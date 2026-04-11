@@ -29,6 +29,7 @@ find_package(spdlog CONFIG REQUIRED)# via vcpkg
 # ---------------------------------------------------------------------------
 # Subdirectories
 # ---------------------------------------------------------------------------
+add_subdirectory(core)      # logging, asserts, profiler — used by engine + backends
 add_subdirectory(engine)
 add_subdirectory(game)
 

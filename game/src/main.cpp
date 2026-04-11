@@ -1,37 +1,37 @@
 #include <arcbit/arcbit.h>
+#include <arcbit/core/Log.h>
+#include <arcbit/core/Assert.h>
+#include <arcbit/core/Profiler.h>
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 #include <vulkan/vulkan.h>
-#include <spdlog/spdlog.h>
 
 #include <vector>
-#include <string>
 #include <cstdlib>
 
 // ---------------------------------------------------------------------------
-// Validation layer debug callback
-// Only compiled in when ARCBIT_DEBUG is defined (Debug builds).
+// Vulkan validation layer debug callback (Debug builds only)
 // ---------------------------------------------------------------------------
 #ifdef ARCBIT_DEBUG
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(
+static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT      severity,
     VkDebugUtilsMessageTypeFlagsEXT             /*type*/,
     const VkDebugUtilsMessengerCallbackDataEXT* data,
-    void*                                       /*user_data*/)
+    void*                                       /*userData*/)
 {
     if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-        spdlog::error("[Vulkan] {}", data->pMessage);
+        LOG_ERROR(Render, "{}", data->pMessage);
     else if (severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
-        spdlog::warn("[Vulkan] {}", data->pMessage);
+        LOG_WARN(Render, "{}", data->pMessage);
     else
-        spdlog::debug("[Vulkan] {}", data->pMessage);
+        LOG_DEBUG(Render, "{}", data->pMessage);
 
     return VK_FALSE;
 }
 
-static VkDebugUtilsMessengerEXT create_debug_messenger(VkInstance instance)
+static VkDebugUtilsMessengerEXT CreateDebugMessenger(VkInstance instance)
 {
     VkDebugUtilsMessengerCreateInfoEXT info{};
     info.sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -40,18 +40,17 @@ static VkDebugUtilsMessengerEXT create_debug_messenger(VkInstance instance)
     info.messageType     = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT
                          | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT
                          | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    info.pfnUserCallback = vk_debug_callback;
+    info.pfnUserCallback = VulkanDebugCallback;
 
     auto fn = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
         vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
 
     VkDebugUtilsMessengerEXT messenger = VK_NULL_HANDLE;
-    if (fn)
-        fn(instance, &info, nullptr, &messenger);
+    if (fn) fn(instance, &info, nullptr, &messenger);
     return messenger;
 }
 
-static void destroy_debug_messenger(VkInstance instance, VkDebugUtilsMessengerEXT messenger)
+static void DestroyDebugMessenger(VkInstance instance, VkDebugUtilsMessengerEXT messenger)
 {
     auto fn = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
         vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT"));
@@ -66,116 +65,96 @@ static void destroy_debug_messenger(VkInstance instance, VkDebugUtilsMessengerEX
 // ---------------------------------------------------------------------------
 int main(int /*argc*/, char* /*argv*/[])
 {
-    spdlog::set_pattern("[%T.%e] [%^%l%$] %v");
-#ifdef ARCBIT_DEBUG
-    spdlog::set_level(spdlog::level::debug);
-#endif
-    spdlog::info("Arcbit starting");
+    Arcbit::Log::Init();
+    LOG_INFO(Engine, "Arcbit starting");
 
     // -----------------------------------------------------------------------
-    // SDL3 init + window
+    // SDL3
     // -----------------------------------------------------------------------
-    if (!SDL_Init(SDL_INIT_VIDEO))
-    {
-        spdlog::error("SDL_Init failed: {}", SDL_GetError());
-        return EXIT_FAILURE;
-    }
+    ARCBIT_VERIFY(SDL_Init(SDL_INIT_VIDEO), "SDL_Init failed");
 
     SDL_Window* window = SDL_CreateWindow(
         "Arcbit — build test",
         1280, 720,
         SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE
     );
-    if (!window)
-    {
-        spdlog::error("SDL_CreateWindow failed: {}", SDL_GetError());
-        SDL_Quit();
-        return EXIT_FAILURE;
-    }
-    spdlog::info("Window created (1280x720)");
+    ARCBIT_ASSERT(window != nullptr, "SDL_CreateWindow failed");
+    LOG_INFO(Platform, "Window created (1280x720)");
 
     // -----------------------------------------------------------------------
     // Vulkan instance
     // -----------------------------------------------------------------------
+    uint32_t sdlExtCount = 0;
+    const char* const* sdlExtensions = SDL_Vulkan_GetInstanceExtensions(&sdlExtCount);
 
-    // Extensions required by SDL3 to create a surface on this platform.
-    uint32_t sdl_ext_count = 0;
-    const char* const* sdl_extensions = SDL_Vulkan_GetInstanceExtensions(&sdl_ext_count);
-
-    std::vector<const char*> extensions(sdl_extensions, sdl_extensions + sdl_ext_count);
+    std::vector<const char*> extensions(sdlExtensions, sdlExtensions + sdlExtCount);
     std::vector<const char*> layers;
 
 #ifdef ARCBIT_DEBUG
     extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     layers.push_back("VK_LAYER_KHRONOS_validation");
-    spdlog::debug("Validation layers enabled");
+    LOG_DEBUG(Render, "Vulkan validation layers enabled");
 #endif
 
-    VkApplicationInfo app_info{};
-    app_info.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    app_info.pApplicationName   = "Arcbit";
-    app_info.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
-    app_info.pEngineName        = "Arcbit Engine";
-    app_info.engineVersion      = VK_MAKE_VERSION(0, 1, 0);
-    app_info.apiVersion         = VK_API_VERSION_1_3;
+    VkApplicationInfo appInfo{};
+    appInfo.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    appInfo.pApplicationName   = "Arcbit";
+    appInfo.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
+    appInfo.pEngineName        = "Arcbit Engine";
+    appInfo.engineVersion      = VK_MAKE_VERSION(0, 1, 0);
+    appInfo.apiVersion         = VK_API_VERSION_1_3;
 
-    VkInstanceCreateInfo instance_info{};
-    instance_info.sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    instance_info.pApplicationInfo        = &app_info;
-    instance_info.enabledExtensionCount   = static_cast<uint32_t>(extensions.size());
-    instance_info.ppEnabledExtensionNames = extensions.data();
-    instance_info.enabledLayerCount       = static_cast<uint32_t>(layers.size());
-    instance_info.ppEnabledLayerNames     = layers.data();
+    VkInstanceCreateInfo instanceInfo{};
+    instanceInfo.sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    instanceInfo.pApplicationInfo        = &appInfo;
+    instanceInfo.enabledExtensionCount   = static_cast<uint32_t>(extensions.size());
+    instanceInfo.ppEnabledExtensionNames = extensions.data();
+    instanceInfo.enabledLayerCount       = static_cast<uint32_t>(layers.size());
+    instanceInfo.ppEnabledLayerNames     = layers.data();
 
     VkInstance instance = VK_NULL_HANDLE;
-    VkResult result = vkCreateInstance(&instance_info, nullptr, &instance);
-    if (result != VK_SUCCESS)
-    {
-        spdlog::error("vkCreateInstance failed (VkResult = {})", static_cast<int>(result));
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return EXIT_FAILURE;
-    }
-    spdlog::info("Vulkan instance created (API 1.3)");
+    VkResult result = vkCreateInstance(&instanceInfo, nullptr, &instance);
+    ARCBIT_VERIFY(result == VK_SUCCESS, "vkCreateInstance failed");
+    LOG_INFO(Render, "Vulkan instance created (API 1.3)");
 
 #ifdef ARCBIT_DEBUG
-    VkDebugUtilsMessengerEXT debug_messenger = create_debug_messenger(instance);
+    VkDebugUtilsMessengerEXT debugMessenger = CreateDebugMessenger(instance);
 #endif
 
     // -----------------------------------------------------------------------
     // Enumerate physical devices
     // -----------------------------------------------------------------------
-    uint32_t gpu_count = 0;
-    vkEnumeratePhysicalDevices(instance, &gpu_count, nullptr);
-    std::vector<VkPhysicalDevice> gpus(gpu_count);
-    vkEnumeratePhysicalDevices(instance, &gpu_count, gpus.data());
+    uint32_t gpuCount = 0;
+    vkEnumeratePhysicalDevices(instance, &gpuCount, nullptr);
+    std::vector<VkPhysicalDevice> gpus(gpuCount);
+    vkEnumeratePhysicalDevices(instance, &gpuCount, gpus.data());
 
-    spdlog::info("Found {} physical device(s):", gpu_count);
+    LOG_INFO(Render, "Found {} physical device(s):", gpuCount);
     for (auto& gpu : gpus)
     {
         VkPhysicalDeviceProperties props{};
         vkGetPhysicalDeviceProperties(gpu, &props);
 
-        const char* type = "Unknown";
-        switch (props.deviceType)
-        {
-            case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:   type = "Discrete GPU";   break;
-            case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: type = "Integrated GPU"; break;
-            case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:    type = "Virtual GPU";    break;
-            case VK_PHYSICAL_DEVICE_TYPE_CPU:            type = "CPU";            break;
-            default: break;
-        }
+        const char* type = [&]() -> const char* {
+            switch (props.deviceType) {
+                case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:   return "Discrete GPU";
+                case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return "Integrated GPU";
+                case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:    return "Virtual GPU";
+                case VK_PHYSICAL_DEVICE_TYPE_CPU:            return "CPU";
+                default:                                      return "Unknown";
+            }
+        }();
 
         uint32_t major = VK_VERSION_MAJOR(props.apiVersion);
         uint32_t minor = VK_VERSION_MINOR(props.apiVersion);
         uint32_t patch = VK_VERSION_PATCH(props.apiVersion);
-        spdlog::info("  [{}] {} — Vulkan {}.{}.{}", type, props.deviceName, major, minor, patch);
+        LOG_INFO(Render, "  [{}] {} — Vulkan {}.{}.{}", type, props.deviceName, major, minor, patch);
     }
 
     // -----------------------------------------------------------------------
     // Event loop
     // -----------------------------------------------------------------------
-    spdlog::info("Entering event loop — press Escape or close the window to exit");
+    LOG_INFO(Engine, "Entering event loop — Escape or close window to exit");
 
     bool running = true;
     while (running)
@@ -202,13 +181,14 @@ int main(int /*argc*/, char* /*argv*/[])
     // Cleanup (reverse order of creation)
     // -----------------------------------------------------------------------
 #ifdef ARCBIT_DEBUG
-    destroy_debug_messenger(instance, debug_messenger);
+    DestroyDebugMessenger(instance, debugMessenger);
 #endif
 
     vkDestroyInstance(instance, nullptr);
     SDL_DestroyWindow(window);
     SDL_Quit();
 
-    spdlog::info("Arcbit shutdown complete");
+    LOG_INFO(Engine, "Arcbit shutdown complete");
+    Arcbit::Log::Shutdown();
     return EXIT_SUCCESS;
 }

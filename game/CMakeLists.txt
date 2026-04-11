@@ -3,17 +3,12 @@ add_executable(arcbit-game
 )
 
 target_link_libraries(arcbit-game PRIVATE
-    arcbit-engine
+    arcbit-engine      # pulls in arcbit-core transitively
     Vulkan::Vulkan
     SDL3::SDL3
-    spdlog::spdlog
 )
 
-# ARCBIT_DEBUG enables Vulkan validation layers and other debug aids.
-# Defined only in Debug builds; Release builds get none of this overhead.
-target_compile_definitions(arcbit-game PRIVATE
-    $<$<CONFIG:Debug>:ARCBIT_DEBUG>
-)
+# ARCBIT_DEBUG propagates from arcbit-core as a PUBLIC define.
 
 # Windows: suppress the console window in Release builds.
 if(WIN32)

@@ -8,5 +8,10 @@ target_include_directories(arcbit-engine
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+target_link_libraries(arcbit-engine
+    INTERFACE
+        arcbit-core
+)
+
 # Engine does NOT link Vulkan directly — its render interfaces are
 # graphics-agnostic. Backends link Vulkan; the game links the backend DLL.
