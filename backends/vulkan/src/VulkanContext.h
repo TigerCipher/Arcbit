@@ -12,66 +12,93 @@ namespace Arcbit {
 
 // ---------------------------------------------------------------------------
 // Internal Vulkan resource types
-// These never appear in engine or game headers.
+//
+// These structs mirror the public Handle types but hold the actual Vulkan
+// objects. They are stored inside HandlePool<T> and are never exposed beyond
+// this backend DLL — engine and game headers only ever see the opaque handles.
 // ---------------------------------------------------------------------------
 
+// Represents a GPU buffer — vertex data, index data, uniforms, SSBOs, etc.
+// HostVisible buffers are persistently mapped so the CPU can write directly;
+// device-local (GPU-only) buffers require a staging copy for uploads.
 struct VulkanBuffer
 {
     VkBuffer      Buffer      = VK_NULL_HANDLE;
     VmaAllocation Allocation  = VK_NULL_HANDLE;
     u64           Size        = 0;
     BufferUsage   Usage       = BufferUsage::None;
-    bool          HostVisible = false;
-    void*         Mapped      = nullptr;   // non-null when HostVisible
+    bool          HostVisible = false;   // true → CPU can write via Mapped
+    void*         Mapped      = nullptr; // non-null when HostVisible; VMA keeps it persistently mapped
 };
 
+// Represents a 2D image on the GPU — textures, render targets, depth buffers.
+// Swapchain images are managed by the driver, not VMA, so IsSwapchainImage
+// distinguishes them to avoid double-free during cleanup.
 struct VulkanTexture
 {
     VkImage       Image      = VK_NULL_HANDLE;
-    VkImageView   View       = VK_NULL_HANDLE;
-    VmaAllocation Allocation = VK_NULL_HANDLE;
+    VkImageView   View       = VK_NULL_HANDLE; // required to bind the image in shaders or as attachment
+    VmaAllocation Allocation = VK_NULL_HANDLE; // null for swapchain images (driver-owned)
     VkFormat      Format     = VK_FORMAT_UNDEFINED;
     u32           Width      = 0;
     u32           Height     = 0;
     TextureUsage  Usage      = TextureUsage::None;
-    bool          IsSwapchainImage = false;   // swapchain images aren't VMA-owned
+    bool          IsSwapchainImage = false; // swapchain images aren't VMA-owned; skip vmaDestroyImage
 };
 
+// Represents a sampler — the small state object that describes how a texture
+// is filtered (bilinear, nearest) and addressed (clamp, wrap) in shaders.
+// Samplers are separate from textures so they can be shared across many images.
 struct VulkanSampler
 {
     VkSampler Sampler = VK_NULL_HANDLE;
 };
 
+// Wraps a VkShaderModule (compiled SPIR-V bytecode loaded into the driver).
+// The Stage field lets the pipeline know which stage this module is for.
 struct VulkanShader
 {
     VkShaderModule Module = VK_NULL_HANDLE;
     ShaderStage    Stage  = ShaderStage::None;
 };
 
+// Wraps a VkPipeline and its associated VkPipelineLayout.
+// The layout describes the push constant ranges and descriptor set layouts
+// that shaders expect — it must be kept alive for as long as the pipeline is used.
 struct VulkanPipeline
 {
     VkPipeline            Pipeline = VK_NULL_HANDLE;
     VkPipelineLayout      Layout   = VK_NULL_HANDLE;
 };
 
+// Wraps a VkSwapchainKHR and all its associated per-frame resources.
+//
+// Sync model (one set per frame in flight):
+//   ImageAvailable — signalled by vkAcquireNextImageKHR when the image is ready to render into.
+//   RenderFinished — signalled by the queue submit when rendering is done; waited on by present.
+//   InFlight       — CPU fence; we wait on this before reusing a frame slot to avoid overwriting
+//                    command buffers or resources that the GPU is still reading.
 struct VulkanSwapchain
 {
-    VkSwapchainKHR          Swapchain    = VK_NULL_HANDLE;
-    VkSurfaceKHR            Surface      = VK_NULL_HANDLE;
-    VkFormat                Format       = VK_FORMAT_UNDEFINED;
-    VkExtent2D              Extent       = {};
-    std::vector<VkImage>    Images;
-    std::vector<VkImageView> ImageViews;
+    VkSwapchainKHR           Swapchain = VK_NULL_HANDLE;
+    VkSurfaceKHR             Surface   = VK_NULL_HANDLE; // the WSI surface this swapchain presents to
+    VkFormat                 Format    = VK_FORMAT_UNDEFINED;
+    VkExtent2D               Extent    = {};
+    std::vector<VkImage>     Images;     // driver-owned swapchain images
+    std::vector<VkImageView> ImageViews; // one view per image for use as colour attachments
 
-    // Sync — one set per frame in flight
-    std::vector<VkSemaphore> ImageAvailable;   // signalled when image acquired
-    std::vector<VkSemaphore> RenderFinished;   // signalled when rendering done
-    std::vector<VkFence>     InFlight;         // CPU waits on this before reusing frame
+    // Per-frame-in-flight synchronisation primitives.
+    // Indexed by CurrentFrame (wraps at MaxFramesInFlight).
+    std::vector<VkSemaphore> ImageAvailable; // CPU→GPU: "image is ready to be rendered into"
+    std::vector<VkSemaphore> RenderFinished; // GPU→GPU: "rendering is done, safe to present"
+    std::vector<VkFence>     InFlight;       // GPU→CPU: "frame N is done, you can reuse its resources"
 
-    u32 CurrentImageIndex = 0;
-    u32 CurrentFrame      = 0;
+    u32 CurrentImageIndex = 0; // index into Images[] of the currently acquired swapchain image
+    u32 CurrentFrame      = 0; // index into the per-frame sync arrays; wraps at MaxFramesInFlight
 };
 
+// Wraps a VkCommandBuffer allocated from the context's command pool.
+// One per in-flight frame; recorded on the CPU and submitted to the GPU queue.
 struct VulkanCommandList
 {
     VkCommandBuffer Buffer = VK_NULL_HANDLE;
@@ -80,11 +107,18 @@ struct VulkanCommandList
 // ---------------------------------------------------------------------------
 // HandlePool<T>
 //
-// Slot-map with generational indices. Matches the Handle<Tag> system.
-// Index 0 is permanently reserved as "invalid".
+// A slot-map with generational indices. Maps public Handle<Tag> values to
+// internal resource objects of type T.
 //
-// T must be default-constructible and copyable/movable.
-// The caller is responsible for destroying GPU resources before calling Free.
+// Design:
+//   - Slot 0 is permanently reserved so index 0 always means "invalid".
+//   - Each slot carries a generation counter that is incremented on Free.
+//     A handle whose generation doesn't match the slot is stale — it was freed
+//     and the slot may now hold a different resource.
+//   - Freed slots go onto a free-list and are reused on the next Allocate,
+//     keeping the pool compact without shifting indices.
+//
+// T must be default-constructible.
 // ---------------------------------------------------------------------------
 template<typename T>
 class HandlePool
@@ -92,10 +126,12 @@ class HandlePool
 public:
     HandlePool()
     {
-        // Reserve slot 0 so index 0 always maps to "invalid"
+        // Reserve slot 0 permanently so index 0 is always the "invalid" sentinel.
         m_Slots.push_back({});
     }
 
+    // Allocate a slot for the given resource and return a typed handle.
+    // Reuses a previously freed slot if one is available; otherwise grows the pool.
     template<typename Tag>
     Handle<Tag> Allocate(T resource)
     {
@@ -103,11 +139,13 @@ public:
 
         if (!m_FreeList.empty())
         {
+            // Reuse an existing slot — generation was already bumped on Free.
             index = m_FreeList.back();
             m_FreeList.pop_back();
         }
         else
         {
+            // Append a fresh slot.
             index = static_cast<u32>(m_Slots.size());
             m_Slots.push_back({});
         }
@@ -115,10 +153,12 @@ public:
         auto& slot      = m_Slots[index];
         slot.Resource   = std::move(resource);
         slot.Occupied   = true;
-        // Generation was bumped on Free; keep it as-is here
+        // Generation was bumped on the previous Free; keep it as-is to embed it in the handle.
         return Handle<Tag>::Make(index, slot.Generation);
     }
 
+    // Look up a resource by handle.
+    // Returns nullptr if the handle is invalid, out of range, or stale (freed and reused).
     template<typename Tag>
     T* Get(Handle<Tag> handle)
     {
@@ -126,12 +166,14 @@ public:
         const u32 index = handle.Index();
         if (index >= m_Slots.size()) return nullptr;
         auto& slot = m_Slots[index];
+        // Generation mismatch means the handle is stale — the slot holds a different resource.
         if (!slot.Occupied || slot.Generation != handle.Generation()) return nullptr;
         return &slot.Resource;
     }
 
-    // Returns the resource and invalidates the slot.
-    // Caller must destroy any GPU objects on the resource before calling this.
+    // Free a slot and return the resource so the caller can destroy its GPU objects.
+    // The slot's generation is incremented, invalidating all existing handles to it.
+    // Returns nullopt if the handle is invalid or already freed.
     template<typename Tag>
     std::optional<T> Free(Handle<Tag> handle)
     {
@@ -144,60 +186,124 @@ public:
         T resource      = std::move(slot.Resource);
         slot.Resource   = {};
         slot.Occupied   = false;
+        // Bump generation so any remaining copies of this handle are now stale.
         slot.Generation = (slot.Generation + 1) & Handle<Tag>::GenMask;
         m_FreeList.push_back(index);
         return resource;
     }
 
+    // Returns the number of currently allocated (live) resources.
     u32 Count() const
     {
+        // Total slots minus the reserved slot 0 and the free-listed slots.
         return static_cast<u32>(m_Slots.size() - 1 - m_FreeList.size());
     }
 
 private:
     struct Slot
     {
-        T    Resource   = {};
-        u32  Generation = 0;
+        T    Resource   = {};  // the stored resource; undefined when !Occupied
+        u32  Generation = 0;   // incremented on every Free; embedded in issued handles
         bool Occupied   = false;
     };
 
-    std::vector<Slot> m_Slots;
-    std::vector<u32>  m_FreeList;
+    std::vector<Slot> m_Slots;    // slot 0 is permanently reserved
+    std::vector<u32>  m_FreeList; // indices of freed slots available for reuse
 };
 
 // ---------------------------------------------------------------------------
 // VulkanContext
 //
-// Owns all Vulkan state. Lives behind the RenderDevice Pimpl.
+// Owns all Vulkan state for the lifetime of a RenderDevice.
+// Lives behind the Pimpl in RenderDevice — game and engine code never see this
+// header because it pulls in <vulkan/vulkan.h>.
+//
+// Initialisation order (Init):
+//   1. CreateInstance      — VkInstance + optional debug messenger
+//   2. SDL surface         — needed by SelectPhysicalDevice for present support
+//   3. SelectPhysicalDevice — scores all GPUs, picks the best one, records queue families
+//   4. CreateLogicalDevice  — VkDevice with dynamic rendering + synchronisation2 enabled
+//   5. CreateAllocator      — VMA allocator for buffer/image memory management
+//   6. CreateCommandPool    — single pool; will expand to per-thread pools later
+//
+// Shutdown destroys objects in reverse order after vkDeviceWaitIdle.
 // ---------------------------------------------------------------------------
 struct VulkanContext
 {
-    // Instance
+    // -------------------------------------------------------------------------
+    // Instance-level objects
+    // -------------------------------------------------------------------------
+
+    // The Vulkan instance — the connection between the application and the Vulkan
+    // loader. All other Vulkan objects are ultimately derived from it.
     VkInstance               Instance       = VK_NULL_HANDLE;
+
+    // Debug messenger that routes validation layer messages through DebugCallback
+    // to the engine's Log system. Only created when EnableValidation is true.
     VkDebugUtilsMessengerEXT DebugMessenger = VK_NULL_HANDLE;
 
+    // -------------------------------------------------------------------------
     // Physical device
-    VkPhysicalDevice                 PhysicalDevice      = VK_NULL_HANDLE;
-    VkPhysicalDeviceProperties       PhysicalDeviceProps = {};
-    VkPhysicalDeviceFeatures         PhysicalDeviceFeats = {};
+    // -------------------------------------------------------------------------
 
+    // The selected GPU — a VkPhysicalDevice is a handle to the physical hardware.
+    // We pick the best one via ScoreDevice (discrete > integrated; must support
+    // Vulkan 1.3 + dynamic rendering + synchronization2 + swapchain extension).
+    VkPhysicalDevice                 PhysicalDevice      = VK_NULL_HANDLE;
+    VkPhysicalDeviceProperties       PhysicalDeviceProps = {}; // name, limits, type, Vulkan version
+    VkPhysicalDeviceFeatures         PhysicalDeviceFeats = {}; // optional feature support flags
+
+    // -------------------------------------------------------------------------
     // Queue families
-    u32 GraphicsFamily = ~0u;
+    // -------------------------------------------------------------------------
+
+    // Vulkan work is submitted to queues. Queue families group queues with the
+    // same capabilities. We need one family that supports graphics commands and
+    // one that supports presenting images to a surface. They are often the same.
+    u32 GraphicsFamily = ~0u; // ~0u = sentinel meaning "not yet assigned"
     u32 PresentFamily  = ~0u;
 
+    // -------------------------------------------------------------------------
     // Logical device + queues
-    VkDevice Device         = VK_NULL_HANDLE;
-    VkQueue  GraphicsQueue  = VK_NULL_HANDLE;
-    VkQueue  PresentQueue   = VK_NULL_HANDLE;
+    // -------------------------------------------------------------------------
 
-    // Memory allocator (VMA)
+    // The logical device — our interface to the physical hardware. Created once
+    // we know which extensions and features we need. All resource creation calls
+    // (vkCreateBuffer, vkCreateImageView, etc.) go through this.
+    VkDevice Device        = VK_NULL_HANDLE;
+
+    // Handles to the actual queue objects within the logical device.
+    // We submit command buffers to GraphicsQueue and present frames via PresentQueue.
+    VkQueue  GraphicsQueue = VK_NULL_HANDLE;
+    VkQueue  PresentQueue  = VK_NULL_HANDLE;
+
+    // -------------------------------------------------------------------------
+    // Memory allocator
+    // -------------------------------------------------------------------------
+
+    // Vulkan Memory Allocator (VMA) — abstracts GPU heap selection and suballocation.
+    // Without VMA we'd have to call vkAllocateMemory for every resource, which
+    // quickly hits driver limits. VMA pools allocations and picks the right heap
+    // (device-local, host-visible, etc.) based on usage hints.
     VmaAllocator Allocator = VK_NULL_HANDLE;
 
-    // Command pool (main thread — expand to per-thread pools later)
+    // -------------------------------------------------------------------------
+    // Command infrastructure
+    // -------------------------------------------------------------------------
+
+    // Command pool — the backing allocator for command buffers.
+    // Created with RESET_COMMAND_BUFFER_BIT so individual command buffers can be
+    // reset and re-recorded each frame without resetting the whole pool.
+    // This is a single main-thread pool; will expand to per-thread pools later.
     VkCommandPool CommandPool = VK_NULL_HANDLE;
 
+    // -------------------------------------------------------------------------
     // Resource pools
+    //
+    // Each pool maps a typed handle (e.g. BufferHandle) to the corresponding
+    // internal Vulkan resource (e.g. VulkanBuffer). Generational indices catch
+    // use-after-free bugs at runtime.
+    // -------------------------------------------------------------------------
     HandlePool<VulkanBuffer>      Buffers;
     HandlePool<VulkanTexture>     Textures;
     HandlePool<VulkanSampler>     Samplers;
@@ -206,21 +312,39 @@ struct VulkanContext
     HandlePool<VulkanSwapchain>   Swapchains;
     HandlePool<VulkanCommandList> CommandLists;
 
-    // Surface created during Init for device selection.
-    // Handed off to the first swapchain via CreateSwapchain.
+    // -------------------------------------------------------------------------
+    // Deferred surface
+    //
+    // The WSI surface is created during Init (so SelectPhysicalDevice can verify
+    // present support), but it logically belongs to the swapchain. We store it
+    // here temporarily and transfer ownership when CreateSwapchain is called.
+    // If no swapchain is ever created, Shutdown destroys it.
+    // -------------------------------------------------------------------------
     VkSurfaceKHR m_InitSurface = VK_NULL_HANDLE;
 
-    // --- Lifetime ---
+    // -------------------------------------------------------------------------
+    // Lifetime
+    // -------------------------------------------------------------------------
+
+    // Initialise all Vulkan state. Returns false on any failure; the caller
+    // should log the error and return nullptr from Arcbit_CreateDevice.
     bool Init(const DeviceDesc& desc);
+
+    // Destroy all Vulkan state in reverse-init order.
+    // Caller must call vkDeviceWaitIdle (or RenderDevice::WaitIdle) first if
+    // any GPU work may still be in flight.
     void Shutdown();
 
 private:
+    // Sub-steps called by Init — each returns false on failure.
     bool CreateInstance(const char* appName, u32 appVersion, bool enableValidation);
     bool SelectPhysicalDevice(VkSurfaceKHR surface);
     bool CreateLogicalDevice();
     bool CreateAllocator();
     bool CreateCommandPool();
 
+    // Attach the debug messenger to the instance. Called after CreateInstance
+    // when validation is enabled. Failure is non-fatal — we log a warning.
     void SetupDebugMessenger();
 };
 
