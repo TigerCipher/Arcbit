@@ -1,20 +1,21 @@
-# arcbit_vulkan.dll — Vulkan renderer backend.
-# Not yet wired into the root build (add_subdirectory is commented out there).
-# This file is a placeholder; implementation begins in Phase 1.
-
-add_library(arcbit_vulkan SHARED)
-
-target_sources(arcbit_vulkan PRIVATE
-    # src/VulkanDevice.cpp
-    # src/VulkanSwapchain.cpp
-    # src/VulkanCommandList.cpp
+add_library(arcbit_vulkan SHARED
+    src/VmaImpl.cpp
+    src/VulkanContext.cpp
+    src/VulkanDevice.cpp
 )
 
-target_link_libraries(arcbit_vulkan PRIVATE
-    arcbit-engine
-    Vulkan::Vulkan
+target_compile_definitions(arcbit_vulkan PRIVATE
+    ARCBIT_VULKAN_EXPORTS
 )
 
 target_include_directories(arcbit_vulkan PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    src/
+    ${Vulkan_INCLUDE_DIRS}   # picks up Include/vma/ and Include/vulkan/
+)
+
+target_link_libraries(arcbit_vulkan PRIVATE
+    arcbit-engine            # render API headers + core headers
+    arcbit-core              # logging, asserts
+    Vulkan::Vulkan
+    SDL3::SDL3
 )

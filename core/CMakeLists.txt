@@ -1,4 +1,4 @@
-add_library(arcbit-core STATIC
+add_library(arcbit-core SHARED
     src/Log.cpp
 )
 
@@ -13,6 +13,8 @@ target_link_libraries(arcbit-core
 )
 
 target_compile_definitions(arcbit-core
+    PRIVATE
+        ARCBIT_CORE_EXPORTS
     PUBLIC
         $<$<CONFIG:Debug>:ARCBIT_DEBUG>
 )

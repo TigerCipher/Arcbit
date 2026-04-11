@@ -8,6 +8,23 @@
 #include <memory>
 #include <string>
 
+// ---------------------------------------------------------------------------
+// DLL export / import
+// ---------------------------------------------------------------------------
+#if defined(_WIN32)
+    #if defined(ARCBIT_CORE_EXPORTS)
+        #define ARCBIT_CORE_API __declspec(dllexport)
+    #else
+        #define ARCBIT_CORE_API __declspec(dllimport)
+    #endif
+#else
+    #if defined(ARCBIT_CORE_EXPORTS)
+        #define ARCBIT_CORE_API __attribute__((visibility("default")))
+    #else
+        #define ARCBIT_CORE_API
+    #endif
+#endif
+
 namespace Arcbit {
 
 // ---------------------------------------------------------------------------
@@ -29,7 +46,7 @@ enum class Channel : uint8_t
 // ---------------------------------------------------------------------------
 // Log
 // ---------------------------------------------------------------------------
-class Log
+class ARCBIT_CORE_API Log
 {
 public:
     // Call once at startup before any other threads are running.

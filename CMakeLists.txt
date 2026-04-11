@@ -34,5 +34,4 @@ add_subdirectory(engine)
 add_subdirectory(game)
 
 # Renderer backends — each is a standalone DLL loaded at runtime.
-# Uncomment as each backend is implemented.
-# add_subdirectory(backends/vulkan)
+add_subdirectory(backends/vulkan)

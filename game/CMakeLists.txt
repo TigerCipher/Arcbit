@@ -4,7 +4,7 @@ add_executable(arcbit-game
 
 target_link_libraries(arcbit-game PRIVATE
     arcbit-engine      # pulls in arcbit-core transitively
-    Vulkan::Vulkan
+    arcbit_vulkan      # renderer backend DLL (implicit link)
     SDL3::SDL3
 )
 
