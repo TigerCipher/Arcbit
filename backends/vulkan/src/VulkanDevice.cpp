@@ -4,7 +4,178 @@
 #include <arcbit/core/Log.h>
 #include <arcbit/core/Assert.h>
 
+#include <SDL3/SDL_vulkan.h>
+
+#include <algorithm>
+#include <vector>
+
 namespace Arcbit {
+
+// ---------------------------------------------------------------------------
+// Helpers (local to this translation unit)
+// ---------------------------------------------------------------------------
+namespace {
+
+// Pick the best surface format. We prefer BGRA8_SRGB (the typical Windows
+// swapchain format). If unavailable, fall back to the first format the driver
+// reports — there will always be at least one.
+VkSurfaceFormatKHR ChooseSurfaceFormat(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface)
+{
+    u32 count = 0;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &count, nullptr);
+    std::vector<VkSurfaceFormatKHR> formats(count);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &count, formats.data());
+
+    for (const auto& fmt : formats)
+    {
+        if (fmt.format     == VK_FORMAT_B8G8R8A8_SRGB &&
+            fmt.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            return fmt;
+    }
+    return formats[0];
+}
+
+// Pick a present mode. With VSync enabled we use FIFO (guaranteed to be available).
+// Without VSync we prefer MAILBOX (renders as fast as possible, replaces queued
+// frames rather than tearing). Falls back to FIFO if MAILBOX is absent.
+VkPresentModeKHR ChoosePresentMode(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, bool vsync)
+{
+    if (vsync) return VK_PRESENT_MODE_FIFO_KHR;
+
+    u32 count = 0;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &count, nullptr);
+    std::vector<VkPresentModeKHR> modes(count);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &count, modes.data());
+
+    for (auto mode : modes)
+        if (mode == VK_PRESENT_MODE_MAILBOX_KHR) return mode;
+
+    return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+// Determine the swapchain image size from the surface capabilities.
+// When currentExtent is set to UINT32_MAX the surface has no fixed size and
+// we clamp the requested dimensions to the allowed min/max range.
+VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& caps, u32 width, u32 height)
+{
+    if (caps.currentExtent.width != UINT32_MAX)
+        return caps.currentExtent;
+
+    return {
+        std::clamp(width,  caps.minImageExtent.width,  caps.maxImageExtent.width),
+        std::clamp(height, caps.minImageExtent.height, caps.maxImageExtent.height)
+    };
+}
+
+// Convert engine LoadOp → VkAttachmentLoadOp.
+VkAttachmentLoadOp ToVkLoadOp(LoadOp op)
+{
+    switch (op)
+    {
+        case LoadOp::Load:     return VK_ATTACHMENT_LOAD_OP_LOAD;
+        case LoadOp::Clear:    return VK_ATTACHMENT_LOAD_OP_CLEAR;
+        case LoadOp::DontCare: return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    }
+    return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+}
+
+// Convert engine StoreOp → VkAttachmentStoreOp.
+VkAttachmentStoreOp ToVkStoreOp(StoreOp op)
+{
+    switch (op)
+    {
+        case StoreOp::Store:    return VK_ATTACHMENT_STORE_OP_STORE;
+        case StoreOp::DontCare: return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    }
+    return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+}
+
+// Build (or rebuild) VkSwapchainKHR and all its images / views.
+// Used by both CreateSwapchain and ResizeSwapchain.
+// On success, fills sc->Swapchain, sc->Images, sc->ImageViews, sc->Extent.
+// Returns false on any Vulkan error.
+bool BuildSwapchain(VulkanContext* ctx, VulkanSwapchain* sc,
+                    u32 width, u32 height, VkSwapchainKHR oldSwapchain)
+{
+    VkSurfaceCapabilitiesKHR caps{};
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(ctx->PhysicalDevice, sc->Surface, &caps);
+
+    const VkSurfaceFormatKHR fmt  = ChooseSurfaceFormat(ctx->PhysicalDevice, sc->Surface);
+    const VkPresentModeKHR   mode = ChoosePresentMode(ctx->PhysicalDevice, sc->Surface, sc->VSync);
+    const VkExtent2D         ext  = ChooseExtent(caps, width, height);
+
+    // Request one more image than the minimum to avoid stalling on the driver.
+    u32 imageCount = caps.minImageCount + 1;
+    if (caps.maxImageCount > 0 && imageCount > caps.maxImageCount)
+        imageCount = caps.maxImageCount;
+
+    VkSwapchainCreateInfoKHR info{ VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR };
+    info.surface          = sc->Surface;
+    info.minImageCount    = imageCount;
+    info.imageFormat      = fmt.format;
+    info.imageColorSpace  = fmt.colorSpace;
+    info.imageExtent      = ext;
+    info.imageArrayLayers = 1;
+    info.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    info.preTransform     = caps.currentTransform; // no extra rotation/flip
+    info.compositeAlpha   = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR; // no window transparency
+    info.presentMode      = mode;
+    info.clipped          = VK_TRUE;    // don't render pixels obscured by other windows
+    info.oldSwapchain     = oldSwapchain; // lets the driver reuse resources from the old swapchain
+
+    // If graphics and present are different queue families the images need to
+    // be accessible from both; otherwise exclusive mode is faster.
+    u32 families[] = { ctx->GraphicsFamily, ctx->PresentFamily };
+    if (ctx->GraphicsFamily != ctx->PresentFamily)
+    {
+        info.imageSharingMode      = VK_SHARING_MODE_CONCURRENT;
+        info.queueFamilyIndexCount = 2;
+        info.pQueueFamilyIndices   = families;
+    }
+    else
+    {
+        info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
+
+    VkResult result = vkCreateSwapchainKHR(ctx->Device, &info, nullptr, &sc->Swapchain);
+    if (result != VK_SUCCESS)
+    {
+        LOG_ERROR(Render, "vkCreateSwapchainKHR failed ({})", static_cast<i32>(result));
+        return false;
+    }
+
+    sc->Format = fmt.format;
+    sc->Extent = ext;
+
+    // Retrieve the driver-created swapchain images.
+    u32 actualCount = 0;
+    vkGetSwapchainImagesKHR(ctx->Device, sc->Swapchain, &actualCount, nullptr);
+    sc->Images.resize(actualCount);
+    vkGetSwapchainImagesKHR(ctx->Device, sc->Swapchain, &actualCount, sc->Images.data());
+
+    // Create an image view for each swapchain image so we can use them as
+    // colour attachments in vkCmdBeginRendering.
+    sc->ImageViews.resize(actualCount);
+    for (u32 i = 0; i < actualCount; ++i)
+    {
+        VkImageViewCreateInfo viewInfo{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+        viewInfo.image    = sc->Images[i];
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.format   = fmt.format;
+        viewInfo.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+
+        result = vkCreateImageView(ctx->Device, &viewInfo, nullptr, &sc->ImageViews[i]);
+        if (result != VK_SUCCESS)
+        {
+            LOG_ERROR(Render, "vkCreateImageView (swapchain image {}) failed", i);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+} // anonymous namespace
 
 // ---------------------------------------------------------------------------
 // RenderDevice — construction / destruction
@@ -51,43 +222,30 @@ BufferHandle RenderDevice::CreateBuffer(const BufferDesc& desc)
 {
     ARCBIT_ASSERT(desc.Size > 0, "Buffer size must be > 0");
 
-    // Build the Vulkan buffer creation info from our engine-side description.
-    // VK_SHARING_MODE_EXCLUSIVE means only one queue family accesses this buffer
-    // at a time — no ownership transfer barriers needed for the common single-queue case.
     VkBufferCreateInfo bufferInfo{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
     bufferInfo.size        = desc.Size;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    // Map our BufferUsage flags to Vulkan's VkBufferUsageFlags.
-    // Multiple flags can be combined — e.g. Transfer on a staging buffer,
-    // or Vertex | Transfer on a buffer that's initially uploaded via staging.
     if (HasFlag(desc.Usage, BufferUsage::Vertex))   bufferInfo.usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
     if (HasFlag(desc.Usage, BufferUsage::Index))    bufferInfo.usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
     if (HasFlag(desc.Usage, BufferUsage::Uniform))  bufferInfo.usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
     if (HasFlag(desc.Usage, BufferUsage::Storage))  bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    // Transfer adds both SRC and DST so this buffer can be used on either end of a copy.
     if (HasFlag(desc.Usage, BufferUsage::Transfer)) bufferInfo.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT
                                                                        | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
-    // Tell VMA how to choose a memory heap for this allocation.
     VmaAllocationCreateInfo allocInfo{};
     allocInfo.usage = desc.HostVisible
-        ? VMA_MEMORY_USAGE_CPU_TO_GPU   // host-visible, suitable for streaming data to the GPU
-        : VMA_MEMORY_USAGE_GPU_ONLY;    // device-local VRAM — fastest for GPU reads
+        ? VMA_MEMORY_USAGE_CPU_TO_GPU
+        : VMA_MEMORY_USAGE_GPU_ONLY;
 
-    // Persistently map host-visible buffers so we can memcpy into them without
-    // calling vkMapMemory every frame. VMA keeps the mapping alive for the buffer's lifetime.
     if (desc.HostVisible)
         allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
-    // Prepare the internal resource struct that will live in the pool.
     VulkanBuffer vkBuffer{};
     vkBuffer.Size        = desc.Size;
     vkBuffer.Usage       = desc.Usage;
     vkBuffer.HostVisible = desc.HostVisible;
 
-    // Create the buffer and its backing memory allocation in one call.
-    // VMA selects the appropriate heap and suballocates within a larger block.
     VmaAllocationInfo allocResult{};
     const VkResult result = vmaCreateBuffer(
         m_Context->Allocator,
@@ -97,13 +255,9 @@ BufferHandle RenderDevice::CreateBuffer(const BufferDesc& desc)
 
     ARCBIT_VERIFY(result == VK_SUCCESS, "vmaCreateBuffer failed");
 
-    // Store the persistent CPU pointer for host-visible buffers.
-    // pMappedData is filled by VMA when VMA_ALLOCATION_CREATE_MAPPED_BIT is set.
     if (desc.HostVisible)
         vkBuffer.Mapped = allocResult.pMappedData;
 
-    // Optionally assign a debug name — visible in Vulkan tools (RenderDoc, Nsight).
-    // vkSetDebugUtilsObjectNameEXT is an extension function; it must be loaded at runtime.
     if (desc.DebugName)
     {
         VkDebugUtilsObjectNameInfoEXT nameInfo{ VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
@@ -116,29 +270,16 @@ BufferHandle RenderDevice::CreateBuffer(const BufferDesc& desc)
         if (fn) fn(m_Context->Device, &nameInfo);
     }
 
-    // Register the buffer in the pool and return a typed handle.
-    // The handle encodes the pool index and a generation counter for stale-handle detection.
     return m_Context->Buffers.Allocate<BufferTag>(std::move(vkBuffer));
 }
 
 // Writes CPU data into a previously allocated buffer.
 //
 // Two paths depending on memory type:
-//
-//   Host-visible (uniform buffers, dynamic SSBOs):
-//     The buffer is persistently mapped. We memcpy directly into it.
-//     Fast — no GPU round-trip, no synchronisation needed for the copy itself.
-//     The GPU sees the new data on the next queue submit.
-//
-//   Device-local (vertex/index buffers):
-//     The GPU cannot see host memory directly. We must:
-//       1. Create a temporary host-visible staging buffer.
-//       2. memcpy the data into the staging buffer.
-//       3. Record and immediately submit a vkCmdCopyBuffer command.
-//       4. vkQueueWaitIdle to block until the copy is done.
-//       5. Destroy the staging buffer.
-//     This is slower but device-local memory is 2-5x faster in shader reads.
-//     For static geometry this cost is paid once at load time.
+//   Host-visible: memcpy directly into the persistently-mapped pointer. Fast.
+//   Device-local: create a staging buffer, memcpy into it, issue a GPU copy
+//                 command, wait, then destroy the staging buffer. Slower but
+//                 device-local VRAM is faster for GPU shader reads.
 void RenderDevice::UpdateBuffer(BufferHandle handle, const void* data, u64 size, u64 offset)
 {
     VulkanBuffer* buf = m_Context->Buffers.Get(handle);
@@ -147,14 +288,11 @@ void RenderDevice::UpdateBuffer(BufferHandle handle, const void* data, u64 size,
 
     if (buf->HostVisible)
     {
-        // Fast path: the buffer is persistently mapped — write directly.
         memcpy(static_cast<u8*>(buf->Mapped) + offset, data, size);
     }
     else
     {
-        // Slow path: device-local buffer — must go via a staging buffer.
-
-        // 1. Create a temporary host-visible transfer source buffer.
+        // Create temporary staging buffer in host-visible memory.
         BufferDesc stagingDesc{};
         stagingDesc.Size        = size;
         stagingDesc.Usage       = BufferUsage::Transfer;
@@ -163,13 +301,9 @@ void RenderDevice::UpdateBuffer(BufferHandle handle, const void* data, u64 size,
 
         BufferHandle stagingHandle = CreateBuffer(stagingDesc);
         VulkanBuffer* staging = m_Context->Buffers.Get(stagingHandle);
-
-        // 2. Copy the CPU data into the staging buffer.
         memcpy(staging->Mapped, data, size);
 
-        // 3. Allocate a one-shot command buffer for the GPU copy.
-        //    ONE_TIME_SUBMIT_BIT tells the driver this buffer will be submitted once
-        //    and discarded — it may enable driver-side optimisations.
+        // Record a one-shot copy command and submit it immediately.
         VkCommandBufferAllocateInfo cmdAlloc{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
         cmdAlloc.commandPool        = m_Context->CommandPool;
         cmdAlloc.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -182,55 +316,69 @@ void RenderDevice::UpdateBuffer(BufferHandle handle, const void* data, u64 size,
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         vkBeginCommandBuffer(cmd, &beginInfo);
 
-        // Record: copy `size` bytes from staging → destination, starting at `offset` in the dst.
         VkBufferCopy region{ 0, offset, size };
         vkCmdCopyBuffer(cmd, staging->Buffer, buf->Buffer, 1, &region);
 
         vkEndCommandBuffer(cmd);
 
-        // 4. Submit and wait — we block the CPU here because the staging buffer
-        //    must remain alive until the GPU copy finishes.
         VkSubmitInfo submit{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
         submit.commandBufferCount = 1;
         submit.pCommandBuffers    = &cmd;
         vkQueueSubmit(m_Context->GraphicsQueue, 1, &submit, VK_NULL_HANDLE);
         vkQueueWaitIdle(m_Context->GraphicsQueue);
 
-        // 5. Free the temporary command buffer and staging buffer.
         vkFreeCommandBuffers(m_Context->Device, m_Context->CommandPool, 1, &cmd);
         DestroyBuffer(stagingHandle);
     }
 }
 
-// Releases the GPU buffer and returns its memory to VMA's pool.
-// The handle is invalidated (its generation slot is bumped) so any remaining
-// copies of the handle are detected as stale on next use.
+// Releases the GPU buffer. The handle is invalidated (generation bumped) so
+// any remaining copies of it are detected as stale on next use.
 void RenderDevice::DestroyBuffer(BufferHandle handle)
 {
-    // Free() moves the resource out of the pool and bumps the generation counter.
     auto resource = m_Context->Buffers.Free(handle);
-    if (!resource) return; // handle was already invalid or double-freed
+    if (!resource) return;
 
-    // vmaDestroyBuffer destroys both the VkBuffer and its VmaAllocation in one call.
     if (resource->Buffer != VK_NULL_HANDLE)
         vmaDestroyBuffer(m_Context->Allocator, resource->Buffer, resource->Allocation);
 }
+
+// ---------------------------------------------------------------------------
+// Textures
+// ---------------------------------------------------------------------------
+
+TextureHandle RenderDevice::CreateTexture(const TextureDesc&)      { return TextureHandle::Invalid(); }
+void          RenderDevice::UploadTexture(TextureHandle, const void*, u64) {}
+
+// Release the texture and its GPU memory.
+// Swapchain images (IsSwapchainImage = true) are driver-owned — we only
+// destroy our VkImageView for them, not the underlying VkImage.
+void RenderDevice::DestroyTexture(TextureHandle handle)
+{
+    auto resource = m_Context->Textures.Free(handle);
+    if (!resource) return;
+
+    if (resource->View != VK_NULL_HANDLE)
+        vkDestroyImageView(m_Context->Device, resource->View, nullptr);
+
+    if (!resource->IsSwapchainImage && resource->Image != VK_NULL_HANDLE)
+        vmaDestroyImage(m_Context->Allocator, resource->Image, resource->Allocation);
+}
+
+// ---------------------------------------------------------------------------
+// Samplers
+// ---------------------------------------------------------------------------
+
+SamplerHandle RenderDevice::CreateSampler(const SamplerDesc&)      { return SamplerHandle::Invalid(); }
+void          RenderDevice::DestroySampler(SamplerHandle)          {}
 
 // ---------------------------------------------------------------------------
 // Shaders
 // ---------------------------------------------------------------------------
 
 // Compiles a SPIR-V shader module on the device.
-//
-// SPIR-V is Vulkan's binary intermediate representation — all shaders must be
-// pre-compiled from GLSL/HLSL to SPIR-V before being passed here. We do this
-// at build time with glslc (part of the Vulkan SDK).
-//
-// The driver copies the bytecode into its own memory, so the caller's array
-// can be freed immediately after this call returns.
-//
-// The SPIR-V spec requires 4-byte alignment on the bytecode pointer and size
-// (VkShaderModuleCreateInfo::pCode is a const uint32_t*).
+// The bytecode is copied into driver memory — the caller's array can be freed
+// after this returns. SPIR-V requires 4-byte alignment on size and pointer.
 ShaderHandle RenderDevice::CreateShader(const ShaderDesc& desc)
 {
     ARCBIT_ASSERT(desc.Code != nullptr && desc.CodeSize > 0, "Shader code must not be empty");
@@ -238,11 +386,10 @@ ShaderHandle RenderDevice::CreateShader(const ShaderDesc& desc)
 
     VkShaderModuleCreateInfo info{ VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
     info.codeSize = desc.CodeSize;
-    // Vulkan expects uint32_t* — the bytecode is always DWORD-aligned (asserted above).
     info.pCode    = reinterpret_cast<const u32*>(desc.Code);
 
     VulkanShader vkShader{};
-    vkShader.Stage = desc.Stage; // stored so the pipeline knows which stage this module belongs to
+    vkShader.Stage = desc.Stage;
 
     const VkResult result = vkCreateShaderModule(m_Context->Device, &info, nullptr, &vkShader.Module);
     ARCBIT_VERIFY(result == VK_SUCCESS, "vkCreateShaderModule failed");
@@ -250,10 +397,8 @@ ShaderHandle RenderDevice::CreateShader(const ShaderDesc& desc)
     return m_Context->Shaders.Allocate<ShaderTag>(std::move(vkShader));
 }
 
-// Destroys the shader module.
-// Pipelines that were built using this module are unaffected — Vulkan copies
-// the SPIR-V bytecode during pipeline creation, so the module can be safely
-// destroyed immediately after CreatePipeline returns.
+// Destroys the shader module. Pipelines built from this shader are unaffected
+// because Vulkan copies the SPIR-V during pipeline creation.
 void RenderDevice::DestroyShader(ShaderHandle handle)
 {
     auto resource = m_Context->Shaders.Free(handle);
@@ -263,29 +408,377 @@ void RenderDevice::DestroyShader(ShaderHandle handle)
 }
 
 // ---------------------------------------------------------------------------
-// Stubs — implemented in subsequent sessions
+// Pipelines
 // ---------------------------------------------------------------------------
-TextureHandle RenderDevice::CreateTexture(const TextureDesc&)      { return TextureHandle::Invalid(); }
-void          RenderDevice::UploadTexture(TextureHandle, const void*, u64) {}
-void          RenderDevice::DestroyTexture(TextureHandle)          {}
-
-SamplerHandle RenderDevice::CreateSampler(const SamplerDesc&)      { return SamplerHandle::Invalid(); }
-void          RenderDevice::DestroySampler(SamplerHandle)          {}
 
 PipelineHandle RenderDevice::CreatePipeline(const PipelineDesc&)   { return PipelineHandle::Invalid(); }
 void           RenderDevice::DestroyPipeline(PipelineHandle)       {}
 
-SwapchainHandle RenderDevice::CreateSwapchain(const SwapchainDesc&){ return SwapchainHandle::Invalid(); }
-void            RenderDevice::ResizeSwapchain(SwapchainHandle, u32, u32) {}
-void            RenderDevice::DestroySwapchain(SwapchainHandle)    {}
+// ---------------------------------------------------------------------------
+// Swapchain
+// ---------------------------------------------------------------------------
 
-TextureHandle   RenderDevice::AcquireNextImage(SwapchainHandle)    { return TextureHandle::Invalid(); }
+// Creates a swapchain for window presentation.
+//
+// The VkSurfaceKHR was created during VulkanContext::Init (needed early for
+// physical device selection). We take ownership of it here via m_InitSurface
+// so it is properly destroyed with the swapchain.
+//
+// Per-frame sync objects (one set per in-flight frame):
+//   ImageAvailable — signalled when vkAcquireNextImageKHR gives us an image.
+//   RenderFinished — signalled by Submit; vkQueuePresentKHR waits on it.
+//   InFlight       — CPU fence; we wait on it in AcquireNextImage before
+//                    reusing that frame's command buffer and resources.
+SwapchainHandle RenderDevice::CreateSwapchain(const SwapchainDesc& desc)
+{
+    // Transfer the surface we created during Init into this swapchain.
+    ARCBIT_ASSERT(m_Context->m_InitSurface != VK_NULL_HANDLE,
+        "CreateSwapchain: no surface available (Init surface already consumed)");
 
-CommandListHandle RenderDevice::BeginCommandList()                 { return CommandListHandle::Invalid(); }
-void              RenderDevice::EndCommandList(CommandListHandle)  {}
+    VulkanSwapchain sc{};
+    sc.Surface = m_Context->m_InitSurface;
+    sc.VSync   = desc.VSync;
+    m_Context->m_InitSurface = VK_NULL_HANDLE; // swapchain now owns it
 
-void RenderDevice::BeginRendering(CommandListHandle, const RenderingDesc&) {}
-void RenderDevice::EndRendering(CommandListHandle)                         {}
+    if (!BuildSwapchain(m_Context.get(), &sc, desc.Width, desc.Height, VK_NULL_HANDLE))
+        return SwapchainHandle::Invalid();
+
+    // Register each swapchain image in the texture pool so the rest of the API
+    // can refer to them by TextureHandle (e.g. as a colour attachment).
+    const u32 imageCount = static_cast<u32>(sc.Images.size());
+    sc.ImageHandles.resize(imageCount);
+    for (u32 i = 0; i < imageCount; ++i)
+    {
+        VulkanTexture vkTex{};
+        vkTex.Image            = sc.Images[i];
+        vkTex.View             = sc.ImageViews[i];
+        vkTex.Allocation       = VK_NULL_HANDLE; // driver-owned — not a VMA allocation
+        vkTex.Format           = sc.Format;
+        vkTex.Width            = sc.Extent.width;
+        vkTex.Height           = sc.Extent.height;
+        vkTex.Usage            = TextureUsage::RenderTarget;
+        vkTex.IsSwapchainImage = true;
+        sc.ImageHandles[i]     = m_Context->Textures.Allocate<TextureTag>(std::move(vkTex));
+    }
+
+    // ImageAvailable — one per frame-in-flight slot (indexed by CurrentFrame).
+    //   Safe because the InFlight fence guarantees the submit that consumed it has
+    //   completed before we reuse the slot.
+    //
+    // RenderFinished — one per swapchain image (indexed by CurrentImageIndex).
+    //   Must NOT be per-frame-slot: the present engine holds the semaphore until
+    //   the image is actually shown, which can outlive the InFlight fence. Since
+    //   the swapchain cannot re-issue image N until its previous present completes,
+    //   RenderFinished[N] is always free when image N is next acquired.
+    //
+    // InFlight — one per frame-in-flight slot. CPU fence; guards command buffer reuse.
+    sc.ImageAvailable.resize(MaxFramesInFlight);
+    sc.RenderFinished.resize(imageCount);  // one per swapchain image, not per frame slot
+    sc.InFlight.resize(MaxFramesInFlight);
+
+    VkSemaphoreCreateInfo semInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+    // Start fences in the signalled state so the first frame doesn't wait forever.
+    VkFenceCreateInfo fenceInfo{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    for (u32 i = 0; i < MaxFramesInFlight; ++i)
+    {
+        vkCreateSemaphore(m_Context->Device, &semInfo,   nullptr, &sc.ImageAvailable[i]);
+        vkCreateFence    (m_Context->Device, &fenceInfo, nullptr, &sc.InFlight[i]);
+    }
+    for (u32 i = 0; i < imageCount; ++i)
+    {
+        vkCreateSemaphore(m_Context->Device, &semInfo, nullptr, &sc.RenderFinished[i]);
+    }
+
+    // Pre-allocate the per-frame command buffers the first time a swapchain is created.
+    if (m_Context->FrameCommandBuffers[0] == VK_NULL_HANDLE)
+    {
+        VkCommandBufferAllocateInfo cmdAlloc{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+        cmdAlloc.commandPool        = m_Context->CommandPool;
+        cmdAlloc.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cmdAlloc.commandBufferCount = MaxFramesInFlight;
+        vkAllocateCommandBuffers(m_Context->Device, &cmdAlloc,
+            m_Context->FrameCommandBuffers.data());
+    }
+
+    SwapchainHandle handle = m_Context->Swapchains.Allocate<SwapchainTag>(std::move(sc));
+    LOG_INFO(Render, "Swapchain created ({}×{}, {} images)",
+        desc.Width, desc.Height, imageCount);
+    return handle;
+}
+
+// Recreates the swapchain at a new size.
+// Must be called when the window is resized or vkAcquireNextImageKHR / Present
+// returns VK_ERROR_OUT_OF_DATE_KHR / VK_SUBOPTIMAL_KHR.
+// All in-flight frames must be complete before calling.
+void RenderDevice::ResizeSwapchain(SwapchainHandle handle, u32 width, u32 height)
+{
+    VulkanSwapchain* sc = m_Context->Swapchains.Get(handle);
+    ARCBIT_ASSERT(sc != nullptr, "ResizeSwapchain: invalid handle");
+
+    vkDeviceWaitIdle(m_Context->Device);
+
+    // Free the old texture handles (but not the image views — we'll destroy those next).
+    for (auto texHandle : sc->ImageHandles)
+        m_Context->Textures.Free(texHandle);
+    sc->ImageHandles.clear();
+
+    // Destroy old image views.
+    for (auto view : sc->ImageViews)
+        vkDestroyImageView(m_Context->Device, view, nullptr);
+    sc->ImageViews.clear();
+    sc->Images.clear();
+
+    // Pass the old swapchain handle to BuildSwapchain so the driver can reuse
+    // its resources internally before we destroy it.
+    VkSwapchainKHR oldSwapchain = sc->Swapchain;
+    sc->Swapchain = VK_NULL_HANDLE;
+
+    if (!BuildSwapchain(m_Context.get(), sc, width, height, oldSwapchain))
+    {
+        LOG_ERROR(Render, "ResizeSwapchain: failed to rebuild swapchain");
+        vkDestroySwapchainKHR(m_Context->Device, oldSwapchain, nullptr);
+        return;
+    }
+
+    vkDestroySwapchainKHR(m_Context->Device, oldSwapchain, nullptr);
+
+    // Re-register images in the texture pool.
+    const u32 newImageCount = static_cast<u32>(sc->Images.size());
+    sc->ImageHandles.resize(newImageCount);
+    for (u32 i = 0; i < newImageCount; ++i)
+    {
+        VulkanTexture vkTex{};
+        vkTex.Image            = sc->Images[i];
+        vkTex.View             = sc->ImageViews[i];
+        vkTex.Format           = sc->Format;
+        vkTex.Width            = sc->Extent.width;
+        vkTex.Height           = sc->Extent.height;
+        vkTex.Usage            = TextureUsage::RenderTarget;
+        vkTex.IsSwapchainImage = true;
+        sc->ImageHandles[i]    = m_Context->Textures.Allocate<TextureTag>(std::move(vkTex));
+    }
+
+    // Recreate RenderFinished semaphores sized to the new image count.
+    for (auto sem : sc->RenderFinished)
+        vkDestroySemaphore(m_Context->Device, sem, nullptr);
+    sc->RenderFinished.resize(newImageCount);
+    VkSemaphoreCreateInfo semInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+    for (u32 i = 0; i < newImageCount; ++i)
+        vkCreateSemaphore(m_Context->Device, &semInfo, nullptr, &sc->RenderFinished[i]);
+
+    sc->CurrentFrame      = 0;
+    sc->CurrentImageIndex = 0;
+
+    LOG_INFO(Render, "Swapchain resized to {}×{}", width, height);
+}
+
+// Destroys the swapchain and all its resources.
+void RenderDevice::DestroySwapchain(SwapchainHandle handle)
+{
+    VulkanSwapchain* sc = m_Context->Swapchains.Get(handle);
+    if (!sc) return;
+
+    vkDeviceWaitIdle(m_Context->Device);
+
+    // ImageAvailable and InFlight are per-frame-slot (MaxFramesInFlight).
+    for (u32 i = 0; i < static_cast<u32>(sc->ImageAvailable.size()); ++i)
+    {
+        vkDestroySemaphore(m_Context->Device, sc->ImageAvailable[i], nullptr);
+        vkDestroyFence    (m_Context->Device, sc->InFlight[i],       nullptr);
+    }
+    // RenderFinished is per-swapchain-image (may differ from MaxFramesInFlight).
+    for (auto sem : sc->RenderFinished)
+        vkDestroySemaphore(m_Context->Device, sem, nullptr);
+
+    // Free texture pool entries. The image views are owned by us; the images
+    // are driver-owned and will be destroyed with the swapchain below.
+    for (auto texHandle : sc->ImageHandles)
+        m_Context->Textures.Free(texHandle);
+
+    for (auto view : sc->ImageViews)
+        vkDestroyImageView(m_Context->Device, view, nullptr);
+
+    vkDestroySwapchainKHR(m_Context->Device, sc->Swapchain, nullptr);
+    vkDestroySurfaceKHR  (m_Context->Instance, sc->Surface, nullptr);
+
+    m_Context->Swapchains.Free(handle);
+
+    LOG_INFO(Render, "Swapchain destroyed");
+}
+
+// ---------------------------------------------------------------------------
+// Frame
+// ---------------------------------------------------------------------------
+
+// Acquires the next available swapchain image.
+//
+// Blocks on the in-flight fence for this frame slot (ensuring the GPU is
+// done with any previous use of these resources), then calls
+// vkAcquireNextImageKHR which signals ImageAvailable when the image is ready.
+//
+// Returns TextureHandle::Invalid() if the swapchain is out of date and must
+// be recreated (the caller should call ResizeSwapchain and retry).
+TextureHandle RenderDevice::AcquireNextImage(SwapchainHandle handle)
+{
+    VulkanSwapchain* sc = m_Context->Swapchains.Get(handle);
+    ARCBIT_ASSERT(sc != nullptr, "AcquireNextImage: invalid handle");
+
+    // Wait for the GPU to finish the previous use of this frame slot.
+    // After this, the frame's command buffer and sync objects are safe to reuse.
+    vkWaitForFences(m_Context->Device, 1, &sc->InFlight[sc->CurrentFrame], VK_TRUE, UINT64_MAX);
+    vkResetFences  (m_Context->Device, 1, &sc->InFlight[sc->CurrentFrame]);
+
+    u32 imageIndex = 0;
+    const VkResult result = vkAcquireNextImageKHR(
+        m_Context->Device,
+        sc->Swapchain,
+        UINT64_MAX,
+        sc->ImageAvailable[sc->CurrentFrame], // signalled when the image is actually ready
+        VK_NULL_HANDLE,
+        &imageIndex);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        LOG_WARN(Render, "AcquireNextImage: swapchain out of date — caller should resize");
+        return TextureHandle::Invalid();
+    }
+
+    sc->CurrentImageIndex  = imageIndex;
+    m_Context->ActiveSwapchain = handle; // Submit/Present pick this up
+
+    return sc->ImageHandles[imageIndex];
+}
+
+// ---------------------------------------------------------------------------
+// Command recording
+// ---------------------------------------------------------------------------
+
+// Allocate and begin a command buffer for this frame.
+// Safe to call because AcquireNextImage waited on the in-flight fence,
+// guaranteeing the GPU is finished with this frame's command buffer.
+CommandListHandle RenderDevice::BeginCommandList()
+{
+    VulkanSwapchain* sc = m_Context->Swapchains.Get(m_Context->ActiveSwapchain);
+    ARCBIT_ASSERT(sc != nullptr, "BeginCommandList: no active swapchain (call AcquireNextImage first)");
+
+    VkCommandBuffer cmd = m_Context->FrameCommandBuffers[sc->CurrentFrame];
+
+    // Reset so we can re-record into it this frame.
+    vkResetCommandBuffer(cmd, 0);
+
+    VkCommandBufferBeginInfo beginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cmd, &beginInfo);
+
+    VulkanCommandList cmdList{ cmd };
+    return m_Context->CommandLists.Allocate<CommandListTag>(std::move(cmdList));
+}
+
+// Finish recording. The command list is ready for Submit after this.
+void RenderDevice::EndCommandList(CommandListHandle handle)
+{
+    VulkanCommandList* cmdList = m_Context->CommandLists.Get(handle);
+    ARCBIT_ASSERT(cmdList != nullptr, "EndCommandList: invalid handle");
+    vkEndCommandBuffer(cmdList->Buffer);
+}
+
+// Begin a dynamic rendering pass (Vulkan 1.3 vkCmdBeginRendering).
+//
+// For each colour attachment we first issue a synchronization2 image barrier to
+// transition the layout to COLOR_ATTACHMENT_OPTIMAL.  Using oldLayout = UNDEFINED
+// discards previous contents, which is correct when loading with Clear or DontCare.
+void RenderDevice::BeginRendering(CommandListHandle cmd, const RenderingDesc& desc)
+{
+    VulkanCommandList* cmdList = m_Context->CommandLists.Get(cmd);
+    ARCBIT_ASSERT(cmdList != nullptr, "BeginRendering: invalid command list");
+
+    std::vector<VkImageMemoryBarrier2>     barriers;
+    std::vector<VkRenderingAttachmentInfo> colorAttachInfos;
+
+    VkExtent2D extent{};
+
+    for (const auto& attach : desc.ColorAttachments)
+    {
+        VulkanTexture* tex = m_Context->Textures.Get(attach.Texture);
+        ARCBIT_ASSERT(tex != nullptr, "BeginRendering: invalid colour attachment texture");
+
+        // Transition: UNDEFINED → COLOR_ATTACHMENT_OPTIMAL
+        // srcStage TOP_OF_PIPE means "wait for nothing before transitioning",
+        // which is correct because we declared oldLayout = UNDEFINED (contents discarded).
+        VkImageMemoryBarrier2 barrier{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
+        barrier.srcStageMask  = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+        barrier.srcAccessMask = VK_ACCESS_2_NONE;
+        barrier.dstStageMask  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+        barrier.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+        barrier.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier.newLayout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        barrier.image         = tex->Image;
+        barrier.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+        barriers.push_back(barrier);
+
+        VkRenderingAttachmentInfo attachInfo{ VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
+        attachInfo.imageView   = tex->View;
+        attachInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        attachInfo.loadOp      = ToVkLoadOp(attach.Load);
+        attachInfo.storeOp     = ToVkStoreOp(attach.Store);
+        attachInfo.clearValue.color = {
+            attach.ClearColor[0], attach.ClearColor[1],
+            attach.ClearColor[2], attach.ClearColor[3]
+        };
+        colorAttachInfos.push_back(attachInfo);
+
+        extent = { tex->Width, tex->Height };
+    }
+
+    VkDependencyInfo depInfo{ VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+    depInfo.imageMemoryBarrierCount = static_cast<u32>(barriers.size());
+    depInfo.pImageMemoryBarriers    = barriers.data();
+    vkCmdPipelineBarrier2(cmdList->Buffer, &depInfo);
+
+    VkRenderingInfo renderingInfo{ VK_STRUCTURE_TYPE_RENDERING_INFO };
+    renderingInfo.renderArea            = { { 0, 0 }, extent };
+    renderingInfo.layerCount            = 1;
+    renderingInfo.colorAttachmentCount  = static_cast<u32>(colorAttachInfos.size());
+    renderingInfo.pColorAttachments     = colorAttachInfos.data();
+
+    vkCmdBeginRendering(cmdList->Buffer, &renderingInfo);
+}
+
+// End the rendering pass and transition the colour attachments to the correct
+// final layout. Swapchain images must be in PRESENT_SRC_KHR before vkQueuePresentKHR.
+void RenderDevice::EndRendering(CommandListHandle cmd)
+{
+    VulkanCommandList* cmdList = m_Context->CommandLists.Get(cmd);
+    ARCBIT_ASSERT(cmdList != nullptr, "EndRendering: invalid command list");
+
+    vkCmdEndRendering(cmdList->Buffer);
+
+    // Transition the active swapchain image from COLOR_ATTACHMENT_OPTIMAL to
+    // PRESENT_SRC_KHR so vkQueuePresentKHR can display it.
+    VulkanSwapchain* sc = m_Context->Swapchains.Get(m_Context->ActiveSwapchain);
+    if (!sc) return;
+
+    VulkanTexture* tex = m_Context->Textures.Get(sc->ImageHandles[sc->CurrentImageIndex]);
+    if (!tex) return;
+
+    VkImageMemoryBarrier2 barrier{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
+    barrier.srcStageMask  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    barrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+    barrier.dstStageMask  = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_2_NONE;
+    barrier.oldLayout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    barrier.newLayout     = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    barrier.image         = tex->Image;
+    barrier.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+
+    VkDependencyInfo depInfo{ VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+    depInfo.imageMemoryBarrierCount = 1;
+    depInfo.pImageMemoryBarriers    = &barrier;
+    vkCmdPipelineBarrier2(cmdList->Buffer, &depInfo);
+}
+
 void RenderDevice::BindPipeline(CommandListHandle, PipelineHandle)         {}
 void RenderDevice::BindVertexBuffer(CommandListHandle, BufferHandle, u32, u64) {}
 void RenderDevice::BindIndexBuffer(CommandListHandle, BufferHandle, IndexType, u64) {}
@@ -295,13 +788,73 @@ void RenderDevice::SetViewport(CommandListHandle, f32, f32, f32, f32, f32, f32) 
 void RenderDevice::SetScissor(CommandListHandle, i32, i32, u32, u32) {}
 void RenderDevice::Draw(CommandListHandle, u32, u32, u32, u32)  {}
 void RenderDevice::DrawIndexed(CommandListHandle, u32, u32, i32, u32, u32) {}
-void RenderDevice::Submit(std::initializer_list<CommandListHandle>) {}
-void RenderDevice::Present(SwapchainHandle)                        {}
 
-// Block the calling thread until all pending GPU work on this device has finished.
-// Equivalent to vkDeviceWaitIdle — drains all queues completely.
-// Use only during shutdown or when rebuilding resources that the GPU is currently using.
-// Prefer fine-grained per-frame fences for normal frame pacing.
+// ---------------------------------------------------------------------------
+// Submit & Present
+// ---------------------------------------------------------------------------
+
+// Submit command lists to the GPU with swapchain synchronisation.
+//
+// Waits on ImageAvailable[CurrentFrame] before executing (ensures the image
+// is not still being read by the display hardware), then signals RenderFinished
+// when done. InFlight is signalled so AcquireNextImage can detect when this
+// frame slot is free for reuse.
+void RenderDevice::Submit(std::initializer_list<CommandListHandle> commands)
+{
+    VulkanSwapchain* sc = m_Context->Swapchains.Get(m_Context->ActiveSwapchain);
+    ARCBIT_ASSERT(sc != nullptr, "Submit: no active swapchain");
+
+    std::vector<VkCommandBuffer> cmdBuffers;
+    for (auto handle : commands)
+    {
+        VulkanCommandList* cmdList = m_Context->CommandLists.Get(handle);
+        if (cmdList) cmdBuffers.push_back(cmdList->Buffer);
+        m_Context->CommandLists.Free(handle); // handle is consumed by Submit
+    }
+
+    // The wait stage tells Vulkan at which pipeline stage to block until the
+    // semaphore is signalled.  COLOR_ATTACHMENT_OUTPUT is the earliest stage
+    // that writes to a colour attachment — we don't need to block sooner.
+    VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+    VkSubmitInfo submit{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
+    submit.waitSemaphoreCount   = 1;
+    submit.pWaitSemaphores      = &sc->ImageAvailable[sc->CurrentFrame];
+    submit.pWaitDstStageMask    = &waitStage;
+    submit.commandBufferCount   = static_cast<u32>(cmdBuffers.size());
+    submit.pCommandBuffers      = cmdBuffers.data();
+    submit.signalSemaphoreCount = 1;
+    submit.pSignalSemaphores    = &sc->RenderFinished[sc->CurrentImageIndex]; // per-image, not per-frame-slot
+
+    // Signal InFlight so AcquireNextImage knows when this frame slot is free.
+    vkQueueSubmit(m_Context->GraphicsQueue, 1, &submit, sc->InFlight[sc->CurrentFrame]);
+}
+
+// Present the current swapchain image to the display.
+// Waits on RenderFinished (set by Submit) before presenting.
+// Advances CurrentFrame so the next AcquireNextImage uses a fresh sync slot.
+void RenderDevice::Present(SwapchainHandle handle)
+{
+    VulkanSwapchain* sc = m_Context->Swapchains.Get(handle);
+    ARCBIT_ASSERT(sc != nullptr, "Present: invalid handle");
+
+    VkPresentInfoKHR presentInfo{ VK_STRUCTURE_TYPE_PRESENT_INFO_KHR };
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores    = &sc->RenderFinished[sc->CurrentImageIndex]; // per-image, matches Submit
+    presentInfo.swapchainCount     = 1;
+    presentInfo.pSwapchains        = &sc->Swapchain;
+    presentInfo.pImageIndices      = &sc->CurrentImageIndex;
+
+    const VkResult result = vkQueuePresentKHR(m_Context->PresentQueue, &presentInfo);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+        LOG_WARN(Render, "Present: swapchain suboptimal — resize on next frame");
+
+    // Advance the frame slot index so the next frame uses different sync objects.
+    sc->CurrentFrame = (sc->CurrentFrame + 1) % MaxFramesInFlight;
+}
+
+// Block until all pending GPU work is complete.
+// Use only during shutdown or resource rebuilding — not per-frame.
 void RenderDevice::WaitIdle()
 {
     if (m_Context && m_Context->Device != VK_NULL_HANDLE)
@@ -311,45 +864,25 @@ void RenderDevice::WaitIdle()
 } // namespace Arcbit
 
 // ---------------------------------------------------------------------------
-// Factory functions
-//
-// These must be outside namespace Arcbit because C linkage (extern "C") and
-// C++ namespaces are incompatible — a C symbol has no concept of namespacing.
-// We use the Arcbit_ prefix instead to avoid name collisions.
-//
-// Arcbit_CreateDevice:
-//   Constructs and initialises the Vulkan backend. Returns nullptr if any
-//   step fails — the caller should check and exit cleanly.
-//
-// Arcbit_DestroyDevice:
-//   Calls the destructor via delete. The destructor calls WaitIdle internally
-//   via VulkanContext::Shutdown, but callers should still call WaitIdle()
-//   beforehand if GPU work may still be in flight.
+// Factory functions — must be outside namespace Arcbit (C linkage + namespaces
+// are incompatible). Arcbit_ prefix avoids symbol collisions.
 // ---------------------------------------------------------------------------
 extern "C"
 {
 
 ARCBIT_RENDER_API Arcbit::RenderDevice* Arcbit_CreateDevice(const Arcbit::DeviceDesc& desc)
 {
-    // Construct the opaque backend context that holds all Vulkan state.
     auto context = std::make_unique<Arcbit::VulkanContext>();
-
-    // Initialise the full Vulkan stack: instance → surface → physical device →
-    // logical device → allocator → command pool.
     if (!context->Init(desc))
     {
         LOG_ERROR(Render, "Arcbit_CreateDevice: backend initialisation failed");
         return nullptr;
     }
-
-    // Wrap the context in a RenderDevice and hand it to the caller.
-    // The caller owns the pointer and must eventually pass it to Arcbit_DestroyDevice.
     return new Arcbit::RenderDevice(std::move(context));
 }
 
 ARCBIT_RENDER_API void Arcbit_DestroyDevice(Arcbit::RenderDevice* device)
 {
-    // delete invokes ~RenderDevice → VulkanContext::Shutdown → destroys all Vulkan objects.
     delete device;
 }
 

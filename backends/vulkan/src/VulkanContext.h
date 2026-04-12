@@ -5,6 +5,7 @@
 #include <vulkan/vulkan.h>
 #include <vma/vk_mem_alloc.h>
 
+#include <array>
 #include <vector>
 #include <optional>
 
@@ -30,6 +31,10 @@ struct VulkanBuffer
     bool          HostVisible = false;   // true → CPU can write via Mapped
     void*         Mapped      = nullptr; // non-null when HostVisible; VMA keeps it persistently mapped
 };
+
+// Maximum number of frames the CPU is allowed to be ahead of the GPU.
+// 2 = double-buffering: one frame being rendered, one being prepared.
+static constexpr u32 MaxFramesInFlight = 2;
 
 // Represents a 2D image on the GPU — textures, render targets, depth buffers.
 // Swapchain images are managed by the driver, not VMA, so IsSwapchainImage
@@ -84,8 +89,9 @@ struct VulkanSwapchain
     VkSurfaceKHR             Surface   = VK_NULL_HANDLE; // the WSI surface this swapchain presents to
     VkFormat                 Format    = VK_FORMAT_UNDEFINED;
     VkExtent2D               Extent    = {};
-    std::vector<VkImage>     Images;     // driver-owned swapchain images
-    std::vector<VkImageView> ImageViews; // one view per image for use as colour attachments
+    std::vector<VkImage>     Images;       // driver-owned swapchain images
+    std::vector<VkImageView> ImageViews;   // one view per image for use as colour attachments
+    std::vector<TextureHandle> ImageHandles; // engine-side handle for each swapchain image
 
     // Per-frame-in-flight synchronisation primitives.
     // Indexed by CurrentFrame (wraps at MaxFramesInFlight).
@@ -93,8 +99,9 @@ struct VulkanSwapchain
     std::vector<VkSemaphore> RenderFinished; // GPU→GPU: "rendering is done, safe to present"
     std::vector<VkFence>     InFlight;       // GPU→CPU: "frame N is done, you can reuse its resources"
 
-    u32 CurrentImageIndex = 0; // index into Images[] of the currently acquired swapchain image
-    u32 CurrentFrame      = 0; // index into the per-frame sync arrays; wraps at MaxFramesInFlight
+    u32  CurrentImageIndex = 0;     // index into Images[] of the currently acquired swapchain image
+    u32  CurrentFrame      = 0;     // index into per-frame sync arrays; wraps at MaxFramesInFlight
+    bool VSync             = true;  // stored to allow ResizeSwapchain to recreate with same mode
 };
 
 // Wraps a VkCommandBuffer allocated from the context's command pool.
@@ -311,6 +318,19 @@ struct VulkanContext
     HandlePool<VulkanPipeline>    Pipelines;
     HandlePool<VulkanSwapchain>   Swapchains;
     HandlePool<VulkanCommandList> CommandLists;
+
+    // -------------------------------------------------------------------------
+    // Frame state
+    //
+    // ActiveSwapchain is set by AcquireNextImage and read by Submit/Present
+    // to know which semaphores and fence to use for synchronisation.
+    //
+    // FrameCommandBuffers are pre-allocated once (MaxFramesInFlight buffers)
+    // and cycled each frame. They are reset at the start of each frame after
+    // the in-flight fence confirms the GPU is done with that slot.
+    // -------------------------------------------------------------------------
+    SwapchainHandle ActiveSwapchain;
+    std::array<VkCommandBuffer, MaxFramesInFlight> FrameCommandBuffers = {};
 
     // -------------------------------------------------------------------------
     // Deferred surface

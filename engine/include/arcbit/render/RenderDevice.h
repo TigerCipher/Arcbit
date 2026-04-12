@@ -324,8 +324,8 @@ private:
 // extern "C" must live outside any namespace — C linkage and namespaces are
 // incompatible. The symbols are still prefixed to avoid collisions.
 //
-// Arcbit_CreateDevice  — initialises the Vulkan backend and returns a device.
-//                        Returns nullptr if initialisation fails.
+// Arcbit_CreateDevice  — initializes the Vulkan backend and returns a device.
+//                        Returns nullptr if initialization fails.
 // Arcbit_DestroyDevice — shuts down the device and frees all GPU resources.
 //                        Call WaitIdle() before destroying if GPU work may
 //                        still be in flight.
