@@ -72,11 +72,31 @@ Checkbox list of every major milestone. Check off items as they are completed.
 ## Phase 8: Render Thread
 - [ ] Dedicated render thread with double-buffered frame state
 - [ ] Window resize → swapchain recreation (out-of-date handling)
-- [ ] Input events forwarded from SDL thread to game thread
+- [ ] Raw SDL events forwarded from SDL thread to game thread via a lock-free queue
 
 ---
 
-## Phase 9: Asset System
+## Phase 9: Input System
+- [ ] `Action` registry — map named actions (`"Jump"`, `"Attack"`) to one or more bindings
+- [ ] Binding types: keyboard key, mouse button, gamepad button, gamepad axis (with deadzone)
+- [ ] `InputManager::IsPressed(Action)` / `JustPressed` / `JustReleased` / `AxisValue`
+- [ ] Keyboard + mouse support via SDL3 event stream
+- [ ] Gamepad / controller support via SDL3 `SDL_Gamepad` API (hot-plug add/remove)
+- [ ] Multiple bindings per action (e.g. `"Attack"` → Space key OR gamepad A button)
+- [ ] Runtime rebind API (used by the settings screen)
+
+---
+
+## Phase 10: Settings System
+- [ ] Settings file (JSON, loaded on startup / saved on shutdown or explicit flush)
+- [ ] Graphics settings: VSync, target resolution, fullscreen mode
+- [ ] Audio settings: master volume, music volume, SFX volume
+- [ ] Input settings: persist action→binding map from Phase 9; apply on load
+- [ ] `Settings::Get<T>` / `Set<T>` typed accessors with dirty-flag auto-save
+
+---
+
+## Phase 11: Asset System
 - [ ] `stb_image` integration (PNG / JPG decode to raw RGBA pixels)
 - [ ] `TextureManager` — load texture from file, cache by path, return `TextureHandle`
 - [ ] `SpriteSheet` — load atlas texture + JSON/binary metadata mapping sprite name/ID to UV rects
@@ -84,7 +104,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 10: 2D Deferred Lighting
+## Phase 12: 2D Deferred Lighting
 - [ ] G-buffer render targets (albedo + normal)
 - [ ] Geometry pass shaders
 - [ ] Dynamic light SSBO (`BindStorageBuffer` — no fixed array limit)
@@ -94,7 +114,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 11: Sprite Batch Renderer
+## Phase 13: Sprite Batch Renderer
 - [ ] Per-frame CPU-side sprite buffer (position, UV rect, tint, layer)
 - [ ] Sort / group by texture to minimise descriptor switches
 - [ ] Single instance buffer upload + one `Draw` call per texture group
@@ -102,7 +122,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 12: Custom ECS
+## Phase 14: Custom ECS
 - [ ] Archetype storage (component pools grouped by component set)
 - [ ] Entity create / destroy
 - [ ] Query API (iterate entities matching a component mask)
@@ -111,25 +131,26 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 13: Audio
+## Phase 15: Audio
 - [ ] Audio library integration (miniaudio via vcpkg — single-header, no runtime deps)
 - [ ] `AudioManager` — initialise device, master volume control
 - [ ] Sound effect playback (fire-and-forget one-shots)
 - [ ] Music streaming (looping background track, crossfade)
 - [ ] `AudioSource` ECS component (spatial attenuation for point sounds)
+- [ ] Wire volume levels to Settings System (Phase 10)
 
 ---
 
-## Phase 14: Tilemap System
+## Phase 16: Tilemap System
 - [ ] Tile definition (ID, solid flag, custom properties)
 - [ ] Chunk-based map storage (16×16 tile chunks)
 - [ ] Tile atlas texture + UV lookup
-- [ ] Tilemap renderer (batched instanced quads via Phase 11 sprite batcher)
+- [ ] Tilemap renderer (batched instanced quads via Phase 13 sprite batcher)
 - [ ] Camera / viewport culling (only submit visible chunks)
 
 ---
 
-## Phase 15: Font Rendering
+## Phase 17: Font Rendering
 - [ ] Font rasteriser integration (`stb_truetype` or FreeType via vcpkg)
 - [ ] Bitmap font atlas generation at startup (bake glyphs into a `TextureHandle`)
 - [ ] `DrawText` helper — lays out a string into sprite-batch quads with correct UVs
@@ -137,7 +158,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 16: 2D Physics
+## Phase 18: 2D Physics
 - [ ] Physics library integration (Box2D v3 via vcpkg)
 - [ ] `PhysicsWorld` — fixed-timestep update, gravity config
 - [ ] `Rigidbody2D` + `Collider2D` ECS components (AABB / circle)
@@ -146,7 +167,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 17: Lua Scripting
+## Phase 19: Lua Scripting
 - [ ] Lua integration (sol2 via vcpkg)
 - [ ] Script component (path to `.lua` file)
 - [ ] NPC script hooks: `OnInteract`, `OnTick`, `OnCombatStart`
@@ -154,7 +175,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 18: Inventory & Items
+## Phase 20: Inventory & Items
 - [ ] Item definition (ID, name, stat block)
 - [ ] Inventory component (item slots with quantities)
 - [ ] Pick-up / drop / equip logic
@@ -162,7 +183,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 19: Turn-Based Combat
+## Phase 21: Turn-Based Combat
 - [ ] Battle state machine (idle → select action → resolve → end check)
 - [ ] Action queue (Pokémon-style turn order by speed)
 - [ ] Move / stat system (HP, ATK, DEF, SPD, type)
@@ -170,7 +191,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 20: C# AvaloniaUI Editor
+## Phase 22: C# AvaloniaUI Editor
 - [ ] Separate solution / CMake-independent project
 - [ ] Tilemap canvas (render tiles, layer management)
 - [ ] Tile palette + placement / erase tools
