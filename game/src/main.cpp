@@ -8,6 +8,20 @@
 
 #include <array>
 #include <cstdlib>
+#include <fstream>
+#include <vector>
+
+// Load a SPIR-V binary file from disk. Returns an empty vector on failure.
+static std::vector<Arcbit::u8> LoadSpv(const char* path)
+{
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    ARCBIT_ASSERT(file.is_open(), "Failed to open shader file — check working directory");
+    const auto size = static_cast<std::streamsize>(file.tellg());
+    file.seekg(0, std::ios::beg);
+    std::vector<Arcbit::u8> buf(static_cast<size_t>(size));
+    file.read(reinterpret_cast<char*>(buf.data()), size);
+    return buf;
+}
 
 int main(int /*argc*/, char* /*argv*/[])
 {
@@ -39,14 +53,53 @@ int main(int /*argc*/, char* /*argv*/[])
     LOG_INFO(Render, "Render device ready");
 
     // --- Swapchain ----------------------------------------------------------
+    Arcbit::u32 windowWidth  = 1280;
+    Arcbit::u32 windowHeight = 720;
+
     Arcbit::SwapchainDesc swapDesc{};
     swapDesc.NativeWindowHandle = window;
-    swapDesc.Width              = 1280;
-    swapDesc.Height             = 720;
+    swapDesc.Width              = windowWidth;
+    swapDesc.Height             = windowHeight;
     swapDesc.VSync              = true;
 
     Arcbit::SwapchainHandle swapchain = device->CreateSwapchain(swapDesc);
     ARCBIT_ASSERT(swapchain.IsValid(), "Failed to create swapchain");
+
+    // --- Shaders & Pipeline -------------------------------------------------
+    // Shaders are compiled to .spv at build time by glslc (see game/CMakeLists.txt).
+    // The working directory must be the binary output directory (build/debug/bin).
+    auto vertSpv = LoadSpv("shaders/triangle.vert.spv");
+    auto fragSpv = LoadSpv("shaders/triangle.frag.spv");
+
+    Arcbit::ShaderDesc vertDesc{};
+    vertDesc.Stage    = Arcbit::ShaderStage::Vertex;
+    vertDesc.Code     = vertSpv.data();
+    vertDesc.CodeSize = static_cast<Arcbit::u32>(vertSpv.size());
+    Arcbit::ShaderHandle vertShader = device->CreateShader(vertDesc);
+
+    Arcbit::ShaderDesc fragDesc{};
+    fragDesc.Stage    = Arcbit::ShaderStage::Fragment;
+    fragDesc.Code     = fragSpv.data();
+    fragDesc.CodeSize = static_cast<Arcbit::u32>(fragSpv.size());
+    Arcbit::ShaderHandle fragShader = device->CreateShader(fragDesc);
+
+    Arcbit::PipelineDesc pipelineDesc{};
+    pipelineDesc.VertexShader   = vertShader;
+    pipelineDesc.FragmentShader = fragShader;
+    pipelineDesc.CullMode       = Arcbit::CullMode::None;       // no backface culling for 2D
+    pipelineDesc.ColorFormat    = device->GetSwapchainColorFormat(swapchain);
+    pipelineDesc.DepthFormat    = Arcbit::Format::Undefined;    // no depth buffer yet
+    pipelineDesc.DebugName      = "TrianglePipeline";
+
+    Arcbit::PipelineHandle pipeline = device->CreatePipeline(pipelineDesc);
+    ARCBIT_ASSERT(pipeline.IsValid(), "Failed to create pipeline");
+
+    // Shader modules can be destroyed immediately after pipeline creation —
+    // Vulkan copies the bytecode internally during vkCreateGraphicsPipelines.
+    device->DestroyShader(vertShader);
+    device->DestroyShader(fragShader);
+
+    LOG_INFO(Render, "Pipeline ready");
 
     // --- Event loop ---------------------------------------------------------
     LOG_INFO(Engine, "Entering event loop — Escape or close window to exit");
@@ -68,9 +121,9 @@ int main(int /*argc*/, char* /*argv*/[])
                         running = false;
                     break;
                 case SDL_EVENT_WINDOW_RESIZED:
-                    device->ResizeSwapchain(swapchain,
-                        static_cast<Arcbit::u32>(event.window.data1),
-                        static_cast<Arcbit::u32>(event.window.data2));
+                    windowWidth  = static_cast<Arcbit::u32>(event.window.data1);
+                    windowHeight = static_cast<Arcbit::u32>(event.window.data2);
+                    device->ResizeSwapchain(swapchain, windowWidth, windowHeight);
                     break;
                 default:
                     break;
@@ -78,15 +131,12 @@ int main(int /*argc*/, char* /*argv*/[])
         }
 
         // --- Frame ----------------------------------------------------------
-
-        // Acquire the next swapchain image. Returns invalid if the swapchain
-        // is out of date; SDL_EVENT_WINDOW_RESIZED will follow and trigger a resize.
         Arcbit::TextureHandle backbuffer = device->AcquireNextImage(swapchain);
         if (!backbuffer.IsValid()) continue;
 
         Arcbit::CommandListHandle cmd = device->BeginCommandList();
 
-        // Clear the backbuffer to a deep-blue colour.
+        // Clear to a deep blue, then draw the orange triangle on top.
         Arcbit::Attachment colorAttach{};
         colorAttach.Texture       = backbuffer;
         colorAttach.Load          = Arcbit::LoadOp::Clear;
@@ -101,7 +151,12 @@ int main(int /*argc*/, char* /*argv*/[])
         renderDesc.ColorAttachments = colorAttachments;
 
         device->BeginRendering(cmd, renderDesc);
-        // Draw calls go here once the pipeline is implemented (Phase 6).
+        device->BindPipeline(cmd, pipeline);
+        device->SetViewport(cmd, 0.0f, 0.0f,
+            static_cast<Arcbit::f32>(windowWidth),
+            static_cast<Arcbit::f32>(windowHeight));
+        device->SetScissor(cmd, 0, 0, windowWidth, windowHeight);
+        device->Draw(cmd, 3); // 3 vertices — positions are hardcoded in the vertex shader
         device->EndRendering(cmd);
 
         device->EndCommandList(cmd);
@@ -111,6 +166,7 @@ int main(int /*argc*/, char* /*argv*/[])
 
     // --- Shutdown -----------------------------------------------------------
     device->WaitIdle();
+    device->DestroyPipeline(pipeline);
     device->DestroySwapchain(swapchain);
     Arcbit_DestroyDevice(device);
     SDL_DestroyWindow(window);

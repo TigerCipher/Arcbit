@@ -308,8 +308,9 @@ struct PipelineDesc
 
     // Format of attachments this pipeline will write to.
     // Must match what's passed to BeginRendering.
+    // Set DepthFormat to Format::Undefined when no depth attachment is used.
     Format ColorFormat = Format::BGRA8_SRGB;
-    Format DepthFormat = Format::D32_Float;
+    Format DepthFormat = Format::Undefined;
 
     const char* DebugName = nullptr;
 };

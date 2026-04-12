@@ -159,6 +159,11 @@ public:
     // rendering into the next one.
     // =========================================================================
 
+    // Returns the colour format of the swapchain as a Format enum value.
+    // Pass this to PipelineDesc::ColorFormat so the pipeline matches the
+    // actual swapchain format chosen by the driver.
+    Format GetSwapchainColorFormat(SwapchainHandle handle);
+
     // Create a swapchain tied to the given window.
     // The window handle (SDL_Window*) is passed as void* to keep SDL out of
     // this header. The surface created during device init is reused here.

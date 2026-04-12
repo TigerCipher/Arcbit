@@ -79,6 +79,100 @@ VkAttachmentLoadOp ToVkLoadOp(LoadOp op)
     return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 }
 
+// Convert our Format enum → VkFormat.
+VkFormat ToVkFormat(Format fmt)
+{
+    switch (fmt)
+    {
+        case Format::RGBA8_UNorm:       return VK_FORMAT_R8G8B8A8_UNORM;
+        case Format::RGBA8_SRGB:        return VK_FORMAT_R8G8B8A8_SRGB;
+        case Format::BGRA8_UNorm:       return VK_FORMAT_B8G8R8A8_UNORM;
+        case Format::BGRA8_SRGB:        return VK_FORMAT_B8G8R8A8_SRGB;
+        case Format::RGBA16_Float:      return VK_FORMAT_R16G16B16A16_SFLOAT;
+        case Format::RGBA32_Float:      return VK_FORMAT_R32G32B32A32_SFLOAT;
+        case Format::R32_Float:         return VK_FORMAT_R32_SFLOAT;
+        case Format::D32_Float:         return VK_FORMAT_D32_SFLOAT;
+        case Format::D24_UNorm_S8_UInt: return VK_FORMAT_D24_UNORM_S8_UINT;
+        default:                        return VK_FORMAT_UNDEFINED;
+    }
+}
+
+// Convert VkFormat → our Format enum (used when querying swapchain format).
+Format VkFormatToFormat(VkFormat fmt)
+{
+    switch (fmt)
+    {
+        case VK_FORMAT_R8G8B8A8_UNORM:        return Format::RGBA8_UNorm;
+        case VK_FORMAT_R8G8B8A8_SRGB:         return Format::RGBA8_SRGB;
+        case VK_FORMAT_B8G8R8A8_UNORM:        return Format::BGRA8_UNorm;
+        case VK_FORMAT_B8G8R8A8_SRGB:         return Format::BGRA8_SRGB;
+        case VK_FORMAT_R16G16B16A16_SFLOAT:   return Format::RGBA16_Float;
+        case VK_FORMAT_R32G32B32A32_SFLOAT:   return Format::RGBA32_Float;
+        case VK_FORMAT_R32_SFLOAT:            return Format::R32_Float;
+        case VK_FORMAT_D32_SFLOAT:            return Format::D32_Float;
+        case VK_FORMAT_D24_UNORM_S8_UINT:     return Format::D24_UNorm_S8_UInt;
+        default:                              return Format::Undefined;
+    }
+}
+
+VkCullModeFlags ToVkCullMode(CullMode mode)
+{
+    switch (mode)
+    {
+        case CullMode::None:  return VK_CULL_MODE_NONE;
+        case CullMode::Front: return VK_CULL_MODE_FRONT_BIT;
+        case CullMode::Back:  return VK_CULL_MODE_BACK_BIT;
+    }
+    return VK_CULL_MODE_NONE;
+}
+
+VkCompareOp ToVkCompareOp(CompareOp op)
+{
+    switch (op)
+    {
+        case CompareOp::Never:        return VK_COMPARE_OP_NEVER;
+        case CompareOp::Less:         return VK_COMPARE_OP_LESS;
+        case CompareOp::Equal:        return VK_COMPARE_OP_EQUAL;
+        case CompareOp::LessEqual:    return VK_COMPARE_OP_LESS_OR_EQUAL;
+        case CompareOp::Greater:      return VK_COMPARE_OP_GREATER;
+        case CompareOp::NotEqual:     return VK_COMPARE_OP_NOT_EQUAL;
+        case CompareOp::GreaterEqual: return VK_COMPARE_OP_GREATER_OR_EQUAL;
+        case CompareOp::Always:       return VK_COMPARE_OP_ALWAYS;
+    }
+    return VK_COMPARE_OP_NEVER;
+}
+
+VkBlendFactor ToVkBlendFactor(BlendFactor f)
+{
+    switch (f)
+    {
+        case BlendFactor::Zero:              return VK_BLEND_FACTOR_ZERO;
+        case BlendFactor::One:               return VK_BLEND_FACTOR_ONE;
+        case BlendFactor::SrcColor:          return VK_BLEND_FACTOR_SRC_COLOR;
+        case BlendFactor::OneMinusSrcColor:  return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+        case BlendFactor::DstColor:          return VK_BLEND_FACTOR_DST_COLOR;
+        case BlendFactor::OneMinusDstColor:  return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+        case BlendFactor::SrcAlpha:          return VK_BLEND_FACTOR_SRC_ALPHA;
+        case BlendFactor::OneMinusSrcAlpha:  return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        case BlendFactor::DstAlpha:          return VK_BLEND_FACTOR_DST_ALPHA;
+        case BlendFactor::OneMinusDstAlpha:  return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+    }
+    return VK_BLEND_FACTOR_ZERO;
+}
+
+VkBlendOp ToVkBlendOp(BlendOp op)
+{
+    switch (op)
+    {
+        case BlendOp::Add:             return VK_BLEND_OP_ADD;
+        case BlendOp::Subtract:        return VK_BLEND_OP_SUBTRACT;
+        case BlendOp::ReverseSubtract: return VK_BLEND_OP_REVERSE_SUBTRACT;
+        case BlendOp::Min:             return VK_BLEND_OP_MIN;
+        case BlendOp::Max:             return VK_BLEND_OP_MAX;
+    }
+    return VK_BLEND_OP_ADD;
+}
+
 // Convert engine StoreOp → VkAttachmentStoreOp.
 VkAttachmentStoreOp ToVkStoreOp(StoreOp op)
 {
@@ -408,11 +502,192 @@ void RenderDevice::DestroyShader(ShaderHandle handle)
 }
 
 // ---------------------------------------------------------------------------
+// Swapchain colour format query
+// ---------------------------------------------------------------------------
+
+// Returns the colour format the swapchain was actually created with.
+// Use this when creating a pipeline so PipelineDesc::ColorFormat matches.
+Format RenderDevice::GetSwapchainColorFormat(SwapchainHandle handle)
+{
+    VulkanSwapchain* sc = m_Context->Swapchains.Get(handle);
+    ARCBIT_ASSERT(sc != nullptr, "GetSwapchainColorFormat: invalid handle");
+    return VkFormatToFormat(sc->Format);
+}
+
+// ---------------------------------------------------------------------------
 // Pipelines
 // ---------------------------------------------------------------------------
 
-PipelineHandle RenderDevice::CreatePipeline(const PipelineDesc&)   { return PipelineHandle::Invalid(); }
-void           RenderDevice::DestroyPipeline(PipelineHandle)       {}
+// Creates a graphics pipeline — shaders, vertex input, rasterizer, depth,
+// blend, and dynamic state (viewport + scissor set at draw time).
+//
+// Uses VkPipelineRenderingCreateInfo (dynamic rendering, Vulkan 1.3) in the
+// pNext chain instead of a VkRenderPass. ColorFormat / DepthFormat must match
+// what is passed to BeginRendering each frame.
+//
+// Pipeline creation is expensive — call at load time, not per-frame.
+PipelineHandle RenderDevice::CreatePipeline(const PipelineDesc& desc)
+{
+    VulkanShader* vertShader = m_Context->Shaders.Get(desc.VertexShader);
+    VulkanShader* fragShader = m_Context->Shaders.Get(desc.FragmentShader);
+    ARCBIT_ASSERT(vertShader && fragShader, "CreatePipeline: invalid shader handles");
+
+    // Shader stages — one struct per stage.
+    VkPipelineShaderStageCreateInfo stages[2] = {};
+    stages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[0].stage  = VK_SHADER_STAGE_VERTEX_BIT;
+    stages[0].module = vertShader->Module;
+    stages[0].pName  = "main";
+    stages[1].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[1].stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+    stages[1].module = fragShader->Module;
+    stages[1].pName  = "main";
+
+    // Vertex input — translate engine binding/attribute descriptions to Vulkan.
+    // Empty arrays are valid (e.g. hardcoded geometry in the vertex shader).
+    std::vector<VkVertexInputBindingDescription>   bindings;
+    std::vector<VkVertexInputAttributeDescription> attributes;
+
+    for (const auto& b : desc.Bindings)
+    {
+        VkVertexInputBindingDescription bd{};
+        bd.binding   = b.Binding;
+        bd.stride    = b.Stride;
+        bd.inputRate = b.PerInstance ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
+        bindings.push_back(bd);
+    }
+    for (const auto& a : desc.Attributes)
+    {
+        VkVertexInputAttributeDescription ad{};
+        ad.location = a.Location;
+        ad.binding  = a.Binding;
+        ad.format   = ToVkFormat(a.Format);
+        ad.offset   = a.Offset;
+        attributes.push_back(ad);
+    }
+
+    VkPipelineVertexInputStateCreateInfo vertexInput{ VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
+    vertexInput.vertexBindingDescriptionCount   = static_cast<u32>(bindings.size());
+    vertexInput.pVertexBindingDescriptions      = bindings.data();
+    vertexInput.vertexAttributeDescriptionCount = static_cast<u32>(attributes.size());
+    vertexInput.pVertexAttributeDescriptions    = attributes.data();
+
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly{ VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+    // Viewport and scissor are dynamic — set per-draw via SetViewport / SetScissor.
+    // We still tell Vulkan how many there are (1 each).
+    VkDynamicState dynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+    VkPipelineDynamicStateCreateInfo dynamicState{ VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
+    dynamicState.dynamicStateCount = 2;
+    dynamicState.pDynamicStates    = dynamicStates;
+
+    VkPipelineViewportStateCreateInfo viewportState{ VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
+    viewportState.viewportCount = 1;
+    viewportState.scissorCount  = 1;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{ VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
+    rasterizer.polygonMode = desc.Wireframe ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
+    rasterizer.cullMode    = ToVkCullMode(desc.CullMode);
+    rasterizer.frontFace   = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rasterizer.lineWidth   = 1.0f;
+
+    // No multisampling for now — single sample.
+    VkPipelineMultisampleStateCreateInfo multisample{ VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
+    multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkPipelineDepthStencilStateCreateInfo depthStencil{ VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
+    depthStencil.depthTestEnable  = desc.Depth.TestEnable  ? VK_TRUE : VK_FALSE;
+    depthStencil.depthWriteEnable = desc.Depth.WriteEnable ? VK_TRUE : VK_FALSE;
+    depthStencil.depthCompareOp   = ToVkCompareOp(desc.Depth.Compare);
+
+    VkPipelineColorBlendAttachmentState blendAttach{};
+    blendAttach.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
+                               | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    if (desc.Blend.Enable)
+    {
+        blendAttach.blendEnable         = VK_TRUE;
+        blendAttach.srcColorBlendFactor = ToVkBlendFactor(desc.Blend.SrcColor);
+        blendAttach.dstColorBlendFactor = ToVkBlendFactor(desc.Blend.DstColor);
+        blendAttach.colorBlendOp        = ToVkBlendOp(desc.Blend.ColorOp);
+        blendAttach.srcAlphaBlendFactor = ToVkBlendFactor(desc.Blend.SrcAlpha);
+        blendAttach.dstAlphaBlendFactor = ToVkBlendFactor(desc.Blend.DstAlpha);
+        blendAttach.alphaBlendOp        = ToVkBlendOp(desc.Blend.AlphaOp);
+    }
+
+    VkPipelineColorBlendStateCreateInfo colorBlend{ VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
+    colorBlend.attachmentCount = 1;
+    colorBlend.pAttachments    = &blendAttach;
+
+    // Pipeline layout. Declare a 128-byte push constant block covering all stages
+    // so any shader can use push constants without needing to recreate the layout.
+    VkPushConstantRange pushRange{};
+    pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    pushRange.offset     = 0;
+    pushRange.size       = 128;
+
+    VkPipelineLayoutCreateInfo layoutInfo{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+    layoutInfo.pushConstantRangeCount = 1;
+    layoutInfo.pPushConstantRanges    = &pushRange;
+
+    VulkanPipeline vkPipeline{};
+    VkResult result = vkCreatePipelineLayout(m_Context->Device, &layoutInfo, nullptr, &vkPipeline.Layout);
+    ARCBIT_VERIFY(result == VK_SUCCESS, "vkCreatePipelineLayout failed");
+
+    // Dynamic rendering: describe the attachment formats without a VkRenderPass.
+    // These must match what's passed to vkCmdBeginRendering each frame.
+    VkFormat colorFmt = ToVkFormat(desc.ColorFormat);
+    VkPipelineRenderingCreateInfo renderingInfo{ VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
+    renderingInfo.colorAttachmentCount    = 1;
+    renderingInfo.pColorAttachmentFormats = &colorFmt;
+    if (desc.DepthFormat != Format::Undefined)
+        renderingInfo.depthAttachmentFormat = ToVkFormat(desc.DepthFormat);
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{ VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+    pipelineInfo.pNext               = &renderingInfo; // dynamic rendering — no VkRenderPass
+    pipelineInfo.stageCount          = 2;
+    pipelineInfo.pStages             = stages;
+    pipelineInfo.pVertexInputState   = &vertexInput;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState      = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState   = &multisample;
+    pipelineInfo.pDepthStencilState  = &depthStencil;
+    pipelineInfo.pColorBlendState    = &colorBlend;
+    pipelineInfo.pDynamicState       = &dynamicState;
+    pipelineInfo.layout              = vkPipeline.Layout;
+    // renderPass = VK_NULL_HANDLE (dynamic rendering handles attachment setup)
+
+    result = vkCreateGraphicsPipelines(m_Context->Device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &vkPipeline.Pipeline);
+    ARCBIT_VERIFY(result == VK_SUCCESS, "vkCreateGraphicsPipelines failed");
+
+    if (desc.DebugName)
+    {
+        auto fn = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(
+            vkGetDeviceProcAddr(m_Context->Device, "vkSetDebugUtilsObjectNameEXT"));
+        if (fn)
+        {
+            VkDebugUtilsObjectNameInfoEXT nameInfo{ VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
+            nameInfo.objectType   = VK_OBJECT_TYPE_PIPELINE;
+            nameInfo.objectHandle = reinterpret_cast<u64>(vkPipeline.Pipeline);
+            nameInfo.pObjectName  = desc.DebugName;
+            fn(m_Context->Device, &nameInfo);
+        }
+    }
+
+    LOG_DEBUG(Render, "Pipeline created{}", desc.DebugName ? std::string(" (") + desc.DebugName + ")" : "");
+    return m_Context->Pipelines.Allocate<PipelineTag>(std::move(vkPipeline));
+}
+
+void RenderDevice::DestroyPipeline(PipelineHandle handle)
+{
+    auto resource = m_Context->Pipelines.Free(handle);
+    if (!resource) return;
+    if (resource->Pipeline != VK_NULL_HANDLE)
+        vkDestroyPipeline(m_Context->Device, resource->Pipeline, nullptr);
+    if (resource->Layout != VK_NULL_HANDLE)
+        vkDestroyPipelineLayout(m_Context->Device, resource->Layout, nullptr);
+}
 
 // ---------------------------------------------------------------------------
 // Swapchain
@@ -779,15 +1054,81 @@ void RenderDevice::EndRendering(CommandListHandle cmd)
     vkCmdPipelineBarrier2(cmdList->Buffer, &depInfo);
 }
 
-void RenderDevice::BindPipeline(CommandListHandle, PipelineHandle)         {}
-void RenderDevice::BindVertexBuffer(CommandListHandle, BufferHandle, u32, u64) {}
-void RenderDevice::BindIndexBuffer(CommandListHandle, BufferHandle, IndexType, u64) {}
-void RenderDevice::BindStorageBuffer(CommandListHandle, BufferHandle, u32, u32) {}
-void RenderDevice::PushConstants(CommandListHandle, ShaderStage, const void*, u32, u32) {}
-void RenderDevice::SetViewport(CommandListHandle, f32, f32, f32, f32, f32, f32) {}
-void RenderDevice::SetScissor(CommandListHandle, i32, i32, u32, u32) {}
-void RenderDevice::Draw(CommandListHandle, u32, u32, u32, u32)  {}
-void RenderDevice::DrawIndexed(CommandListHandle, u32, u32, i32, u32, u32) {}
+void RenderDevice::BindPipeline(CommandListHandle cmd, PipelineHandle pipeline)
+{
+    VulkanCommandList* cmdList = m_Context->CommandLists.Get(cmd);
+    VulkanPipeline*    pip     = m_Context->Pipelines.Get(pipeline);
+    ARCBIT_ASSERT(cmdList && pip, "BindPipeline: invalid handle");
+    vkCmdBindPipeline(cmdList->Buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pip->Pipeline);
+    cmdList->BoundLayout = pip->Layout; // stored so PushConstants can use it
+}
+
+void RenderDevice::BindVertexBuffer(CommandListHandle cmd, BufferHandle buffer, u32 binding, u64 offset)
+{
+    VulkanCommandList* cmdList = m_Context->CommandLists.Get(cmd);
+    VulkanBuffer*      buf     = m_Context->Buffers.Get(buffer);
+    ARCBIT_ASSERT(cmdList && buf, "BindVertexBuffer: invalid handle");
+    vkCmdBindVertexBuffers(cmdList->Buffer, binding, 1, &buf->Buffer, &offset);
+}
+
+void RenderDevice::BindIndexBuffer(CommandListHandle cmd, BufferHandle buffer, IndexType type, u64 offset)
+{
+    VulkanCommandList* cmdList = m_Context->CommandLists.Get(cmd);
+    VulkanBuffer*      buf     = m_Context->Buffers.Get(buffer);
+    ARCBIT_ASSERT(cmdList && buf, "BindIndexBuffer: invalid handle");
+    const VkIndexType vkType = (type == IndexType::U16) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
+    vkCmdBindIndexBuffer(cmdList->Buffer, buf->Buffer, offset, vkType);
+}
+
+void RenderDevice::BindStorageBuffer(CommandListHandle, BufferHandle, u32, u32) {} // descriptor sets — Phase 7
+
+void RenderDevice::PushConstants(CommandListHandle cmd, ShaderStage stages,
+                                  const void* data, u32 size, u32 offset)
+{
+    VulkanCommandList* cmdList = m_Context->CommandLists.Get(cmd);
+    ARCBIT_ASSERT(cmdList && cmdList->BoundLayout != VK_NULL_HANDLE,
+        "PushConstants: no pipeline bound");
+
+    VkShaderStageFlags vkStages = 0;
+    if (HasFlag(stages, ShaderStage::Vertex))   vkStages |= VK_SHADER_STAGE_VERTEX_BIT;
+    if (HasFlag(stages, ShaderStage::Fragment))  vkStages |= VK_SHADER_STAGE_FRAGMENT_BIT;
+    if (HasFlag(stages, ShaderStage::Compute))   vkStages |= VK_SHADER_STAGE_COMPUTE_BIT;
+
+    vkCmdPushConstants(cmdList->Buffer, cmdList->BoundLayout, vkStages, offset, size, data);
+}
+
+void RenderDevice::SetViewport(CommandListHandle cmd, f32 x, f32 y,
+                                f32 width, f32 height, f32 minDepth, f32 maxDepth)
+{
+    VulkanCommandList* cmdList = m_Context->CommandLists.Get(cmd);
+    ARCBIT_ASSERT(cmdList, "SetViewport: invalid command list");
+    VkViewport vp{ x, y, width, height, minDepth, maxDepth };
+    vkCmdSetViewport(cmdList->Buffer, 0, 1, &vp);
+}
+
+void RenderDevice::SetScissor(CommandListHandle cmd, i32 x, i32 y, u32 width, u32 height)
+{
+    VulkanCommandList* cmdList = m_Context->CommandLists.Get(cmd);
+    ARCBIT_ASSERT(cmdList, "SetScissor: invalid command list");
+    VkRect2D scissor{ { x, y }, { width, height } };
+    vkCmdSetScissor(cmdList->Buffer, 0, 1, &scissor);
+}
+
+void RenderDevice::Draw(CommandListHandle cmd, u32 vertexCount, u32 firstVertex,
+                         u32 instanceCount, u32 firstInstance)
+{
+    VulkanCommandList* cmdList = m_Context->CommandLists.Get(cmd);
+    ARCBIT_ASSERT(cmdList, "Draw: invalid command list");
+    vkCmdDraw(cmdList->Buffer, vertexCount, instanceCount, firstVertex, firstInstance);
+}
+
+void RenderDevice::DrawIndexed(CommandListHandle cmd, u32 indexCount, u32 firstIndex,
+                                 i32 vertexOffset, u32 instanceCount, u32 firstInstance)
+{
+    VulkanCommandList* cmdList = m_Context->CommandLists.Get(cmd);
+    ARCBIT_ASSERT(cmdList, "DrawIndexed: invalid command list");
+    vkCmdDrawIndexed(cmdList->Buffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+}
 
 // ---------------------------------------------------------------------------
 // Submit & Present

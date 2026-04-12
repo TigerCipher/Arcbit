@@ -48,16 +48,16 @@ Checkbox list of every major milestone. Check off items as they are completed.
 - [x] `BeginCommandList` / `EndCommandList`
 - [x] `BeginRendering` / `EndRendering` (image layout transitions via sync2)
 - [x] `Submit` + `Present`
-- [ ] Clear-color frame rendered to the window in `main.cpp`
+- [x] Clear-color frame rendered to the window in `main.cpp`
 
 ---
 
 ## Phase 6: Pipeline & Triangle
-- [ ] CMake glslc compile step (`.vert` / `.frag` → `.spv` at build time)
-- [ ] Minimal vertex + fragment shaders (hardcoded triangle, solid colour)
-- [ ] `CreatePipeline` / `DestroyPipeline` (graphics pipeline)
-- [ ] `BindPipeline` / `SetViewport` / `SetScissor` / `Draw`
-- [ ] Triangle rendered to screen (no vertex buffer — position in shader)
+- [x] CMake glslc compile step (`.vert` / `.frag` → `.spv` at build time)
+- [x] Minimal vertex + fragment shaders (hardcoded triangle, solid colour)
+- [x] `CreatePipeline` / `DestroyPipeline` (graphics pipeline)
+- [x] `BindPipeline` / `SetViewport` / `SetScissor` / `Draw`
+- [x] Triangle rendered to screen
 
 ---
 

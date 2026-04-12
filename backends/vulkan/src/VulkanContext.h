@@ -106,9 +106,12 @@ struct VulkanSwapchain
 
 // Wraps a VkCommandBuffer allocated from the context's command pool.
 // One per in-flight frame; recorded on the CPU and submitted to the GPU queue.
+// BoundLayout is updated by BindPipeline so PushConstants can call
+// vkCmdPushConstants with the correct layout without needing a separate argument.
 struct VulkanCommandList
 {
-    VkCommandBuffer Buffer = VK_NULL_HANDLE;
+    VkCommandBuffer  Buffer      = VK_NULL_HANDLE;
+    VkPipelineLayout BoundLayout = VK_NULL_HANDLE; // set by BindPipeline
 };
 
 // ---------------------------------------------------------------------------
