@@ -77,12 +77,12 @@ Checkbox list of every major milestone. Check off items as they are completed.
 ---
 
 ## Phase 9: Input System
-- [ ] `Action` registry — map named actions (`"Jump"`, `"Attack"`) to one or more bindings
+- [ ] `Action` registry — map named actions (`"Move_Left"`, `"Interact"`) to one or more bindings
 - [ ] Binding types: keyboard key, mouse button, gamepad button, gamepad axis (with deadzone)
 - [ ] `InputManager::IsPressed(Action)` / `JustPressed` / `JustReleased` / `AxisValue`
 - [ ] Keyboard + mouse support via SDL3 event stream
 - [ ] Gamepad / controller support via SDL3 `SDL_Gamepad` API (hot-plug add/remove)
-- [ ] Multiple bindings per action (e.g. `"Attack"` → Space key OR gamepad A button)
+- [ ] Multiple bindings per action (e.g. `"Interact"` → E key OR gamepad A button)
 - [ ] Runtime rebind API (used by the settings screen)
 
 ---
