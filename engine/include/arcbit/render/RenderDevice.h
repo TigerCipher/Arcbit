@@ -237,6 +237,16 @@ public:
     void BindIndexBuffer(CommandListHandle cmd, BufferHandle buffer,
                          IndexType type, u64 offset = 0);
 
+    // Bind a texture and sampler pair so shaders can sample it.
+    // Updates the texture's pre-allocated descriptor set with the given sampler,
+    // then binds it to the pipeline at the specified set index.
+    // Must be called after BindPipeline and before the draw that reads the texture.
+    //
+    // @param set      Descriptor set index (layout(set = N, binding = 0)).
+    // @param binding  Binding index within the set (currently always 0).
+    void BindTexture(CommandListHandle cmd, TextureHandle texture, SamplerHandle sampler,
+                     u32 set = 0, u32 binding = 0);
+
     // Bind a storage buffer (SSBO) to a descriptor set binding.
     // Used for large read/write data that changes per frame — e.g. the
     // dynamic light list. The shader iterates over lightCount entries

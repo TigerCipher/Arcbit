@@ -62,10 +62,10 @@ Checkbox list of every major milestone. Check off items as they are completed.
 ---
 
 ## Phase 7: Textures & Samplers
-- [ ] `CreateTexture` / `UploadTexture` / `DestroyTexture`
-- [ ] `CreateSampler` / `DestroySampler`
-- [ ] Descriptor pool + descriptor set management
-- [ ] Textured quad demo
+- [x] `CreateTexture` / `UploadTexture` / `DestroyTexture`
+- [x] `CreateSampler` / `DestroySampler`
+- [x] Descriptor pool + descriptor set management
+- [x] Textured quad demo
 
 ---
 

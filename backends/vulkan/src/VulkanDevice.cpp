@@ -173,6 +173,18 @@ VkBlendOp ToVkBlendOp(BlendOp op)
     return VK_BLEND_OP_ADD;
 }
 
+VkSamplerAddressMode ToVkAddressMode(AddressMode mode)
+{
+    switch (mode)
+    {
+        case AddressMode::Repeat:        return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        case AddressMode::MirrorRepeat:  return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+        case AddressMode::ClampToEdge:   return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        case AddressMode::ClampToBorder: return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    }
+    return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+}
+
 // Convert engine StoreOp → VkAttachmentStoreOp.
 VkAttachmentStoreOp ToVkStoreOp(StoreOp op)
 {
@@ -441,8 +453,176 @@ void RenderDevice::DestroyBuffer(BufferHandle handle)
 // Textures
 // ---------------------------------------------------------------------------
 
-TextureHandle RenderDevice::CreateTexture(const TextureDesc&)      { return TextureHandle::Invalid(); }
-void          RenderDevice::UploadTexture(TextureHandle, const void*, u64) {}
+// Allocates a GPU image (VkImage + VkImageView via VMA) and, if the texture
+// will be sampled in shaders, pre-allocates a VkDescriptorSet for it from the
+// global pool. The descriptor is populated later by UploadTexture / BindTexture.
+TextureHandle RenderDevice::CreateTexture(const TextureDesc& desc)
+{
+    ARCBIT_ASSERT(desc.Width > 0 && desc.Height > 0, "Texture dimensions must be > 0");
+
+    VkImageCreateInfo imageInfo{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+    imageInfo.imageType   = VK_IMAGE_TYPE_2D;
+    imageInfo.format      = ToVkFormat(desc.Format);
+    imageInfo.extent      = { desc.Width, desc.Height, 1 };
+    imageInfo.mipLevels   = desc.MipLevels;
+    imageInfo.arrayLayers = 1;
+    imageInfo.samples     = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.tiling      = VK_IMAGE_TILING_OPTIMAL; // GPU-optimal layout; CPU cannot read
+
+    if (HasFlag(desc.Usage, TextureUsage::Sampled))      imageInfo.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    if (HasFlag(desc.Usage, TextureUsage::RenderTarget))  imageInfo.usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    if (HasFlag(desc.Usage, TextureUsage::DepthStencil)) imageInfo.usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    if (HasFlag(desc.Usage, TextureUsage::Storage))       imageInfo.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+    if (HasFlag(desc.Usage, TextureUsage::Transfer))      imageInfo.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+                                                                           | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+    // Sampled textures need TRANSFER_DST so UploadTexture can copy into them.
+    if (HasFlag(desc.Usage, TextureUsage::Sampled))
+        imageInfo.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+    VmaAllocationCreateInfo allocInfo{};
+    allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+    VulkanTexture vkTex{};
+    vkTex.Format = imageInfo.format;
+    vkTex.Width  = desc.Width;
+    vkTex.Height = desc.Height;
+    vkTex.Usage  = desc.Usage;
+
+    const VkResult imgResult = vmaCreateImage(
+        m_Context->Allocator,
+        &imageInfo, &allocInfo,
+        &vkTex.Image, &vkTex.Allocation, nullptr);
+    ARCBIT_VERIFY(imgResult == VK_SUCCESS, "vmaCreateImage failed");
+
+    // Determine the correct aspect flag (colour vs depth).
+    VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+    if (HasFlag(desc.Usage, TextureUsage::DepthStencil))
+        aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+    VkImageViewCreateInfo viewInfo{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+    viewInfo.image    = vkTex.Image;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format   = imageInfo.format;
+    viewInfo.subresourceRange = { aspect, 0, desc.MipLevels, 0, 1 };
+
+    const VkResult viewResult = vkCreateImageView(m_Context->Device, &viewInfo, nullptr, &vkTex.View);
+    ARCBIT_VERIFY(viewResult == VK_SUCCESS, "vkCreateImageView failed");
+
+    // Pre-allocate one descriptor set per frame-in-flight so BindTexture can safely
+    // update the current frame's set while the previous frame may still be in flight.
+    // AcquireNextImage waits on InFlight[CurrentFrame] before we touch that slot,
+    // guaranteeing the GPU is no longer reading from DescriptorSets[CurrentFrame].
+    if (HasFlag(desc.Usage, TextureUsage::Sampled))
+    {
+        // Allocate all MaxFramesInFlight sets in one call using the same layout.
+        std::array<VkDescriptorSetLayout, MaxFramesInFlight> layouts;
+        layouts.fill(m_Context->TextureSetLayout);
+
+        VkDescriptorSetAllocateInfo setAlloc{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+        setAlloc.descriptorPool     = m_Context->GlobalDescriptorPool;
+        setAlloc.descriptorSetCount = MaxFramesInFlight;
+        setAlloc.pSetLayouts        = layouts.data();
+
+        const VkResult setResult = vkAllocateDescriptorSets(m_Context->Device, &setAlloc,
+                                                             vkTex.DescriptorSets.data());
+        ARCBIT_VERIFY(setResult == VK_SUCCESS, "vkAllocateDescriptorSets failed");
+    }
+
+    return m_Context->Textures.Allocate<TextureTag>(std::move(vkTex));
+}
+
+// Upload raw pixel data into a texture via a staging buffer.
+//
+// Transition sequence (sync2):
+//   1. UNDEFINED → TRANSFER_DST_OPTIMAL  — discard old contents, prepare for copy.
+//   2. Buffer-to-image copy.
+//   3. TRANSFER_DST_OPTIMAL → SHADER_READ_ONLY_OPTIMAL — ready for shader sampling.
+//
+// A one-shot command buffer is used and the queue is drained before returning,
+// so the staging buffer can be freed immediately.
+void RenderDevice::UploadTexture(TextureHandle handle, const void* data, u64 size)
+{
+    VulkanTexture* tex = m_Context->Textures.Get(handle);
+    ARCBIT_ASSERT(tex != nullptr, "UploadTexture: invalid handle");
+
+    // Staging buffer — host-visible, CPU writes → GPU reads.
+    BufferDesc stagingDesc{};
+    stagingDesc.Size        = size;
+    stagingDesc.Usage       = BufferUsage::Transfer;
+    stagingDesc.HostVisible = true;
+    stagingDesc.DebugName   = "tex_staging";
+
+    BufferHandle stagingHandle = CreateBuffer(stagingDesc);
+    VulkanBuffer* staging = m_Context->Buffers.Get(stagingHandle);
+    memcpy(staging->Mapped, data, size);
+
+    // One-shot command buffer.
+    VkCommandBufferAllocateInfo cmdAlloc{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+    cmdAlloc.commandPool        = m_Context->CommandPool;
+    cmdAlloc.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmdAlloc.commandBufferCount = 1;
+
+    VkCommandBuffer cmd;
+    vkAllocateCommandBuffers(m_Context->Device, &cmdAlloc, &cmd);
+
+    VkCommandBufferBeginInfo beginInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cmd, &beginInfo);
+
+    // Barrier 1: UNDEFINED → TRANSFER_DST_OPTIMAL.
+    // srcStage TOP_OF_PIPE + srcAccess NONE means "wait for nothing" — correct
+    // because oldLayout = UNDEFINED discards existing image contents anyway.
+    VkImageMemoryBarrier2 toTransfer{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
+    toTransfer.srcStageMask  = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+    toTransfer.srcAccessMask = VK_ACCESS_2_NONE;
+    toTransfer.dstStageMask  = VK_PIPELINE_STAGE_2_COPY_BIT;
+    toTransfer.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    toTransfer.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
+    toTransfer.newLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    toTransfer.image         = tex->Image;
+    toTransfer.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+
+    VkDependencyInfo dep1{ VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+    dep1.imageMemoryBarrierCount = 1;
+    dep1.pImageMemoryBarriers    = &toTransfer;
+    vkCmdPipelineBarrier2(cmd, &dep1);
+
+    // Copy staging buffer → image (row-major, tightly packed).
+    VkBufferImageCopy region{};
+    region.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+    region.imageExtent      = { tex->Width, tex->Height, 1 };
+    vkCmdCopyBufferToImage(cmd, staging->Buffer, tex->Image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    // Barrier 2: TRANSFER_DST_OPTIMAL → SHADER_READ_ONLY_OPTIMAL.
+    // Fragment shaders can now sample this texture.
+    VkImageMemoryBarrier2 toShaderRead{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
+    toShaderRead.srcStageMask  = VK_PIPELINE_STAGE_2_COPY_BIT;
+    toShaderRead.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    toShaderRead.dstStageMask  = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+    toShaderRead.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+    toShaderRead.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    toShaderRead.newLayout     = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    toShaderRead.image         = tex->Image;
+    toShaderRead.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+
+    VkDependencyInfo dep2{ VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+    dep2.imageMemoryBarrierCount = 1;
+    dep2.pImageMemoryBarriers    = &toShaderRead;
+    vkCmdPipelineBarrier2(cmd, &dep2);
+
+    vkEndCommandBuffer(cmd);
+
+    VkSubmitInfo submit{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers    = &cmd;
+    vkQueueSubmit(m_Context->GraphicsQueue, 1, &submit, VK_NULL_HANDLE);
+    vkQueueWaitIdle(m_Context->GraphicsQueue);
+
+    vkFreeCommandBuffers(m_Context->Device, m_Context->CommandPool, 1, &cmd);
+    DestroyBuffer(stagingHandle);
+}
 
 // Release the texture and its GPU memory.
 // Swapchain images (IsSwapchainImage = true) are driver-owned — we only
@@ -451,6 +631,11 @@ void RenderDevice::DestroyTexture(TextureHandle handle)
 {
     auto resource = m_Context->Textures.Free(handle);
     if (!resource) return;
+
+    // Return all per-frame descriptor sets to the pool before destroying the image.
+    if (!resource->IsSwapchainImage && resource->DescriptorSets[0] != VK_NULL_HANDLE)
+        vkFreeDescriptorSets(m_Context->Device, m_Context->GlobalDescriptorPool,
+                             MaxFramesInFlight, resource->DescriptorSets.data());
 
     if (resource->View != VK_NULL_HANDLE)
         vkDestroyImageView(m_Context->Device, resource->View, nullptr);
@@ -463,8 +648,44 @@ void RenderDevice::DestroyTexture(TextureHandle handle)
 // Samplers
 // ---------------------------------------------------------------------------
 
-SamplerHandle RenderDevice::CreateSampler(const SamplerDesc&)      { return SamplerHandle::Invalid(); }
-void          RenderDevice::DestroySampler(SamplerHandle)          {}
+// Creates a VkSampler from the given filtering and addressing parameters.
+// Samplers are cheap to create and can be shared across many textures.
+SamplerHandle RenderDevice::CreateSampler(const SamplerDesc& desc)
+{
+    VkSamplerCreateInfo info{ VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+    info.magFilter    = (desc.MagFilter == Filter::Linear) ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+    info.minFilter    = (desc.MinFilter == Filter::Linear) ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+    info.addressModeU = ToVkAddressMode(desc.AddressU);
+    info.addressModeV = ToVkAddressMode(desc.AddressV);
+    info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
+    if (desc.Anisotropy && m_Context->PhysicalDeviceFeats.samplerAnisotropy)
+    {
+        info.anisotropyEnable = VK_TRUE;
+        info.maxAnisotropy    = std::min(desc.MaxAniso,
+            m_Context->PhysicalDeviceProps.limits.maxSamplerAnisotropy);
+    }
+
+    // Standard range for normalised UV coordinates.
+    info.minLod          = 0.0f;
+    info.maxLod          = VK_LOD_CLAMP_NONE;
+    info.borderColor     = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
+    info.unnormalizedCoordinates = VK_FALSE;
+
+    VulkanSampler vkSampler{};
+    const VkResult result = vkCreateSampler(m_Context->Device, &info, nullptr, &vkSampler.Sampler);
+    ARCBIT_VERIFY(result == VK_SUCCESS, "vkCreateSampler failed");
+
+    return m_Context->Samplers.Allocate<SamplerTag>(std::move(vkSampler));
+}
+
+void RenderDevice::DestroySampler(SamplerHandle handle)
+{
+    auto resource = m_Context->Samplers.Free(handle);
+    if (!resource) return;
+    if (resource->Sampler != VK_NULL_HANDLE)
+        vkDestroySampler(m_Context->Device, resource->Sampler, nullptr);
+}
 
 // ---------------------------------------------------------------------------
 // Shaders
@@ -629,6 +850,14 @@ PipelineHandle RenderDevice::CreatePipeline(const PipelineDesc& desc)
     VkPipelineLayoutCreateInfo layoutInfo{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
     layoutInfo.pushConstantRangeCount = 1;
     layoutInfo.pPushConstantRanges    = &pushRange;
+
+    // Optionally include the texture descriptor set layout so the shader can
+    // sample a texture via BindTexture. Set 0 = combined image sampler.
+    if (desc.UseTextures)
+    {
+        layoutInfo.setLayoutCount = 1;
+        layoutInfo.pSetLayouts    = &m_Context->TextureSetLayout;
+    }
 
     VulkanPipeline vkPipeline{};
     VkResult result = vkCreatePipelineLayout(m_Context->Device, &layoutInfo, nullptr, &vkPipeline.Layout);
@@ -1080,7 +1309,49 @@ void RenderDevice::BindIndexBuffer(CommandListHandle cmd, BufferHandle buffer, I
     vkCmdBindIndexBuffer(cmdList->Buffer, buf->Buffer, offset, vkType);
 }
 
-void RenderDevice::BindStorageBuffer(CommandListHandle, BufferHandle, u32, u32) {} // descriptor sets — Phase 7
+// Update the texture's pre-allocated descriptor set with the given sampler,
+// then bind it to the pipeline at the specified descriptor set slot.
+// vkUpdateDescriptorSets is called every bind — if perf becomes a concern,
+// we can cache the last-bound (texture, sampler) pair and skip the update.
+void RenderDevice::BindTexture(CommandListHandle cmd, TextureHandle texture,
+                                SamplerHandle sampler, u32 set, u32 /*binding*/)
+{
+    VulkanCommandList* cmdList = m_Context->CommandLists.Get(cmd);
+    VulkanTexture*     tex     = m_Context->Textures.Get(texture);
+    VulkanSampler*     samp    = m_Context->Samplers.Get(sampler);
+    ARCBIT_ASSERT(cmdList && tex && samp, "BindTexture: invalid handle");
+    ARCBIT_ASSERT(tex->DescriptorSets[0] != VK_NULL_HANDLE,
+        "BindTexture: texture was not created with Sampled usage");
+
+    // Use the descriptor set for the current frame slot.
+    // AcquireNextImage already waited on InFlight[CurrentFrame], so the GPU
+    // is no longer reading from this slot's set — safe to update it now.
+    VulkanSwapchain* sc = m_Context->Swapchains.Get(m_Context->ActiveSwapchain);
+    ARCBIT_ASSERT(sc, "BindTexture: no active swapchain");
+    const u32 frame = sc->CurrentFrame;
+
+    VkDescriptorSet dstSet = tex->DescriptorSets[frame];
+
+    // Write the current sampler + image view into the descriptor set.
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.sampler     = samp->Sampler;
+    imageInfo.imageView   = tex->View;
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+    write.dstSet          = dstSet;
+    write.dstBinding      = 0;
+    write.descriptorCount = 1;
+    write.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    write.pImageInfo      = &imageInfo;
+
+    vkUpdateDescriptorSets(m_Context->Device, 1, &write, 0, nullptr);
+
+    vkCmdBindDescriptorSets(cmdList->Buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        cmdList->BoundLayout, set, 1, &dstSet, 0, nullptr);
+}
+
+void RenderDevice::BindStorageBuffer(CommandListHandle, BufferHandle, u32, u32) {} // descriptor sets — Phase 9
 
 void RenderDevice::PushConstants(CommandListHandle cmd, ShaderStage stages,
                                   const void* data, u32 size, u32 offset)

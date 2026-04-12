@@ -312,6 +312,10 @@ struct PipelineDesc
     Format ColorFormat = Format::BGRA8_SRGB;
     Format DepthFormat = Format::Undefined;
 
+    // Set to true to include the texture descriptor set layout (set 0, binding 0)
+    // in the pipeline layout so shaders can sample textures via BindTexture.
+    bool UseTextures = false;
+
     const char* DebugName = nullptr;
 };
 

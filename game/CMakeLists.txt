@@ -26,6 +26,8 @@ set(SHADER_OUT_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders")
 set(SHADER_SOURCES
     triangle.vert
     triangle.frag
+    quad.vert
+    quad.frag
 )
 
 set(SHADER_OUTPUTS)

@@ -41,14 +41,20 @@ static constexpr u32 MaxFramesInFlight = 2;
 // distinguishes them to avoid double-free during cleanup.
 struct VulkanTexture
 {
-    VkImage       Image      = VK_NULL_HANDLE;
-    VkImageView   View       = VK_NULL_HANDLE; // required to bind the image in shaders or as attachment
-    VmaAllocation Allocation = VK_NULL_HANDLE; // null for swapchain images (driver-owned)
-    VkFormat      Format     = VK_FORMAT_UNDEFINED;
-    u32           Width      = 0;
-    u32           Height     = 0;
-    TextureUsage  Usage      = TextureUsage::None;
-    bool          IsSwapchainImage = false; // swapchain images aren't VMA-owned; skip vmaDestroyImage
+    VkImage          Image           = VK_NULL_HANDLE;
+    VkImageView      View            = VK_NULL_HANDLE; // required to bind the image in shaders or as attachment
+    VmaAllocation    Allocation      = VK_NULL_HANDLE; // null for swapchain images (driver-owned)
+    VkFormat         Format          = VK_FORMAT_UNDEFINED;
+    u32              Width           = 0;
+    u32              Height          = 0;
+    TextureUsage     Usage            = TextureUsage::None;
+    bool             IsSwapchainImage = false;   // swapchain images aren't VMA-owned; skip vmaDestroyImage
+
+    // One descriptor set per frame-in-flight slot.
+    // We update DescriptorSets[CurrentFrame] in BindTexture — safe because
+    // AcquireNextImage already waited on InFlight[CurrentFrame], guaranteeing
+    // that slot's previous command buffer is no longer executing on the GPU.
+    std::array<VkDescriptorSet, MaxFramesInFlight> DescriptorSets = {};
 };
 
 // Represents a sampler — the small state object that describes how a texture
@@ -308,6 +314,17 @@ struct VulkanContext
     VkCommandPool CommandPool = VK_NULL_HANDLE;
 
     // -------------------------------------------------------------------------
+    // Descriptor infrastructure
+    //
+    // GlobalDescriptorPool is a shared pool from which we allocate one
+    // VkDescriptorSet per sampled texture.  TextureSetLayout describes that
+    // set: set 0, binding 0 = combined image sampler, fragment stage only.
+    // Pipelines that read textures include TextureSetLayout in their layout.
+    // -------------------------------------------------------------------------
+    VkDescriptorPool      GlobalDescriptorPool = VK_NULL_HANDLE;
+    VkDescriptorSetLayout TextureSetLayout     = VK_NULL_HANDLE;
+
+    // -------------------------------------------------------------------------
     // Resource pools
     //
     // Each pool maps a typed handle (e.g. BufferHandle) to the corresponding
@@ -365,6 +382,8 @@ private:
     bool CreateLogicalDevice();
     bool CreateAllocator();
     bool CreateCommandPool();
+    bool CreateDescriptorPool();
+    bool CreateDescriptorSetLayout();
 
     // Attach the debug messenger to the instance. Called after CreateInstance
     // when validation is enabled. Failure is non-fatal — we log a warning.
