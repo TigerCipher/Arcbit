@@ -76,7 +76,15 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 9: 2D Deferred Lighting
+## Phase 9: Asset System
+- [ ] `stb_image` integration (PNG / JPG decode to raw RGBA pixels)
+- [ ] `TextureManager` — load texture from file, cache by path, return `TextureHandle`
+- [ ] `SpriteSheet` — load atlas texture + JSON/binary metadata mapping sprite name/ID to UV rects
+- [ ] Asset hot-reload stub (watch file mtime, re-upload on change)
+
+---
+
+## Phase 10: 2D Deferred Lighting
 - [ ] G-buffer render targets (albedo + normal)
 - [ ] Geometry pass shaders
 - [ ] Dynamic light SSBO (`BindStorageBuffer` — no fixed array limit)
@@ -86,7 +94,15 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 10: Custom ECS
+## Phase 11: Sprite Batch Renderer
+- [ ] Per-frame CPU-side sprite buffer (position, UV rect, tint, layer)
+- [ ] Sort / group by texture to minimise descriptor switches
+- [ ] Single instance buffer upload + one `Draw` call per texture group
+- [ ] Camera / viewport transform (world → NDC matrix via push constant)
+
+---
+
+## Phase 12: Custom ECS
 - [ ] Archetype storage (component pools grouped by component set)
 - [ ] Entity create / destroy
 - [ ] Query API (iterate entities matching a component mask)
@@ -95,16 +111,42 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 11: Tilemap System
-- [ ] Tile definition (ID, solid flag, custom properties)
-- [ ] Chunk-based map storage (16×16 tile chunks)
-- [ ] Tile atlas texture + UV lookup
-- [ ] Camera / viewport transform
-- [ ] Tilemap renderer (batched instanced quads)
+## Phase 13: Audio
+- [ ] Audio library integration (miniaudio via vcpkg — single-header, no runtime deps)
+- [ ] `AudioManager` — initialise device, master volume control
+- [ ] Sound effect playback (fire-and-forget one-shots)
+- [ ] Music streaming (looping background track, crossfade)
+- [ ] `AudioSource` ECS component (spatial attenuation for point sounds)
 
 ---
 
-## Phase 12: Lua Scripting
+## Phase 14: Tilemap System
+- [ ] Tile definition (ID, solid flag, custom properties)
+- [ ] Chunk-based map storage (16×16 tile chunks)
+- [ ] Tile atlas texture + UV lookup
+- [ ] Tilemap renderer (batched instanced quads via Phase 11 sprite batcher)
+- [ ] Camera / viewport culling (only submit visible chunks)
+
+---
+
+## Phase 15: Font Rendering
+- [ ] Font rasteriser integration (`stb_truetype` or FreeType via vcpkg)
+- [ ] Bitmap font atlas generation at startup (bake glyphs into a `TextureHandle`)
+- [ ] `DrawText` helper — lays out a string into sprite-batch quads with correct UVs
+- [ ] SDF font variant (optional — better quality at large sizes)
+
+---
+
+## Phase 16: 2D Physics
+- [ ] Physics library integration (Box2D v3 via vcpkg)
+- [ ] `PhysicsWorld` — fixed-timestep update, gravity config
+- [ ] `Rigidbody2D` + `Collider2D` ECS components (AABB / circle)
+- [ ] Collision event callbacks (enter / stay / exit) forwarded to ECS systems
+- [ ] Debug draw overlay (wireframe collider shapes)
+
+---
+
+## Phase 17: Lua Scripting
 - [ ] Lua integration (sol2 via vcpkg)
 - [ ] Script component (path to `.lua` file)
 - [ ] NPC script hooks: `OnInteract`, `OnTick`, `OnCombatStart`
@@ -112,7 +154,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 13: Inventory & Items
+## Phase 18: Inventory & Items
 - [ ] Item definition (ID, name, stat block)
 - [ ] Inventory component (item slots with quantities)
 - [ ] Pick-up / drop / equip logic
@@ -120,7 +162,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 14: Turn-Based Combat
+## Phase 19: Turn-Based Combat
 - [ ] Battle state machine (idle → select action → resolve → end check)
 - [ ] Action queue (Pokémon-style turn order by speed)
 - [ ] Move / stat system (HP, ATK, DEF, SPD, type)
@@ -128,7 +170,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 15: C# AvaloniaUI Editor
+## Phase 20: C# AvaloniaUI Editor
 - [ ] Separate solution / CMake-independent project
 - [ ] Tilemap canvas (render tiles, layer management)
 - [ ] Tile palette + placement / erase tools
