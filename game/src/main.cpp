@@ -2,12 +2,10 @@
 #include <arcbit/core/Log.h>
 #include <arcbit/core/Assert.h>
 #include <arcbit/core/Profiler.h>
+#include <arcbit/app/Window.h>
 #include <arcbit/render/RenderDevice.h>
 #include <arcbit/render/RenderThread.h>
 
-#include <SDL3/SDL.h>
-
-#include <array>
 #include <cstdlib>
 #include <fstream>
 #include <vector>
@@ -51,20 +49,12 @@ int main(int /*argc*/, char* /*argv*/[])
     Arcbit::Log::Init();
     LOG_INFO(Engine, "Arcbit starting");
 
-    // --- Platform -----------------------------------------------------------
-    ARCBIT_VERIFY(SDL_Init(SDL_INIT_VIDEO), "SDL_Init failed");
-
-    SDL_Window* window = SDL_CreateWindow(
-        "Arcbit",
-        1280, 720,
-        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE
-    );
-    ARCBIT_ASSERT(window != nullptr, "SDL_CreateWindow failed");
-    LOG_INFO(Platform, "Window created (1280x720)");
+    // --- Window -------------------------------------------------------------
+    Arcbit::Window window({ .Title = "Arcbit", .Width = 1280, .Height = 720 });
 
     // --- Renderer -----------------------------------------------------------
     Arcbit::DeviceDesc deviceDesc{};
-    deviceDesc.NativeWindowHandle = window;
+    deviceDesc.NativeWindowHandle = window.GetNativeHandle();
     deviceDesc.AppName            = "Arcbit";
     deviceDesc.AppVersion         = 1;
 #ifdef ARCBIT_DEBUG
@@ -76,13 +66,10 @@ int main(int /*argc*/, char* /*argv*/[])
     LOG_INFO(Render, "Render device ready");
 
     // --- Swapchain ----------------------------------------------------------
-    Arcbit::u32 windowWidth  = 1280;
-    Arcbit::u32 windowHeight = 720;
-
     Arcbit::SwapchainDesc swapDesc{};
-    swapDesc.NativeWindowHandle = window;
-    swapDesc.Width              = windowWidth;
-    swapDesc.Height             = windowHeight;
+    swapDesc.NativeWindowHandle = window.GetNativeHandle();
+    swapDesc.Width              = window.GetWidth();
+    swapDesc.Height             = window.GetHeight();
     swapDesc.VSync              = true;
 
     Arcbit::SwapchainHandle swapchain = device->CreateSwapchain(swapDesc);
@@ -123,7 +110,7 @@ int main(int /*argc*/, char* /*argv*/[])
     quadDesc.CullMode       = Arcbit::CullMode::None;
     quadDesc.ColorFormat    = swapFormat;
     quadDesc.DepthFormat    = Arcbit::Format::Undefined;
-    quadDesc.UseTextures    = true;  // include texture descriptor set layout
+    quadDesc.UseTextures    = true;
     quadDesc.DebugName      = "QuadPipeline";
 
     Arcbit::PipelineHandle quadPipeline = device->CreatePipeline(quadDesc);
@@ -139,15 +126,14 @@ int main(int /*argc*/, char* /*argv*/[])
     auto checkerPixels = MakeCheckerboard(CheckerTileSize, CheckerTiles);
 
     Arcbit::TextureDesc texDesc{};
-    texDesc.Width    = CheckerDim;
-    texDesc.Height   = CheckerDim;
-    texDesc.Format   = Arcbit::Format::RGBA8_UNorm;
-    texDesc.Usage    = Arcbit::TextureUsage::Sampled | Arcbit::TextureUsage::Transfer;
+    texDesc.Width     = CheckerDim;
+    texDesc.Height    = CheckerDim;
+    texDesc.Format    = Arcbit::Format::RGBA8_UNorm;
+    texDesc.Usage     = Arcbit::TextureUsage::Sampled | Arcbit::TextureUsage::Transfer;
     texDesc.DebugName = "Checkerboard";
 
     Arcbit::TextureHandle checkerTex = device->CreateTexture(texDesc);
     ARCBIT_ASSERT(checkerTex.IsValid(), "Failed to create checkerboard texture");
-
     device->UploadTexture(checkerTex, checkerPixels.data(),
         static_cast<Arcbit::u64>(checkerPixels.size()));
 
@@ -165,85 +151,42 @@ int main(int /*argc*/, char* /*argv*/[])
     LOG_INFO(Render, "Texture and sampler ready");
 
     // --- Render thread ------------------------------------------------------
-    // All GPU work from here on is driven by the render thread. The main thread
-    // only builds FramePackets and hands them off — it never calls the device
-    // directly inside the loop.
     Arcbit::RenderThread renderThread;
     renderThread.Start(device);
 
-    // --- Event loop ---------------------------------------------------------
-    LOG_INFO(Engine, "Entering event loop — Escape or close window to exit");
+    // --- Game loop ----------------------------------------------------------
+    LOG_INFO(Engine, "Entering game loop");
 
-    bool running       = true;
-    bool pendingResize = false; // true when SDL reported a window resize this tick
-
-    while (running)
+    while (window.PollEvents())
     {
-        // --- Event polling --------------------------------------------------
-        // SDL events *must* be polled from the thread that created the window.
-        // We process them here on the main thread and fold any resize into the
-        // next FramePacket so the render thread handles the Vulkan side.
-        SDL_Event event;
-        while (SDL_PollEvent(&event))
-        {
-            switch (event.type)
-            {
-                case SDL_EVENT_QUIT:
-                    running = false;
-                    break;
-                case SDL_EVENT_KEY_DOWN:
-                    if (event.key.key == SDLK_ESCAPE)
-                        running = false;
-                    break;
-                case SDL_EVENT_WINDOW_RESIZED:
-                    // Record new dimensions and let the render thread recreate
-                    // the swapchain — we must not call ResizeSwapchain here
-                    // because the render thread may be mid-frame.
-                    windowWidth   = static_cast<Arcbit::u32>(event.window.data1);
-                    windowHeight  = static_cast<Arcbit::u32>(event.window.data2);
-                    pendingResize = true;
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        // --- Build frame packet ---------------------------------------------
         Arcbit::FramePacket packet{};
         packet.Swapchain   = swapchain;
-        packet.Width       = windowWidth;
-        packet.Height      = windowHeight;
+        packet.Width       = window.GetWidth();
+        packet.Height      = window.GetHeight();
         packet.ClearColor  = { 0.05f, 0.05f, 0.15f, 1.00f };
-        packet.NeedsResize = pendingResize;
-        pendingResize      = false; // consumed — clear for next tick
+        packet.NeedsResize = window.WasResizedThisFrame();
 
-        // Draw the textured quad covering the full screen.
         Arcbit::DrawCall quadDraw{};
         quadDraw.Pipeline    = quadPipeline;
         quadDraw.Texture     = checkerTex;
         quadDraw.Sampler     = sampler;
-        quadDraw.VertexCount = 6; // two triangles forming a quad
+        quadDraw.VertexCount = 6;
         packet.DrawCalls.push_back(quadDraw);
 
-        // Hand the packet to the render thread. Blocks briefly if it is still
-        // finishing the previous frame (back-pressure — see RenderThread docs).
         renderThread.SubmitFrame(std::move(packet));
     }
 
     // --- Shutdown -----------------------------------------------------------
-    // Stop the render thread first — blocks until the current frame finishes
-    // and the thread exits, ensuring no Vulkan calls are in flight.
+    // Stop render thread before touching any GPU resources.
     renderThread.Stop();
-
-    device->WaitIdle(); // belt-and-suspenders before releasing GPU resources
+    device->WaitIdle();
     device->DestroySampler(sampler);
     device->DestroyTexture(checkerTex);
     device->DestroyPipeline(quadPipeline);
     device->DestroyPipeline(triPipeline);
     device->DestroySwapchain(swapchain);
     Arcbit_DestroyDevice(device);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+    // Window destructor calls SDL_DestroyWindow + SDL_Quit.
 
     LOG_INFO(Engine, "Arcbit shutdown complete");
     Arcbit::Log::Shutdown();
