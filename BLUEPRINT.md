@@ -70,9 +70,9 @@ Checkbox list of every major milestone. Check off items as they are completed.
 ---
 
 ## Phase 8: Render Thread
-- [ ] Dedicated render thread with double-buffered frame state
-- [ ] Window resize → swapchain recreation (out-of-date handling)
-- [ ] Raw SDL events forwarded from SDL thread to game thread via a lock-free queue
+- [x] Dedicated render thread with double-buffered frame state
+- [x] Window resize → swapchain recreation (out-of-date handling)
+- [x] Raw SDL events forwarded from SDL thread to game thread via a lock-free queue
 
 ---
 

@@ -1,15 +1,17 @@
-# arcbit-engine is an INTERFACE library for now — it provides include paths
-# and will accumulate headers as we build the abstract render API, ECS, etc.
-# It will graduate to a STATIC library once it has source files of its own.
-add_library(arcbit-engine INTERFACE)
+# arcbit-engine is a STATIC library that provides the engine's public API:
+# graphics abstraction, render thread, and (in later phases) ECS, audio, etc.
+# Game and tool targets link against this; they never see Vulkan headers.
+add_library(arcbit-engine STATIC
+    src/RenderThread.cpp
+)
 
 target_include_directories(arcbit-engine
-    INTERFACE
+    PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_link_libraries(arcbit-engine
-    INTERFACE
+    PUBLIC
         arcbit-core
 )
 

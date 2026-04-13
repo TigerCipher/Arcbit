@@ -3,6 +3,7 @@
 #include <arcbit/core/Assert.h>
 #include <arcbit/core/Profiler.h>
 #include <arcbit/render/RenderDevice.h>
+#include <arcbit/render/RenderThread.h>
 
 #include <SDL3/SDL.h>
 
@@ -23,8 +24,8 @@ static std::vector<Arcbit::u8> LoadSpv(const char* path)
     return buf;
 }
 
-// Generate a simple 4x4 checkerboard texture (magenta / white) for testing
-// Returns a flat RGBA8 buffer; width and height are always 4.
+// Generate a simple checkerboard texture (magenta / white) for the demo.
+// Returns a flat RGBA8 buffer; dimensions are tileSize * tiles in each axis.
 static std::vector<Arcbit::u8> MakeCheckerboard(Arcbit::u32 tileSize = 32,
                                                   Arcbit::u32 tiles    = 4)
 {
@@ -89,11 +90,7 @@ int main(int /*argc*/, char* /*argv*/[])
 
     const Arcbit::Format swapFormat = device->GetSwapchainColorFormat(swapchain);
 
-    // --- Triangle pipeline (solid colour, no texture) -----------------------
-    {
-        // Kept alive only long enough to show it still compiles. Not drawn in
-        // the main loop — the quad demo replaces it for this phase.
-    }
+    // --- Triangle pipeline (solid colour, kept for reference) ---------------
     auto vertSpv = LoadSpv("shaders/triangle.vert.spv");
     auto fragSpv = LoadSpv("shaders/triangle.frag.spv");
 
@@ -167,13 +164,25 @@ int main(int /*argc*/, char* /*argv*/[])
 
     LOG_INFO(Render, "Texture and sampler ready");
 
+    // --- Render thread ------------------------------------------------------
+    // All GPU work from here on is driven by the render thread. The main thread
+    // only builds FramePackets and hands them off — it never calls the device
+    // directly inside the loop.
+    Arcbit::RenderThread renderThread;
+    renderThread.Start(device);
+
     // --- Event loop ---------------------------------------------------------
     LOG_INFO(Engine, "Entering event loop — Escape or close window to exit");
 
-    bool running = true;
+    bool running       = true;
+    bool pendingResize = false; // true when SDL reported a window resize this tick
+
     while (running)
     {
-        // Poll window events.
+        // --- Event polling --------------------------------------------------
+        // SDL events *must* be polled from the thread that created the window.
+        // We process them here on the main thread and fold any resize into the
+        // next FramePacket so the render thread handles the Vulkan side.
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
@@ -187,54 +196,46 @@ int main(int /*argc*/, char* /*argv*/[])
                         running = false;
                     break;
                 case SDL_EVENT_WINDOW_RESIZED:
-                    windowWidth  = static_cast<Arcbit::u32>(event.window.data1);
-                    windowHeight = static_cast<Arcbit::u32>(event.window.data2);
-                    device->ResizeSwapchain(swapchain, windowWidth, windowHeight);
+                    // Record new dimensions and let the render thread recreate
+                    // the swapchain — we must not call ResizeSwapchain here
+                    // because the render thread may be mid-frame.
+                    windowWidth   = static_cast<Arcbit::u32>(event.window.data1);
+                    windowHeight  = static_cast<Arcbit::u32>(event.window.data2);
+                    pendingResize = true;
                     break;
                 default:
                     break;
             }
         }
 
-        // --- Frame ----------------------------------------------------------
-        Arcbit::TextureHandle backbuffer = device->AcquireNextImage(swapchain);
-        if (!backbuffer.IsValid()) continue;
-
-        Arcbit::CommandListHandle cmd = device->BeginCommandList();
-
-        Arcbit::Attachment colorAttach{};
-        colorAttach.Texture       = backbuffer;
-        colorAttach.Load          = Arcbit::LoadOp::Clear;
-        colorAttach.Store         = Arcbit::StoreOp::Store;
-        colorAttach.ClearColor[0] = 0.05f;
-        colorAttach.ClearColor[1] = 0.05f;
-        colorAttach.ClearColor[2] = 0.15f;
-        colorAttach.ClearColor[3] = 1.00f;
-
-        std::array<Arcbit::Attachment, 1> colorAttachments = { colorAttach };
-        Arcbit::RenderingDesc renderDesc{};
-        renderDesc.ColorAttachments = colorAttachments;
-
-        device->BeginRendering(cmd, renderDesc);
+        // --- Build frame packet ---------------------------------------------
+        Arcbit::FramePacket packet{};
+        packet.Swapchain   = swapchain;
+        packet.Width       = windowWidth;
+        packet.Height      = windowHeight;
+        packet.ClearColor  = { 0.05f, 0.05f, 0.15f, 1.00f };
+        packet.NeedsResize = pendingResize;
+        pendingResize      = false; // consumed — clear for next tick
 
         // Draw the textured quad covering the full screen.
-        device->BindPipeline(cmd, quadPipeline);
-        device->SetViewport(cmd, 0.0f, 0.0f,
-            static_cast<Arcbit::f32>(windowWidth),
-            static_cast<Arcbit::f32>(windowHeight));
-        device->SetScissor(cmd, 0, 0, windowWidth, windowHeight);
-        device->BindTexture(cmd, checkerTex, sampler);
-        device->Draw(cmd, 6); // 6 vertices — two triangles forming the quad
+        Arcbit::DrawCall quadDraw{};
+        quadDraw.Pipeline    = quadPipeline;
+        quadDraw.Texture     = checkerTex;
+        quadDraw.Sampler     = sampler;
+        quadDraw.VertexCount = 6; // two triangles forming a quad
+        packet.DrawCalls.push_back(quadDraw);
 
-        device->EndRendering(cmd);
-
-        device->EndCommandList(cmd);
-        device->Submit({ cmd });
-        device->Present(swapchain);
+        // Hand the packet to the render thread. Blocks briefly if it is still
+        // finishing the previous frame (back-pressure — see RenderThread docs).
+        renderThread.SubmitFrame(std::move(packet));
     }
 
     // --- Shutdown -----------------------------------------------------------
-    device->WaitIdle();
+    // Stop the render thread first — blocks until the current frame finishes
+    // and the thread exits, ensuring no Vulkan calls are in flight.
+    renderThread.Stop();
+
+    device->WaitIdle(); // belt-and-suspenders before releasing GPU resources
     device->DestroySampler(sampler);
     device->DestroyTexture(checkerTex);
     device->DestroyPipeline(quadPipeline);
