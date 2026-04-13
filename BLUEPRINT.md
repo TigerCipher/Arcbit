@@ -54,7 +54,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ## Phase 6: Pipeline & Triangle
 - [x] CMake glslc compile step (`.vert` / `.frag` → `.spv` at build time)
-- [x] Minimal vertex + fragment shaders (hardcoded triangle, solid colour)
+- [x] Minimal vertex + fragment shaders (hardcoded triangle, solid color)
 - [x] `CreatePipeline` / `DestroyPipeline` (graphics pipeline)
 - [x] `BindPipeline` / `SetViewport` / `SetScissor` / `Draw`
 - [x] Triangle rendered to screen
@@ -78,13 +78,13 @@ Checkbox list of every major milestone. Check off items as they are completed.
 ---
 
 ## Phase 9: Input System
-- [ ] `Action` registry — map named actions (`"Move_Left"`, `"Interact"`) to one or more bindings
-- [ ] Binding types: keyboard key, mouse button, gamepad button, gamepad axis (with deadzone)
-- [ ] `InputManager::IsPressed(Action)` / `JustPressed` / `JustReleased` / `AxisValue`
-- [ ] Keyboard + mouse support via SDL3 event stream
-- [ ] Gamepad / controller support via SDL3 `SDL_Gamepad` API (hot-plug add/remove)
-- [ ] Multiple bindings per action (e.g. `"Interact"` → E key OR gamepad A button)
-- [ ] Runtime rebind API (used by the settings screen)
+- [x] `Action` registry — map named actions (`"Move_Left"`, `"Interact"`) to one or more bindings
+- [x] Binding types: keyboard key, mouse button, gamepad button, gamepad axis (with deadzone)
+- [x] `InputManager::IsPressed(Action)` / `JustPressed` / `JustReleased` / `AxisValue`
+- [x] Keyboard + mouse support via SDL3 event stream
+- [x] Gamepad / controller support via SDL3 `SDL_Gamepad` API (hot-plug add/remove)
+- [x] Multiple bindings per action (e.g. `"Interact"` → E key OR gamepad A button)
+- [x] Runtime rebind API (used by the settings screen)
 
 ---
 
@@ -125,7 +125,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ## Phase 14: Sprite Batch Renderer
 - [ ] Per-frame CPU-side sprite buffer (position, UV rect, tint, layer)
-- [ ] Sort / group by texture to minimise descriptor switches
+- [ ] Sort / group by texture to minimize descriptor switches
 - [ ] Single instance buffer upload + one `Draw` call per texture group
 - [ ] Camera / viewport transform (world → NDC matrix via push constant)
 
@@ -142,7 +142,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ## Phase 16: Audio
 - [ ] Audio library integration (miniaudio via vcpkg — single-header, no runtime deps)
-- [ ] `AudioManager` — initialise device, master volume control
+- [ ] `AudioManager` — initialize device, master volume control
 - [ ] Sound effect playback (fire-and-forget one-shots)
 - [ ] Music streaming (looping background track, crossfade)
 - [ ] `AudioSource` ECS component (spatial attenuation for point sounds)

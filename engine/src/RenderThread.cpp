@@ -154,7 +154,7 @@ void RenderThread::RenderFrame(const FramePacket& packet)
         if (!backbuffer.IsValid())
         {
             // Still invalid after recreation — surface is in an unusable state
-            // (e.g. window minimised to zero size on some platforms). Skip this
+            // (e.g. window minimized to zero size on some platforms). Skip this
             // frame entirely; the game thread will retry next tick.
             LOG_ERROR(Render, "Failed to acquire image after swapchain recreation — skipping frame");
             return;
@@ -165,7 +165,7 @@ void RenderThread::RenderFrame(const FramePacket& packet)
 
     CommandListHandle cmd = m_Device->BeginCommandList();
 
-    // Set up the colour attachment with the requested clear colour.
+    // Set up the color attachment with the requested clear color.
     Attachment colorAttach{};
     colorAttach.Texture       = backbuffer;
     colorAttach.Load          = LoadOp::Clear;

@@ -96,7 +96,7 @@ struct VulkanSwapchain
     VkFormat                 Format    = VK_FORMAT_UNDEFINED;
     VkExtent2D               Extent    = {};
     std::vector<VkImage>     Images;       // driver-owned swapchain images
-    std::vector<VkImageView> ImageViews;   // one view per image for use as colour attachments
+    std::vector<VkImageView> ImageViews;   // one view per image for use as color attachments
     std::vector<TextureHandle> ImageHandles; // engine-side handle for each swapchain image
 
     // Per-frame-in-flight synchronisation primitives.
@@ -366,7 +366,7 @@ struct VulkanContext
     // Lifetime
     // -------------------------------------------------------------------------
 
-    // Initialise all Vulkan state. Returns false on any failure; the caller
+    // Initialize all Vulkan state. Returns false on any failure; the caller
     // should log the error and return nullptr from Arcbit_CreateDevice.
     bool Init(const DeviceDesc& desc);
 

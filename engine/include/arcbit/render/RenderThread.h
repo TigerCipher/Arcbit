@@ -46,7 +46,7 @@ struct FramePacket
     SwapchainHandle    Swapchain;         // which swapchain to present to
     u32                Width     = 0;     // current backbuffer dimensions in pixels
     u32                Height    = 0;
-    std::array<f32, 4> ClearColor = {};   // RGBA clear colour for the colour attachment
+    std::array<f32, 4> ClearColor = {};   // RGBA clear color for the color attachment
 
     // Ordered list of draw calls. The render thread executes them in order
     // inside a single BeginRendering / EndRendering scope.

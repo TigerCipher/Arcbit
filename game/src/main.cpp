@@ -3,6 +3,7 @@
 #include <arcbit/core/Assert.h>
 #include <arcbit/core/Profiler.h>
 #include <arcbit/app/Window.h>
+#include <arcbit/input/InputManager.h>
 #include <arcbit/render/RenderDevice.h>
 #include <arcbit/render/RenderThread.h>
 
@@ -77,7 +78,7 @@ int main(int /*argc*/, char* /*argv*/[])
 
     const Arcbit::Format swapFormat = device->GetSwapchainColorFormat(swapchain);
 
-    // --- Triangle pipeline (solid colour, kept for reference) ---------------
+    // --- Triangle pipeline (solid color, kept for reference) ---------------
     auto vertSpv = LoadSpv("shaders/triangle.vert.spv");
     auto fragSpv = LoadSpv("shaders/triangle.frag.spv");
 
@@ -150,6 +151,43 @@ int main(int /*argc*/, char* /*argv*/[])
 
     LOG_INFO(Render, "Texture and sampler ready");
 
+    // --- Input --------------------------------------------------------------
+    // Define action IDs as compile-time constants via MakeAction (FNV-1a hash).
+    // These live in the game — the engine has no concept of "Jump" or "Interact".
+    constexpr Arcbit::ActionID ActionMoveLeft  = Arcbit::MakeAction("Move_Left");
+    constexpr Arcbit::ActionID ActionMoveRight = Arcbit::MakeAction("Move_Right");
+    constexpr Arcbit::ActionID ActionMoveUp    = Arcbit::MakeAction("Move_Up");
+    constexpr Arcbit::ActionID ActionMoveDown  = Arcbit::MakeAction("Move_Down");
+    constexpr Arcbit::ActionID ActionInteract  = Arcbit::MakeAction("Interact");
+
+    Arcbit::InputManager input;
+
+    // Register names so the Settings System can serialize them in Phase 10.
+    input.RegisterAction(ActionMoveLeft,  "Move_Left");
+    input.RegisterAction(ActionMoveRight, "Move_Right");
+    input.RegisterAction(ActionMoveUp,    "Move_Up");
+    input.RegisterAction(ActionMoveDown,  "Move_Down");
+    input.RegisterAction(ActionInteract,  "Interact");
+
+    // Keyboard bindings.
+    input.BindKey(ActionMoveLeft,  Arcbit::Key::A);
+    input.BindKey(ActionMoveLeft,  Arcbit::Key::Left);
+    input.BindKey(ActionMoveRight, Arcbit::Key::D);
+    input.BindKey(ActionMoveRight, Arcbit::Key::Right);
+    input.BindKey(ActionMoveUp,    Arcbit::Key::W);
+    input.BindKey(ActionMoveUp,    Arcbit::Key::Up);
+    input.BindKey(ActionMoveDown,  Arcbit::Key::S);
+    input.BindKey(ActionMoveDown,  Arcbit::Key::Down);
+    input.BindKey(ActionInteract,  Arcbit::Key::E);
+    input.BindKey(ActionInteract,  Arcbit::Key::Enter);
+
+    // Gamepad bindings (any connected controller works automatically).
+    input.BindGamepadButton(ActionInteract,  Arcbit::GamepadButton::South);
+    input.BindGamepadAxis(ActionMoveLeft,    Arcbit::GamepadAxis::LeftX);  // negative = left
+    input.BindGamepadAxis(ActionMoveRight,   Arcbit::GamepadAxis::LeftX);  // positive = right
+    input.BindGamepadAxis(ActionMoveUp,      Arcbit::GamepadAxis::LeftY);  // negative = up
+    input.BindGamepadAxis(ActionMoveDown,    Arcbit::GamepadAxis::LeftY);  // positive = down
+
     // --- Render thread ------------------------------------------------------
     Arcbit::RenderThread renderThread;
     renderThread.Start(device);
@@ -159,6 +197,21 @@ int main(int /*argc*/, char* /*argv*/[])
 
     while (window.PollEvents())
     {
+        // Update input AFTER PollEvents — SDL's internal state is now current.
+        input.Update();
+
+        // Demo: log action events (replace with real game logic in later phases).
+        if (input.JustPressed(ActionInteract))
+            LOG_DEBUG(Engine, "Interact triggered");
+        if (input.IsPressed(ActionMoveLeft))
+            LOG_DEBUG(Engine, "Moving left  (axis={:.2f})", input.AxisValue(ActionMoveLeft));
+        if (input.IsPressed(ActionMoveRight))
+            LOG_DEBUG(Engine, "Moving right (axis={:.2f})", input.AxisValue(ActionMoveRight));
+        if (input.IsPressed(ActionMoveUp))
+            LOG_DEBUG(Engine, "Moving up    (axis={:.2f})", input.AxisValue(ActionMoveUp));
+        if (input.IsPressed(ActionMoveDown))
+            LOG_DEBUG(Engine, "Moving down  (axis={:.2f})", input.AxisValue(ActionMoveDown));
+
         Arcbit::FramePacket packet{};
         packet.Swapchain   = swapchain;
         packet.Width       = window.GetWidth();

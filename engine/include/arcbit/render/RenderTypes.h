@@ -104,7 +104,7 @@ enum class TextureUsage : u32
 {
     None         = 0,
     Sampled      = 1 << 0,   // read in shaders
-    RenderTarget = 1 << 1,   // write as colour attachment
+    RenderTarget = 1 << 1,   // write as color attachment
     DepthStencil = 1 << 2,   // write as depth attachment
     Storage      = 1 << 3,   // read/write in compute
     Transfer     = 1 << 4,   // copy src/dst
@@ -319,7 +319,7 @@ struct PipelineDesc
     const char* DebugName = nullptr;
 };
 
-// A single colour or depth attachment for a render pass.
+// A single color or depth attachment for a render pass.
 struct Attachment
 {
     TextureHandle Texture;

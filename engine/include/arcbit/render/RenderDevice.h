@@ -159,7 +159,7 @@ public:
     // rendering into the next one.
     // =========================================================================
 
-    // Returns the colour format of the swapchain as a Format enum value.
+    // Returns the color format of the swapchain as a Format enum value.
     // Pass this to PipelineDesc::ColorFormat so the pipeline matches the
     // actual swapchain format chosen by the driver.
     Format GetSwapchainColorFormat(SwapchainHandle handle);
@@ -181,7 +181,7 @@ public:
     // =========================================================================
 
     // Acquire the next available swapchain image and return it as a texture
-    // handle that can be used as a colour attachment in BeginRendering.
+    // handle that can be used as a color attachment in BeginRendering.
     // Blocks if no image is currently available (triple-buffering avoids this).
     // Must be called once per frame before any rendering commands.
     TextureHandle AcquireNextImage(SwapchainHandle handle);
@@ -212,7 +212,7 @@ public:
     void EndCommandList(CommandListHandle handle);
 
     // Begin a dynamic rendering pass — no VkRenderPass objects required.
-    // Describes the colour and optional depth attachments to write to.
+    // Describes the color and optional depth attachments to write to.
     // Uses Vulkan 1.3 vkCmdBeginRendering under the hood.
     void BeginRendering(CommandListHandle cmd, const RenderingDesc& desc);
 

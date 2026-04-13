@@ -260,7 +260,7 @@ bool BuildSwapchain(VulkanContext* ctx, VulkanSwapchain* sc,
     vkGetSwapchainImagesKHR(ctx->Device, sc->Swapchain, &actualCount, sc->Images.data());
 
     // Create an image view for each swapchain image so we can use them as
-    // colour attachments in vkCmdBeginRendering.
+    // color attachments in vkCmdBeginRendering.
     sc->ImageViews.resize(actualCount);
     for (u32 i = 0; i < actualCount; ++i)
     {
@@ -287,7 +287,7 @@ bool BuildSwapchain(VulkanContext* ctx, VulkanSwapchain* sc,
 // RenderDevice — construction / destruction
 // ---------------------------------------------------------------------------
 
-// Takes ownership of the fully-initialised VulkanContext via unique_ptr.
+// Takes ownership of the fully-initialized VulkanContext via unique_ptr.
 // Construction is only reachable from Arcbit_CreateDevice because VulkanContext
 // is an incomplete type in all headers outside this backend DLL.
 RenderDevice::RenderDevice(std::unique_ptr<VulkanContext> context)
@@ -495,7 +495,7 @@ TextureHandle RenderDevice::CreateTexture(const TextureDesc& desc)
         &vkTex.Image, &vkTex.Allocation, nullptr);
     ARCBIT_VERIFY(imgResult == VK_SUCCESS, "vmaCreateImage failed");
 
-    // Determine the correct aspect flag (colour vs depth).
+    // Determine the correct aspect flag (color vs depth).
     VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
     if (HasFlag(desc.Usage, TextureUsage::DepthStencil))
         aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
@@ -666,7 +666,7 @@ SamplerHandle RenderDevice::CreateSampler(const SamplerDesc& desc)
             m_Context->PhysicalDeviceProps.limits.maxSamplerAnisotropy);
     }
 
-    // Standard range for normalised UV coordinates.
+    // Standard range for normalized UV coordinates.
     info.minLod          = 0.0f;
     info.maxLod          = VK_LOD_CLAMP_NONE;
     info.borderColor     = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
@@ -723,10 +723,10 @@ void RenderDevice::DestroyShader(ShaderHandle handle)
 }
 
 // ---------------------------------------------------------------------------
-// Swapchain colour format query
+// Swapchain color format query
 // ---------------------------------------------------------------------------
 
-// Returns the colour format the swapchain was actually created with.
+// Returns the color format the swapchain was actually created with.
 // Use this when creating a pipeline so PipelineDesc::ColorFormat matches.
 Format RenderDevice::GetSwapchainColorFormat(SwapchainHandle handle)
 {
@@ -948,7 +948,7 @@ SwapchainHandle RenderDevice::CreateSwapchain(const SwapchainDesc& desc)
         return SwapchainHandle::Invalid();
 
     // Register each swapchain image in the texture pool so the rest of the API
-    // can refer to them by TextureHandle (e.g. as a colour attachment).
+    // can refer to them by TextureHandle (e.g. as a color attachment).
     const u32 imageCount = static_cast<u32>(sc.Images.size());
     sc.ImageHandles.resize(imageCount);
     for (u32 i = 0; i < imageCount; ++i)
@@ -1190,7 +1190,7 @@ void RenderDevice::EndCommandList(CommandListHandle handle)
 
 // Begin a dynamic rendering pass (Vulkan 1.3 vkCmdBeginRendering).
 //
-// For each colour attachment we first issue a synchronization2 image barrier to
+// For each color attachment we first issue a synchronization2 image barrier to
 // transition the layout to COLOR_ATTACHMENT_OPTIMAL.  Using oldLayout = UNDEFINED
 // discards previous contents, which is correct when loading with Clear or DontCare.
 void RenderDevice::BeginRendering(CommandListHandle cmd, const RenderingDesc& desc)
@@ -1206,7 +1206,7 @@ void RenderDevice::BeginRendering(CommandListHandle cmd, const RenderingDesc& de
     for (const auto& attach : desc.ColorAttachments)
     {
         VulkanTexture* tex = m_Context->Textures.Get(attach.Texture);
-        ARCBIT_ASSERT(tex != nullptr, "BeginRendering: invalid colour attachment texture");
+        ARCBIT_ASSERT(tex != nullptr, "BeginRendering: invalid color attachment texture");
 
         // Transition: UNDEFINED → COLOR_ATTACHMENT_OPTIMAL
         // srcStage TOP_OF_PIPE means "wait for nothing before transitioning",
@@ -1250,7 +1250,7 @@ void RenderDevice::BeginRendering(CommandListHandle cmd, const RenderingDesc& de
     vkCmdBeginRendering(cmdList->Buffer, &renderingInfo);
 }
 
-// End the rendering pass and transition the colour attachments to the correct
+// End the rendering pass and transition the color attachments to the correct
 // final layout. Swapchain images must be in PRESENT_SRC_KHR before vkQueuePresentKHR.
 void RenderDevice::EndRendering(CommandListHandle cmd)
 {
@@ -1426,7 +1426,7 @@ void RenderDevice::Submit(std::initializer_list<CommandListHandle> commands)
 
     // The wait stage tells Vulkan at which pipeline stage to block until the
     // semaphore is signalled.  COLOR_ATTACHMENT_OUTPUT is the earliest stage
-    // that writes to a colour attachment — we don't need to block sooner.
+    // that writes to a color attachment — we don't need to block sooner.
     VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
     VkSubmitInfo submit{ VK_STRUCTURE_TYPE_SUBMIT_INFO };
