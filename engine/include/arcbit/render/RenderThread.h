@@ -2,6 +2,7 @@
 
 #include <arcbit/render/RenderDevice.h>
 #include <arcbit/render/RenderTypes.h>
+#include <arcbit/assets/AssetTypes.h>
 
 #include <array>
 #include <condition_variable>
@@ -25,6 +26,19 @@ struct DrawCall
     TextureHandle  Texture;         // leave invalid (default) for untextured draws
     SamplerHandle  Sampler;         // only consulted when Texture.IsValid()
     u32            VertexCount = 0; // vertices to emit (e.g. 6 for a quad)
+
+    // Position of the quad's center in NDC space (-1 to 1 on each axis).
+    // (0, 0) is the screen center; (-1,-1) is top-left; (1,1) is bottom-right.
+    f32 X = 0.0f, Y = 0.0f;
+
+    // Half-size of the quad in NDC space. (1, 1) fills the entire screen.
+    // For a 256×256 sprite on a 1280×720 window, use roughly (0.2, 0.35).
+    f32 ScaleX = 1.0f, ScaleY = 1.0f;
+
+    // Sub-region of the texture to sample, in normalized (0-1) UV space.
+    // Defaults to the full texture. Use SpriteSheet::GetTile() / GetSprite()
+    // to get the UV rect for a specific frame and assign it here.
+    UVRect UV = { 0.0f, 0.0f, 1.0f, 1.0f };
 };
 
 // ---------------------------------------------------------------------------

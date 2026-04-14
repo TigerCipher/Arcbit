@@ -196,6 +196,20 @@ void RenderThread::RenderFrame(const FramePacket& packet)
         if (dc.Texture.IsValid())
             m_Device->BindTexture(cmd, dc.Texture, dc.Sampler);
 
+        // Push UV rect so the vertex shader can sample a sub-region of the
+        // texture (e.g. a single tile from an atlas). Matches the push_constant
+        // block layout in quad.vert: vec2 uvMin, vec2 uvMax = 16 bytes.
+        // Push quad transform + UV sub-region. Layout must match quad.vert's
+        // push_constant block exactly: position(vec2), scale(vec2), uvMin(vec2), uvMax(vec2).
+        // Must include all stages declared in the pipeline layout's range (Vertex|Fragment).
+        const f32 pcData[8] = {
+            dc.X, dc.Y,
+            dc.ScaleX, dc.ScaleY,
+            dc.UV.U0, dc.UV.V0,
+            dc.UV.U1, dc.UV.V1,
+        };
+        m_Device->PushConstants(cmd, ShaderStage::Vertex | ShaderStage::Fragment, pcData, sizeof(pcData));
+
         m_Device->Draw(cmd, dc.VertexCount);
     }
 

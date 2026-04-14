@@ -49,6 +49,23 @@ endforeach()
 add_custom_target(arcbit-shaders ALL DEPENDS ${SHADER_OUTPUTS})
 add_dependencies(arcbit-game arcbit-shaders)
 
+# ---------------------------------------------------------------------------
+# Asset sync — mirror game/assets/ into bin/assets/ on every build.
+#
+# Delegates to cmake/CopyAssets.cmake which uses file(COPY), giving us
+# timestamp-based diffing for free: unchanged files are skipped, new files
+# are picked up without any CMake reconfigure.
+# ---------------------------------------------------------------------------
+add_custom_target(arcbit-assets ALL
+    COMMAND ${CMAKE_COMMAND}
+        -D "ASSETS_SRC=${CMAKE_CURRENT_SOURCE_DIR}/assets"
+        -D "ASSETS_DST=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CopyAssets.cmake"
+    COMMENT "Syncing assets to bin/"
+    VERBATIM
+)
+add_dependencies(arcbit-game arcbit-assets)
+
 # Windows: suppress the console window in Release builds.
 if(WIN32)
     set_target_properties(arcbit-game PROPERTIES

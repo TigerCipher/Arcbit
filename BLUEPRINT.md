@@ -106,10 +106,10 @@ Checkbox list of every major milestone. Check off items as they are completed.
 ---
 
 ## Phase 12: Asset System
-- [ ] `stb_image` integration (PNG / JPG decode to raw RGBA pixels)
-- [ ] `TextureManager` — load texture from file, cache by path, return `TextureHandle`
-- [ ] `SpriteSheet` — load atlas texture + JSON/binary metadata mapping sprite name/ID to UV rects
-- [ ] Asset hot-reload stub (watch file mtime, re-upload on change)
+- [x] `stb_image` integration (PNG / JPG decode to raw RGBA pixels)
+- [x] `TextureManager` — load texture from file, cache by path, return `TextureHandle`
+- [x] `SpriteSheet` — load atlas texture + JSON/binary metadata mapping sprite name/ID to UV rects
+- [x] Asset hot-reload stub (watch file mtime, re-upload on change)
 
 ---
 
@@ -200,10 +200,20 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 23: C# AvaloniaUI Editor
+## Phase 23: Data-Driven Runtime
+- [ ] `project.arcbit` JSON project file format (title, resolution, entry scene, asset/script paths)
+- [ ] `runtime/` CMake project — generic, pre-compiled Application host with no game-specific code
+- [ ] Project file loader replaces hardcoded `ApplicationConfig` in the runtime path
+- [ ] Lua hook wiring: `OnStart` loads entry scene, `OnUpdate` dispatches to Lua `OnTick`, etc.
+- [ ] Defined export folder layout (`runtime.exe`, `project.arcbit`, `assets/`, `scenes/`, `scripts/`, `shaders/`)
+- [ ] C++ subclass path (`game/`) remains fully supported alongside the data-driven path
+
+---
+
+## Phase 24: C# AvaloniaUI Editor
 - [ ] Separate solution / CMake-independent project
 - [ ] Tilemap canvas (render tiles, layer management)
 - [ ] Tile palette + placement / erase tools
 - [ ] Tile property editor panel
 - [ ] NPC placement + script file assignment
-- [ ] Content export (binary format readable by the engine)
+- [ ] Content export to Phase 23 folder layout (project.arcbit + binary scene/asset files)

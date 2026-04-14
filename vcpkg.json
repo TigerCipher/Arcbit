@@ -8,6 +8,7 @@
             "features": [ "vulkan" ]
         },
         "spdlog",
-        "nlohmann-json"
+        "nlohmann-json",
+        "stb"
     ]
 }

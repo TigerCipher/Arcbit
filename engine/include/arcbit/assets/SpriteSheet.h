@@ -1,0 +1,75 @@
+#pragma once
+
+#include <arcbit/assets/AssetTypes.h>
+#include <arcbit/render/RenderHandle.h>
+
+#include <optional>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
+
+namespace Arcbit {
+
+class TextureManager;
+
+// ---------------------------------------------------------------------------
+// SpriteSheet
+//
+// Associates a texture atlas with named or indexed UV rectangles.
+// Loaded from a JSON metadata file; the referenced texture is loaded
+// automatically via TextureManager.
+//
+// Two layout modes are supported — a single JSON file may use either or both:
+//
+//   Named sprites (e.g. character animations):
+//   {
+//     "texture": "assets/textures/player.png",
+//     "sprites": [
+//       { "name": "idle_0", "x": 0, "y": 0, "w": 48, "h": 48 },
+//       { "name": "idle_1", "x": 48, "y": 0, "w": 48, "h": 48 }
+//     ]
+//   }
+//
+//   Tile grid (tileset sheets where every cell is the same size):
+//   {
+//     "texture": "assets/textures/grass_tileset.png",
+//     "tile_width": 16,
+//     "tile_height": 16
+//   }
+//   Tiles are indexed left-to-right, top-to-bottom starting at 0.
+//
+// Pixel coordinates in the JSON are converted to normalized (0-1) UVs using
+// the loaded texture's dimensions, so the caller never needs raw pixel math.
+// ---------------------------------------------------------------------------
+class SpriteSheet
+{
+public:
+    // Load a spritesheet from a JSON metadata file.
+    // The texture path inside the JSON is resolved relative to metaPath's
+    // directory, so the texture and JSON can live alongside each other.
+    // Returns an invalid (empty) SpriteSheet on any error — check IsValid().
+    [[nodiscard]] static SpriteSheet Load(std::string_view metaPath,
+                                          TextureManager&  textures);
+
+    [[nodiscard]] bool          IsValid()     const { return m_Texture.IsValid(); }
+    [[nodiscard]] TextureHandle GetTexture()  const { return m_Texture; }
+
+    // Look up a named sprite. Returns std::nullopt if the name is not found.
+    [[nodiscard]] std::optional<UVRect> GetSprite(std::string_view name) const;
+
+    // Look up a tile by grid index (0-based, left-to-right, top-to-bottom).
+    // Returns std::nullopt if the index is out of range or the sheet was
+    // defined with named sprites only (no tile_width / tile_height).
+    [[nodiscard]] std::optional<UVRect> GetTile(u32 index) const;
+
+    // Total number of tiles in the grid (0 if not a tile-grid sheet).
+    [[nodiscard]] u32 TileCount() const { return static_cast<u32>(m_Tiles.size()); }
+
+private:
+    TextureHandle                            m_Texture;
+    std::unordered_map<std::string, UVRect>  m_NamedSprites;
+    std::vector<UVRect>                      m_Tiles;
+};
+
+} // namespace Arcbit

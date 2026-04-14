@@ -1,5 +1,6 @@
 #include <arcbit/app/Application.h>
 #include <arcbit/app/Window.h>
+#include <arcbit/assets/TextureManager.h>
 #include <arcbit/settings/Settings.h>
 #include <arcbit/core/Log.h>
 #include <arcbit/core/Assert.h>
@@ -51,6 +52,8 @@ namespace Arcbit {
         ARCBIT_ASSERT(m_Swapchain.IsValid(), "Failed to create swapchain");
 
         m_RenderThread.Start(m_Device);
+
+        m_Textures = std::make_unique<TextureManager>(*m_Device);
     }
 
     // ---------------------------------------------------------------------------
@@ -145,6 +148,15 @@ namespace Arcbit {
                 fpsWindowStart = Clock::now();
             }
 
+            // --- Asset hot-reload ------------------------------------------------
+            // Checked once per second rather than every frame to avoid the cost
+            // of stat()-ing every loaded texture path each tick.
+            m_HotReloadAccumulator += dt;
+            if (m_HotReloadAccumulator >= 1.0) {
+                m_Textures->CheckReloads();
+                m_HotReloadAccumulator -= 1.0;
+            }
+
             // --- FPS limiter -----------------------------------------------------
             // Only active when VSync is off and a limit is configured.
             // sleep_for is imprecise (~1-2 ms granularity on Windows), which is
@@ -167,6 +179,10 @@ namespace Arcbit {
         m_Device->WaitIdle();
 
         OnShutdown();
+
+        // Release all cached textures before the device is destroyed.
+        m_Textures->Clear();
+        m_Textures.reset();
 
         m_Device->DestroySwapchain(m_Swapchain);
         Arcbit_DestroyDevice(m_Device);

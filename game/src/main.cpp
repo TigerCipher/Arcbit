@@ -1,4 +1,5 @@
 #include <arcbit/app/Application.h>
+#include <arcbit/assets/SpriteSheet.h>
 #include <arcbit/core/Log.h>
 #include <arcbit/core/Assert.h>
 #include <arcbit/input/InputTypes.h>
@@ -22,27 +23,6 @@ static std::vector<Arcbit::u8> LoadSpv(const char* path)
     std::vector<Arcbit::u8> buf(static_cast<size_t>(size));
     file.read(reinterpret_cast<char*>(buf.data()), size);
     return buf;
-}
-
-// Generate a checkerboard texture (magenta / white) for the demo.
-static std::vector<Arcbit::u8> MakeCheckerboard(Arcbit::u32 tileSize = 32,
-                                                  Arcbit::u32 tiles    = 4)
-{
-    const Arcbit::u32 dim = tileSize * tiles;
-    std::vector<Arcbit::u8> pixels(dim * dim * 4);
-    for (Arcbit::u32 y = 0; y < dim; ++y)
-    {
-        for (Arcbit::u32 x = 0; x < dim; ++x)
-        {
-            const bool checker = ((x / tileSize) ^ (y / tileSize)) & 1;
-            const Arcbit::u32 idx = (y * dim + x) * 4;
-            pixels[idx + 0] = checker ? 255 : 220; // R
-            pixels[idx + 1] = checker ?   0 : 220; // G
-            pixels[idx + 2] = checker ? 200 : 220; // B
-            pixels[idx + 3] = 255;                 // A
-        }
-    }
-    return pixels;
 }
 
 // ---------------------------------------------------------------------------
@@ -134,23 +114,19 @@ protected:
         GetDevice().DestroyShader(quadVert);
         GetDevice().DestroyShader(quadFrag);
 
-        // --- Checkerboard texture ---
-        constexpr Arcbit::u32 TileSize = 32;
-        constexpr Arcbit::u32 Tiles    = 4;
-        constexpr Arcbit::u32 Dim      = TileSize * Tiles;
+        // --- Textures via TextureManager ---
+        // Load the woods background texture. The manager caches by path, so
+        // calling Load() again elsewhere returns the same handle at no cost.
+        m_WoodsTex = GetTextures().Load("assets/textures/free_pixel_16_woods.png");
+        ARCBIT_ASSERT(m_WoodsTex.IsValid(), "Failed to load woods texture");
 
-        auto pixels = MakeCheckerboard(TileSize, Tiles);
-
-        Arcbit::TextureDesc texDesc{};
-        texDesc.Width     = Dim;
-        texDesc.Height    = Dim;
-        texDesc.Format    = Arcbit::Format::RGBA8_UNorm;
-        texDesc.Usage     = Arcbit::TextureUsage::Sampled | Arcbit::TextureUsage::Transfer;
-        texDesc.DebugName = "Checkerboard";
-
-        m_CheckerTex = GetDevice().CreateTexture(texDesc);
-        ARCBIT_ASSERT(m_CheckerTex.IsValid(), "Failed to create checkerboard texture");
-        GetDevice().UploadTexture(m_CheckerTex, pixels.data(), static_cast<Arcbit::u64>(pixels.size()));
+        // Demonstrate SpriteSheet: load the player atlas as a tile grid.
+        // The JSON metadata file defines tile_width/tile_height; the loader
+        // computes UV rects for every cell automatically.
+        m_PlayerSheet = Arcbit::SpriteSheet::Load(
+            "assets/spritesheets/player.json", GetTextures());
+        if (m_PlayerSheet.IsValid())
+            LOG_INFO(Engine, "Player sheet loaded — {} tiles", m_PlayerSheet.TileCount());
 
         // --- Sampler ---
         Arcbit::SamplerDesc sampDesc{};
@@ -186,21 +162,42 @@ protected:
     // -----------------------------------------------------------------------
     void OnRender(Arcbit::FramePacket& packet) override
     {
-        Arcbit::DrawCall quadDraw{};
-        quadDraw.Pipeline    = m_QuadPipeline;
-        quadDraw.Texture     = m_CheckerTex;
-        quadDraw.Sampler     = m_Sampler;
-        quadDraw.VertexCount = 6;
-        packet.DrawCalls.push_back(quadDraw);
+        // Woods texture — left half of the screen.
+        {
+            Arcbit::DrawCall dc{};
+            dc.Pipeline    = m_QuadPipeline;
+            dc.Texture     = m_WoodsTex;
+            dc.Sampler     = m_Sampler;
+            dc.VertexCount = 6;
+            dc.X      = -0.5f; dc.Y      = 0.0f;
+            dc.ScaleX =  0.5f; dc.ScaleY = 1.0f;
+            packet.DrawCalls.push_back(dc);
+        }
+
+        // Player tile 0 — right half of the screen.
+        if (m_PlayerSheet.IsValid())
+        {
+            Arcbit::DrawCall dc{};
+            dc.Pipeline    = m_QuadPipeline;
+            dc.Texture     = m_PlayerSheet.GetTexture();
+            dc.Sampler     = m_Sampler;
+            dc.VertexCount = 6;
+            dc.X      =  0.5f; dc.Y      = 0.0f;
+            dc.ScaleX =  0.5f; dc.ScaleY = 1.0f;
+            if (auto uv = m_PlayerSheet.GetTile(0))
+                dc.UV = *uv;
+            packet.DrawCalls.push_back(dc);
+        }
     }
 
     // -----------------------------------------------------------------------
     // OnShutdown — destroy GPU resources before the device is torn down.
+    // Textures loaded via GetTextures() are released automatically by
+    // Application; only manually created GPU objects need explicit cleanup.
     // -----------------------------------------------------------------------
     void OnShutdown() override
     {
         GetDevice().DestroySampler(m_Sampler);
-        GetDevice().DestroyTexture(m_CheckerTex);
         GetDevice().DestroyPipeline(m_QuadPipeline);
         GetDevice().DestroyPipeline(m_TriPipeline);
     }
@@ -213,11 +210,15 @@ private:
     static constexpr Arcbit::ActionID ActionMoveDown  = Arcbit::MakeAction("Move_Down");
     static constexpr Arcbit::ActionID ActionInteract  = Arcbit::MakeAction("Interact");
 
-    // GPU resources — created in OnStart, destroyed in OnShutdown.
+    // GPU resources — pipelines and samplers created in OnStart, destroyed in OnShutdown.
+    // Textures are owned by the TextureManager and released automatically.
     Arcbit::PipelineHandle m_TriPipeline;
     Arcbit::PipelineHandle m_QuadPipeline;
-    Arcbit::TextureHandle  m_CheckerTex;
     Arcbit::SamplerHandle  m_Sampler;
+
+    // Loaded via TextureManager — no manual destroy needed.
+    Arcbit::TextureHandle  m_WoodsTex;
+    Arcbit::SpriteSheet    m_PlayerSheet;
 };
 
 // ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@
 #include <arcbit/core/Types.h>
 #include <arcbit/render/RenderThread.h>
 #include <arcbit/input/InputManager.h>
+#include <arcbit/assets/TextureManager.h>
 
 #include <array>
 #include <memory>
@@ -87,6 +88,11 @@ public:
     // The window — use in OnStart / OnUpdate for size queries or title changes.
     [[nodiscard]] Window& GetWindow();
 
+    // The texture manager — load textures from disk in OnStart; the manager
+    // caches by path so repeated loads are free. Application clears it
+    // automatically during shutdown, but you can also Unload() explicitly.
+    [[nodiscard]] TextureManager& GetTextures() { return *m_Textures; }
+
     // Color format of the swapchain — pass to PipelineDesc::ColorFormat so
     // pipelines match the actual surface format chosen by the driver.
     [[nodiscard]] Format GetSwapchainFormat() const;
@@ -131,18 +137,23 @@ private:
     // order (destruction is reverse of initialization).
     //
     // Required destruction order:
-    //   m_Input       — closes SDL gamepad handles (SDL must still be alive)
-    //   m_Window      — calls SDL_Quit (must outlive InputManager)
+    //   m_Input        — closes SDL gamepad handles (SDL must still be alive)
+    //   m_Window       — calls SDL_Quit (must outlive InputManager)
     //   m_RenderThread — stopped explicitly in Run(); destructor is a no-op
-    //   m_Swapchain   — handle only; destroyed explicitly in Run()
-    //   m_Device      — raw pointer; destroyed explicitly in Run()
+    //   m_Swapchain    — handle only; destroyed explicitly in Run()
+    //   m_Textures     — unique_ptr; reset() called explicitly before DestroyDevice
+    //   m_Device       — raw pointer; destroyed explicitly in Run()
     //
     // So declaration order is the reverse of that (destructor fires bottom-up):
-    RenderDevice*           m_Device = nullptr;
-    SwapchainHandle         m_Swapchain;
-    RenderThread            m_RenderThread;
-    std::unique_ptr<Window> m_Window; // SDL_Quit in destructor
-    InputManager            m_Input;  // SDL gamepad cleanup in destructor
+    RenderDevice*                    m_Device = nullptr;
+    std::unique_ptr<TextureManager>  m_Textures;          // created after device; reset before DestroyDevice
+    SwapchainHandle                  m_Swapchain;
+    RenderThread                     m_RenderThread;
+    std::unique_ptr<Window>          m_Window;            // SDL_Quit in destructor
+    InputManager                     m_Input;             // SDL gamepad cleanup in destructor
+
+    // Accumulates real time to rate-limit hot-reload checks to once per second.
+    f64 m_HotReloadAccumulator = 0.0;
 };
 
 } // namespace Arcbit
