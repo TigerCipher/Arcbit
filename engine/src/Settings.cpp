@@ -286,6 +286,7 @@ void Settings::ReadFile()
         Graphics.ResolutionWidth  = g.value("resolution_width",  Graphics.ResolutionWidth);
         Graphics.ResolutionHeight = g.value("resolution_height", Graphics.ResolutionHeight);
         Graphics.Fullscreen       = g.value("fullscreen",        Graphics.Fullscreen);
+        Graphics.FpsLimit         = g.value("fps_limit",         Graphics.FpsLimit);
     }
 
     // --- Audio ---
@@ -325,6 +326,7 @@ void Settings::WriteFile()
     doc["graphics"]["resolution_width"]  = Graphics.ResolutionWidth;
     doc["graphics"]["resolution_height"] = Graphics.ResolutionHeight;
     doc["graphics"]["fullscreen"]        = Graphics.Fullscreen;
+    doc["graphics"]["fps_limit"]         = Graphics.FpsLimit;
 
     // --- Audio ---
     doc["audio"]["master_volume"] = Audio.MasterVolume;

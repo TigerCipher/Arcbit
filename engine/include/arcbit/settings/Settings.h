@@ -21,10 +21,14 @@ class InputManager;
 // ---------------------------------------------------------------------------
 struct GraphicsSettings
 {
-    bool VSync           = true;
-    u32  ResolutionWidth = 1280;
+    bool VSync            = true;
+    u32  ResolutionWidth  = 1280;
     u32  ResolutionHeight = 720;
-    bool Fullscreen      = false;
+    bool Fullscreen       = false;
+
+    // Maximum frames per second when VSync is off. 0 = unlimited.
+    // Typical values: 60, 120, 144, 165, 240, 250.
+    u32  FpsLimit         = 0;
 };
 
 // ---------------------------------------------------------------------------

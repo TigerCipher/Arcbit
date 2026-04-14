@@ -4,6 +4,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 # graphics abstraction, render thread, window, input, and (in later phases) ECS, audio, etc.
 # Game and tool targets link against this; they never see Vulkan or SDL headers directly.
 add_library(arcbit-engine STATIC
+    src/Application.cpp
     src/RenderThread.cpp
     src/Window.cpp
     src/InputManager.cpp

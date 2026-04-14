@@ -98,10 +98,10 @@ Checkbox list of every major milestone. Check off items as they are completed.
 ---
 
 ## Phase 11: Application & Game Loop
-- [ ] `Application` class — owns Window, RenderThread, InputManager, SettingsSystem
-- [ ] `GameLoop` — fixed-timestep update tick separate from variable render tick
-- [ ] Virtual `OnStart` / `OnUpdate(f32 dt)` / `OnRender(FramePacket&)` / `OnShutdown` hooks
-- [ ] `main.cpp` reduced to constructing the Application subclass and calling `Run()`
+- [x] `Application` class — owns Window, RenderThread, InputManager, SettingsSystem
+- [x] `GameLoop` — fixed-timestep update tick separate from variable render tick
+- [x] Virtual `OnStart` / `OnUpdate(f32 dt)` / `OnRender(FramePacket&)` / `OnShutdown` hooks
+- [x] `main.cpp` reduced to constructing the Application subclass and calling `Run()`
 
 ---
 

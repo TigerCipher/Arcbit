@@ -66,7 +66,7 @@ void Log::Init(bool fileOutput, const std::string& filePath)
         );
 
 #ifdef ARCBIT_DEBUG
-        logger->set_level(spdlog::level::debug);
+        logger->set_level(spdlog::level::trace);
         logger->flush_on(spdlog::level::warn);
 #else
         logger->set_level(spdlog::level::info);
