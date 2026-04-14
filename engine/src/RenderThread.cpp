@@ -170,10 +170,7 @@ void RenderThread::RenderFrame(const FramePacket& packet)
     colorAttach.Texture       = backbuffer;
     colorAttach.Load          = LoadOp::Clear;
     colorAttach.Store         = StoreOp::Store;
-    colorAttach.ClearColor[0] = packet.ClearColor[0];
-    colorAttach.ClearColor[1] = packet.ClearColor[1];
-    colorAttach.ClearColor[2] = packet.ClearColor[2];
-    colorAttach.ClearColor[3] = packet.ClearColor[3];
+    colorAttach.ClearColor = packet.ClearColor;
 
     std::array<Attachment, 1> attachments = { colorAttach };
     RenderingDesc renderDesc{};
@@ -203,10 +200,10 @@ void RenderThread::RenderFrame(const FramePacket& packet)
         // push_constant block exactly: position(vec2), scale(vec2), uvMin(vec2), uvMax(vec2).
         // Must include all stages declared in the pipeline layout's range (Vertex|Fragment).
         const f32 pcData[8] = {
-            dc.X, dc.Y,
-            dc.ScaleX, dc.ScaleY,
-            dc.UV.U0, dc.UV.V0,
-            dc.UV.U1, dc.UV.V1,
+            dc.Position.X, dc.Position.Y,
+            dc.Scale.X,    dc.Scale.Y,
+            dc.UV.U0,      dc.UV.V0,
+            dc.UV.U1,      dc.UV.V1,
         };
         m_Device->PushConstants(cmd, ShaderStage::Vertex | ShaderStage::Fragment, pcData, sizeof(pcData));
 

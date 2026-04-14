@@ -29,11 +29,11 @@ struct DrawCall
 
     // Position of the quad's center in NDC space (-1 to 1 on each axis).
     // (0, 0) is the screen center; (-1,-1) is top-left; (1,1) is bottom-right.
-    f32 X = 0.0f, Y = 0.0f;
+    Vec2 Position = { 0.0f, 0.0f };
 
     // Half-size of the quad in NDC space. (1, 1) fills the entire screen.
     // For a 256×256 sprite on a 1280×720 window, use roughly (0.2, 0.35).
-    f32 ScaleX = 1.0f, ScaleY = 1.0f;
+    Vec2 Scale = { 1.0f, 1.0f };
 
     // Sub-region of the texture to sample, in normalized (0-1) UV space.
     // Defaults to the full texture. Use SpriteSheet::GetTile() / GetSprite()
@@ -57,10 +57,10 @@ struct DrawCall
 // ---------------------------------------------------------------------------
 struct FramePacket
 {
-    SwapchainHandle    Swapchain;         // which swapchain to present to
-    u32                Width     = 0;     // current backbuffer dimensions in pixels
-    u32                Height    = 0;
-    std::array<f32, 4> ClearColor = {};   // RGBA clear color for the color attachment
+    SwapchainHandle Swapchain;         // which swapchain to present to
+    u32             Width     = 0;     // current backbuffer dimensions in pixels
+    u32             Height    = 0;
+    Color           ClearColor = Color::Black(); // RGBA clear color for the color attachment
 
     // Ordered list of draw calls. The render thread executes them in order
     // inside a single BeginRendering / EndRendering scope.

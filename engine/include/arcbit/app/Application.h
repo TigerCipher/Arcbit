@@ -1,11 +1,11 @@
 #pragma once
 
 #include <arcbit/core/Types.h>
+#include <arcbit/core/Math.h>
 #include <arcbit/render/RenderThread.h>
 #include <arcbit/input/InputManager.h>
 #include <arcbit/assets/TextureManager.h>
 
-#include <array>
 #include <memory>
 
 namespace Arcbit {
@@ -124,7 +124,7 @@ protected:
     // -----------------------------------------------------------------------
 
     // Background clear color used to pre-fill each FramePacket.
-    std::array<f32, 4> _clearColor = { 0.05f, 0.05f, 0.15f, 1.0f };
+    Color _clearColor = { 0.05f, 0.05f, 0.15f, 1.0f };
 
     // Target rate for OnUpdate calls. Defaults to 60 Hz.
     // Change before Run() is called; modifying mid-loop is not recommended.

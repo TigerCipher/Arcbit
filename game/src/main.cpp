@@ -169,8 +169,8 @@ protected:
             dc.Texture     = m_WoodsTex;
             dc.Sampler     = m_Sampler;
             dc.VertexCount = 6;
-            dc.X      = -0.5f; dc.Y      = 0.0f;
-            dc.ScaleX =  0.5f; dc.ScaleY = 1.0f;
+            dc.Position = { -0.5f, 0.0f };
+            dc.Scale    = {  0.5f, 1.0f };
             packet.DrawCalls.push_back(dc);
         }
 
@@ -182,8 +182,8 @@ protected:
             dc.Texture     = m_PlayerSheet.GetTexture();
             dc.Sampler     = m_Sampler;
             dc.VertexCount = 6;
-            dc.X      =  0.5f; dc.Y      = 0.0f;
-            dc.ScaleX =  0.5f; dc.ScaleY = 1.0f;
+            dc.Position = { 0.5f, 0.0f };
+            dc.Scale    = { 0.5f, 1.0f };
             if (auto uv = m_PlayerSheet.GetTile(0))
                 dc.UV = *uv;
             packet.DrawCalls.push_back(dc);

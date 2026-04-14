@@ -1,6 +1,7 @@
 #pragma once
 
 #include <arcbit/core/Types.h>
+#include <arcbit/core/Math.h>
 #include <arcbit/render/RenderHandle.h>
 
 #include <span>
@@ -327,9 +328,9 @@ struct Attachment
     StoreOp       Store = StoreOp::Store;
 
     // Used when Load == Clear
-    f32 ClearColor[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
-    f32 ClearDepth    = 1.0f;
-    u8  ClearStencil  = 0;
+    Color ClearColor  = Color::Black();
+    f32   ClearDepth  = 1.0f;
+    u8    ClearStencil = 0;
 };
 
 // Passed to BeginRendering to describe the output targets for this draw.
