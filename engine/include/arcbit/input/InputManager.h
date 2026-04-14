@@ -141,6 +141,10 @@ public:
     // Read-only view of all bindings for an action (for serialization/display).
     [[nodiscard]] const std::vector<Binding>& GetBindings(ActionID action) const;
 
+    // All registered action IDs — used by the Settings System to enumerate
+    // actions when saving/loading the input binding file.
+    [[nodiscard]] std::vector<ActionID> GetAllActions() const;
+
 private:
     // Per-action data stored in the registry.
     struct ActionEntry

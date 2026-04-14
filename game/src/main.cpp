@@ -49,6 +49,7 @@ int main(int /*argc*/, char* /*argv*/[])
 {
     Arcbit::Log::Init();
     LOG_INFO(Engine, "Arcbit starting");
+    Arcbit::Settings::Init("settings.json");
 
     // --- Window -------------------------------------------------------------
     Arcbit::Window window({ .Title = "Arcbit", .Width = 1280, .Height = 720 });
@@ -169,24 +170,25 @@ int main(int /*argc*/, char* /*argv*/[])
     input.RegisterAction(ActionMoveDown,  "Move_Down");
     input.RegisterAction(ActionInteract,  "Interact");
 
+    Arcbit::Settings::LoadInputBindings(input);
     // Keyboard bindings.
-    input.BindKey(ActionMoveLeft,  Arcbit::Key::A);
-    input.BindKey(ActionMoveLeft,  Arcbit::Key::Left);
-    input.BindKey(ActionMoveRight, Arcbit::Key::D);
-    input.BindKey(ActionMoveRight, Arcbit::Key::Right);
-    input.BindKey(ActionMoveUp,    Arcbit::Key::W);
-    input.BindKey(ActionMoveUp,    Arcbit::Key::Up);
-    input.BindKey(ActionMoveDown,  Arcbit::Key::S);
-    input.BindKey(ActionMoveDown,  Arcbit::Key::Down);
-    input.BindKey(ActionInteract,  Arcbit::Key::E);
-    input.BindKey(ActionInteract,  Arcbit::Key::Enter);
-
-    // Gamepad bindings (any connected controller works automatically).
-    input.BindGamepadButton(ActionInteract,  Arcbit::GamepadButton::South);
-    input.BindGamepadAxis(ActionMoveLeft,    Arcbit::GamepadAxis::LeftX);  // negative = left
-    input.BindGamepadAxis(ActionMoveRight,   Arcbit::GamepadAxis::LeftX);  // positive = right
-    input.BindGamepadAxis(ActionMoveUp,      Arcbit::GamepadAxis::LeftY);  // negative = up
-    input.BindGamepadAxis(ActionMoveDown,    Arcbit::GamepadAxis::LeftY);  // positive = down
+    // input.BindKey(ActionMoveLeft,  Arcbit::Key::A);
+    // input.BindKey(ActionMoveLeft,  Arcbit::Key::Left);
+    // input.BindKey(ActionMoveRight, Arcbit::Key::D);
+    // input.BindKey(ActionMoveRight, Arcbit::Key::Right);
+    // input.BindKey(ActionMoveUp,    Arcbit::Key::W);
+    // input.BindKey(ActionMoveUp,    Arcbit::Key::Up);
+    // input.BindKey(ActionMoveDown,  Arcbit::Key::S);
+    // input.BindKey(ActionMoveDown,  Arcbit::Key::Down);
+    // input.BindKey(ActionInteract,  Arcbit::Key::E);
+    // input.BindKey(ActionInteract,  Arcbit::Key::Enter);
+    //
+    // // Gamepad bindings (any connected controller works automatically).
+    // input.BindGamepadButton(ActionInteract,  Arcbit::GamepadButton::South);
+    // input.BindGamepadAxis(ActionMoveLeft,    Arcbit::GamepadAxis::LeftX);  // negative = left
+    // input.BindGamepadAxis(ActionMoveRight,   Arcbit::GamepadAxis::LeftX);  // positive = right
+    // input.BindGamepadAxis(ActionMoveUp,      Arcbit::GamepadAxis::LeftY);  // negative = up
+    // input.BindGamepadAxis(ActionMoveDown,    Arcbit::GamepadAxis::LeftY);  // positive = down
 
     // --- Render thread ------------------------------------------------------
     Arcbit::RenderThread renderThread;
@@ -241,6 +243,8 @@ int main(int /*argc*/, char* /*argv*/[])
     Arcbit_DestroyDevice(device);
     // Window destructor calls SDL_DestroyWindow + SDL_Quit.
 
+    // Arcbit::Settings::SaveInputBindings(input);
+    Arcbit::Settings::Shutdown();
     LOG_INFO(Engine, "Arcbit shutdown complete");
     Arcbit::Log::Shutdown();
     return EXIT_SUCCESS;

@@ -399,6 +399,15 @@ const std::vector<Binding>& InputManager::GetBindings(const ActionID action) con
     return it != m_Actions.end() ? it->second.Bindings : s_EmptyBindings;
 }
 
+std::vector<ActionID> InputManager::GetAllActions() const
+{
+    std::vector<ActionID> result;
+    result.reserve(m_Actions.size());
+    for (const auto& [id, _] : m_Actions)
+        result.push_back(id);
+    return result;
+}
+
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------

@@ -89,11 +89,11 @@ Checkbox list of every major milestone. Check off items as they are completed.
 ---
 
 ## Phase 10: Settings System
-- [ ] Settings file (JSON, loaded on startup / saved on shutdown or explicit flush)
-- [ ] Graphics settings: VSync, target resolution, fullscreen mode
-- [ ] Audio settings: master volume, music volume, SFX volume
-- [ ] Input settings: persist action→binding map from Phase 9; apply on load
-- [ ] `Settings::Get<T>` / `Set<T>` typed accessors with dirty-flag auto-save
+- [x] Settings file (JSON, loaded on startup / saved on shutdown or explicit flush)
+- [x] Graphics settings: VSync, target resolution, fullscreen mode
+- [x] Audio settings: master volume, music volume, SFX volume
+- [x] Input settings: persist action→binding map from Phase 9; apply on load
+- [x] `Settings::Get<T>` / `Set<T>` typed accessors with dirty-flag auto-save
 
 ---
 

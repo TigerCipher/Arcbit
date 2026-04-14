@@ -1,0 +1,172 @@
+#pragma once
+
+#include <arcbit/core/Types.h>
+
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <variant>
+
+namespace Arcbit {
+
+class InputManager;
+
+// ---------------------------------------------------------------------------
+// GraphicsSettings
+//
+// Controls display and rendering options. Inspect or modify fields directly,
+// then call Settings::MarkDirty() (or use Settings::Set<T>() which does it
+// automatically). Changes take effect the next time the engine reads them —
+// VSync and fullscreen require re-creating the swapchain (Phase 11).
+// ---------------------------------------------------------------------------
+struct GraphicsSettings
+{
+    bool VSync           = true;
+    u32  ResolutionWidth = 1280;
+    u32  ResolutionHeight = 720;
+    bool Fullscreen      = false;
+};
+
+// ---------------------------------------------------------------------------
+// AudioSettings
+//
+// Volume levels are in [0, 1]. MasterVolume multiplies all channels.
+// Wired to the AudioManager in Phase 16.
+// ---------------------------------------------------------------------------
+struct AudioSettings
+{
+    f32 MasterVolume = 1.0f;
+    f32 MusicVolume  = 1.0f;
+    f32 SfxVolume    = 1.0f;
+};
+
+// ---------------------------------------------------------------------------
+// Settings
+//
+// A static, globally-accessible store for all user-facing configuration.
+// Data is persisted to a JSON file on disk; loaded at startup and written on
+// shutdown (or any explicit Flush() call).
+//
+// Typical usage
+// -------------
+//   // Startup:
+//   Settings::Init("settings.json");
+//   Settings::LoadInputBindings(input);      // restore last session's bindings
+//
+//   // Runtime (e.g. from a settings screen):
+//   Settings::Graphics.VSync = false;
+//   Settings::MarkDirty();
+//   // or equivalently:
+//   Settings::Set<bool>("graphics.vsync", false);
+//
+//   // Shutdown:
+//   Settings::SaveInputBindings(input);      // capture any runtime rebinds
+//   Settings::Shutdown();                    // flushes if dirty
+//
+// Generic Get/Set
+// ---------------
+//   Supported types: bool, i32, u32, f32, std::string.
+//   Keys use a dot-path convention ("game.difficulty", "debug.show_fps").
+//   They are persisted under a "custom" section in the JSON file, separate
+//   from the well-known graphics/audio/input sections.
+//
+// Thread safety
+// -------------
+//   NOT thread-safe. Call all Settings methods from the main/game thread only.
+// ---------------------------------------------------------------------------
+class Settings
+{
+public:
+    // -----------------------------------------------------------------------
+    // Lifecycle
+    // -----------------------------------------------------------------------
+
+    // Load settings from the given file path. If the file does not exist,
+    // defaults are used and the file will be created on the next Flush().
+    // Must be called before any Get/Set or binding load/save calls.
+    static void Init(std::string_view path = "settings.json");
+
+    // Flush if dirty, then release internal state.
+    // Call after all systems have saved their settings (e.g. input bindings).
+    static void Shutdown();
+
+    // Write current settings to disk immediately and clear the dirty flag.
+    static void Flush();
+
+    // True if any setting has changed since the last Init() or Flush().
+    [[nodiscard]] static bool IsDirty() { return s_Dirty; }
+
+    // Mark settings as modified. Call after writing directly to Graphics or
+    // Audio fields so Shutdown()/Flush() knows to persist the change.
+    static void MarkDirty() { s_Dirty = true; }
+
+    // -----------------------------------------------------------------------
+    // Well-known settings sections
+    //
+    // Read and write fields directly on these structs. Call MarkDirty() after
+    // any write, or use Set<T>() which marks dirty automatically.
+    // -----------------------------------------------------------------------
+    static GraphicsSettings Graphics;
+    static AudioSettings    Audio;
+
+    // -----------------------------------------------------------------------
+    // Generic typed accessors
+    //
+    // Supported types: bool, i32, u32, f32, std::string.
+    // Values are stored separately from the well-known sections.
+    // -----------------------------------------------------------------------
+
+    // Returns the stored value for key, or defaultValue if not found.
+    // Type must match what was passed to Set<T>(); mismatches return the default.
+    template<typename T>
+    [[nodiscard]] static T Get(std::string_view key, const T& defaultValue = T{})
+    {
+        const auto it = s_Store.find(std::string(key));
+        if (it == s_Store.end()) return defaultValue;
+        const T* val = std::get_if<T>(&it->second);
+        return val ? *val : defaultValue;
+    }
+
+    // Store a value and mark dirty. Overwrites any previous value for this key.
+    template<typename T>
+    static void Set(std::string_view key, const T& value)
+    {
+        s_Store[std::string(key)] = Value(value);
+        s_Dirty = true;
+    }
+
+    // -----------------------------------------------------------------------
+    // Input binding persistence
+    // -----------------------------------------------------------------------
+
+    // Serialize all registered actions and their current bindings into the
+    // in-memory settings document. Call before Shutdown() to capture any
+    // runtime rebinds made via InputManager (e.g. from a settings screen).
+    static void SaveInputBindings(const InputManager& input);
+
+    // Read bindings from the settings document and apply them to the
+    // InputManager. Only actions already registered in the InputManager are
+    // affected; unrecognized action names in the file are silently ignored.
+    // Returns true if at least one binding was loaded.
+    static bool LoadInputBindings(InputManager& input);
+
+private:
+    // The variant covers all types supported by Get<T>/Set<T>.
+    using Value = std::variant<bool, i32, u32, f32, std::string>;
+
+    static bool                                   s_Dirty;
+    static std::string                            s_FilePath;
+    static std::unordered_map<std::string, Value> s_Store;
+
+    // Helpers called by Init() and Flush().
+    static void ReadFile();
+    static void WriteFile();
+
+    // Sync the GraphicsSettings / AudioSettings structs to/from s_Store.
+    // SyncFromStore copies the known-section values out of the loaded JSON
+    // into the public structs; SyncToStore does the reverse before writing.
+    static void SyncFromStore();
+    static void SyncToStore();
+};
+
+} // namespace Arcbit
