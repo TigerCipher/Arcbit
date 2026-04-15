@@ -116,7 +116,7 @@ protected:
         m_PlayerSheet = Arcbit::SpriteSheet::Load(
             "assets/spritesheets/player.json", GetTextures());
         if (m_PlayerSheet.IsValid())
-            LOG_INFO(Engine, "Player sheet loaded — {} tiles", m_PlayerSheet.TileCount());
+            LOG_INFO(Engine, "Player sheet loaded - {} tiles", m_PlayerSheet.TileCount());
 
         // --- Floor texture ---
         m_FloorTex = GetTextures().Load("assets/textures/floor.jpg");

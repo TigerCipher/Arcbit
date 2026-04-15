@@ -1042,7 +1042,7 @@ SwapchainHandle RenderDevice::CreateSwapchain(const SwapchainDesc& desc)
     }
 
     SwapchainHandle handle = m_Context->Swapchains.Allocate<SwapchainTag>(std::move(sc));
-    LOG_INFO(Render, "Swapchain created ({}×{}, {} images)",
+    LOG_INFO(Render, "Swapchain created ({}x{}, {} images)",
         desc.Width, desc.Height, imageCount);
     return handle;
 }
@@ -1110,7 +1110,7 @@ void RenderDevice::ResizeSwapchain(SwapchainHandle handle, u32 width, u32 height
     sc->CurrentFrame      = 0;
     sc->CurrentImageIndex = 0;
 
-    LOG_INFO(Render, "Swapchain resized to {}×{}", width, height);
+    LOG_INFO(Render, "Swapchain resized to {}x{}", width, height);
 }
 
 // Destroys the swapchain and all its resources.

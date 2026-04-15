@@ -218,7 +218,7 @@ bool VulkanContext::Init(const DeviceDesc& desc)
     // Hold the surface until CreateSwapchain is called — it will take ownership.
     m_InitSurface = surface;
 
-    LOG_INFO(Render, "Vulkan backend ready — {}",
+    LOG_INFO(Render, "Vulkan backend ready -- {}",
         PhysicalDeviceProps.deviceName);
     return true;
 }
