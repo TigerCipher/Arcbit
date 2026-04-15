@@ -319,6 +319,16 @@ public:
     // rebuilding resources that the GPU is currently reading from.
     void WaitIdle();
 
+    // Returns the current per-frame slot index (0 … MaxFramesInFlight-1) for
+    // the given swapchain. Use this to index into per-frame CPU arrays (e.g.
+    // light SSBOs) so the CPU slot the game thread writes to is never the same
+    // slot the GPU is currently reading from.
+    u32 GetCurrentFrameIndex(SwapchainHandle handle);
+
+    // Maximum number of frames the CPU is allowed to be ahead of the GPU.
+    // Mirrors the value used internally by the backend for frame-slot sizing.
+    static constexpr u32 MaxFramesInFlight = 2;
+
     // -------------------------------------------------------------------------
     // Constructed by Arcbit_CreateDevice only.
     // VulkanContext is forward-declared and never defined in engine headers,

@@ -237,8 +237,9 @@ void VulkanContext::Shutdown()
     vkDeviceWaitIdle(Device);
 
     // Descriptor infrastructure — must go before the logical device.
-    if (TextureSetLayout     != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(Device, TextureSetLayout,     nullptr);
-    if (GlobalDescriptorPool != VK_NULL_HANDLE) vkDestroyDescriptorPool     (Device, GlobalDescriptorPool, nullptr);
+    if (StorageBufferSetLayout != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(Device, StorageBufferSetLayout, nullptr);
+    if (TextureSetLayout       != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(Device, TextureSetLayout,       nullptr);
+    if (GlobalDescriptorPool   != VK_NULL_HANDLE) vkDestroyDescriptorPool     (Device, GlobalDescriptorPool,   nullptr);
 
     // Command pool must be destroyed before the logical device.
     if (CommandPool  != VK_NULL_HANDLE) vkDestroyCommandPool(Device, CommandPool, nullptr);
@@ -575,25 +576,26 @@ bool VulkanContext::CreateCommandPool()
 // ---------------------------------------------------------------------------
 // VulkanContext::CreateDescriptorPool
 //
-// Creates a shared descriptor pool large enough to hold one combined-image-
-// sampler descriptor per texture. We pre-size to 1024 textures; this can be
-// expanded later if the scene needs more.
+// Creates a shared descriptor pool sized for two descriptor types:
+//   - COMBINED_IMAGE_SAMPLER: one set per sampled texture (up to 1024).
+//   - STORAGE_BUFFER: one set per frame-in-flight per storage buffer (up to
+//     256 × MaxFramesInFlight slots, covers many SSBOs with headroom).
 //
-// FREE_DESCRIPTOR_SET_BIT lets us free individual sets (one per texture) when
-// textures are destroyed, rather than having to reset the entire pool.
+// FREE_DESCRIPTOR_SET_BIT lets us free individual sets when resources are
+// destroyed, rather than having to reset the entire pool.
 // ---------------------------------------------------------------------------
 bool VulkanContext::CreateDescriptorPool()
 {
-    // One combined-image-sampler per texture (sampled + sampler merged into one binding).
-    VkDescriptorPoolSize poolSize{};
-    poolSize.type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSize.descriptorCount = 1024;
+    const VkDescriptorPoolSize poolSizes[] = {
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,          256 },
+    };
 
     VkDescriptorPoolCreateInfo info{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
     info.flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    info.maxSets       = 1024;
-    info.poolSizeCount = 1;
-    info.pPoolSizes    = &poolSize;
+    info.maxSets       = 1024 + 256;
+    info.poolSizeCount = static_cast<u32>(std::size(poolSizes));
+    info.pPoolSizes    = poolSizes;
 
     const VkResult result = vkCreateDescriptorPool(Device, &info, nullptr, &GlobalDescriptorPool);
     if (result != VK_SUCCESS)
@@ -602,40 +604,65 @@ bool VulkanContext::CreateDescriptorPool()
         return false;
     }
 
-    LOG_DEBUG(Render, "Descriptor pool created (1024 combined-image-sampler slots)");
+    LOG_DEBUG(Render, "Descriptor pool created (1024 sampler + 256 SSBO slots)");
     return true;
 }
 
 // ---------------------------------------------------------------------------
 // VulkanContext::CreateDescriptorSetLayout
 //
-// Creates the descriptor set layout for texture binding:
-//   set 0, binding 0 = combined image sampler, fragment stage.
+// Creates two descriptor set layouts shared by all pipelines:
 //
-// "Combined image sampler" merges the VkImageView and VkSampler into a single
-// descriptor, which is the most common pattern for 2D textures in fragment
-// shaders (GLSL: layout(set=0, binding=0) uniform sampler2D tex;).
+//   TextureSetLayout        — binding 0, COMBINED_IMAGE_SAMPLER, fragment stage.
+//                             Reused for both albedo (set 0) and normal map (set 1).
+//
+//   StorageBufferSetLayout  — binding 0, STORAGE_BUFFER, vertex + fragment stages.
+//                             Used for the per-frame dynamic light list (set 2).
 // ---------------------------------------------------------------------------
 bool VulkanContext::CreateDescriptorSetLayout()
 {
-    VkDescriptorSetLayoutBinding binding{};
-    binding.binding         = 0;
-    binding.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    binding.descriptorCount = 1;
-    binding.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    VkDescriptorSetLayoutCreateInfo info{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-    info.bindingCount = 1;
-    info.pBindings    = &binding;
-
-    const VkResult result = vkCreateDescriptorSetLayout(Device, &info, nullptr, &TextureSetLayout);
-    if (result != VK_SUCCESS)
+    // --- Texture layout (combined image sampler, fragment only) ---
     {
-        LOG_ERROR(Render, "vkCreateDescriptorSetLayout failed ({})", static_cast<i32>(result));
-        return false;
+        VkDescriptorSetLayoutBinding binding{};
+        binding.binding         = 0;
+        binding.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        binding.descriptorCount = 1;
+        binding.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        VkDescriptorSetLayoutCreateInfo info{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+        info.bindingCount = 1;
+        info.pBindings    = &binding;
+
+        const VkResult result = vkCreateDescriptorSetLayout(Device, &info, nullptr, &TextureSetLayout);
+        if (result != VK_SUCCESS)
+        {
+            LOG_ERROR(Render, "vkCreateDescriptorSetLayout (texture) failed ({})", static_cast<i32>(result));
+            return false;
+        }
     }
 
-    LOG_DEBUG(Render, "Texture descriptor set layout created");
+    // --- Storage buffer layout (SSBO, vertex + fragment) ---
+    {
+        VkDescriptorSetLayoutBinding binding{};
+        binding.binding         = 0;
+        binding.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        binding.descriptorCount = 1;
+        // Both stages need access: vertex reads light positions, fragment computes contribution.
+        binding.stageFlags      = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        VkDescriptorSetLayoutCreateInfo info{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+        info.bindingCount = 1;
+        info.pBindings    = &binding;
+
+        const VkResult result = vkCreateDescriptorSetLayout(Device, &info, nullptr, &StorageBufferSetLayout);
+        if (result != VK_SUCCESS)
+        {
+            LOG_ERROR(Render, "vkCreateDescriptorSetLayout (storage buffer) failed ({})", static_cast<i32>(result));
+            return false;
+        }
+    }
+
+    LOG_DEBUG(Render, "Descriptor set layouts created (texture + storage buffer)");
     return true;
 }
 

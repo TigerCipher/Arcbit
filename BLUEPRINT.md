@@ -113,13 +113,15 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 13: 2D Deferred Lighting
-- [ ] G-buffer render targets (albedo + normal)
-- [ ] Geometry pass shaders
-- [ ] Dynamic light SSBO (`BindStorageBuffer` — no fixed array limit)
-- [ ] Light accumulation pass shaders
-- [ ] Composite pass
-- [ ] Point light demo scene
+## Phase 13: 2D Forward+ Lighting
+- [x] `UseNormalTexture` + `UseStorageBuffer` flags on `PipelineDesc`
+- [x] `BindStorageBuffer` — bind SSBO to descriptor set (no fixed array limit)
+- [x] `GetCurrentFrameIndex` — expose per-frame slot index for SSBO cycling
+- [x] `forward.vert` / `forward.frag` — single-pass lit sprite shaders
+- [x] Default flat-normal texture in `RenderThread` (fallback for unlit sprites)
+- [x] Per-frame light SSBO cycling in `RenderThread`
+- [x] `PointLight` struct + `Lights` / `AmbientColor` fields on `FramePacket`
+- [x] Point light demo scene
 
 ---
 
@@ -151,10 +153,10 @@ Checkbox list of every major milestone. Check off items as they are completed.
 ---
 
 ## Phase 17: Tilemap System
-- [ ] Tile definition (ID, solid flag, custom properties)
+- [ ] Tile definition (ID, solid flag, light blocking, interactable, custom properties)
 - [ ] Chunk-based map storage (16×16 tile chunks)
 - [ ] Tile atlas texture + UV lookup
-- [ ] Tilemap renderer (batched instanced quads via Phase 13 sprite batcher)
+- [ ] Tilemap renderer (batched instanced quads via Phase 14 sprite batcher)
 - [ ] Camera / viewport culling (only submit visible chunks)
 
 ---

@@ -71,48 +71,38 @@ protected:
         GetInput().BindGamepadAxis(ActionMoveUp,      Arcbit::GamepadAxis::LeftY);
         GetInput().BindGamepadAxis(ActionMoveDown,    Arcbit::GamepadAxis::LeftY);
 
-        // --- Triangle pipeline (solid color) ---
+        // --- Forward+ pipeline (lit textured sprites) ---
         const Arcbit::Format swapFormat = GetSwapchainFormat();
 
-        auto vertSpv = LoadSpv("shaders/triangle.vert.spv");
-        auto fragSpv = LoadSpv("shaders/triangle.frag.spv");
+        auto fwdVertSpv = LoadSpv("shaders/forward.vert.spv");
+        auto fwdFragSpv = LoadSpv("shaders/forward.frag.spv");
 
-        Arcbit::ShaderHandle triVert = GetDevice().CreateShader({ Arcbit::ShaderStage::Vertex,   vertSpv.data(), static_cast<Arcbit::u32>(vertSpv.size()) });
-        Arcbit::ShaderHandle triFrag = GetDevice().CreateShader({ Arcbit::ShaderStage::Fragment, fragSpv.data(), static_cast<Arcbit::u32>(fragSpv.size()) });
+        Arcbit::ShaderHandle fwdVert = GetDevice().CreateShader({ Arcbit::ShaderStage::Vertex,   fwdVertSpv.data(), static_cast<Arcbit::u32>(fwdVertSpv.size()) });
+        Arcbit::ShaderHandle fwdFrag = GetDevice().CreateShader({ Arcbit::ShaderStage::Fragment, fwdFragSpv.data(), static_cast<Arcbit::u32>(fwdFragSpv.size()) });
 
-        Arcbit::PipelineDesc triDesc{};
-        triDesc.VertexShader   = triVert;
-        triDesc.FragmentShader = triFrag;
-        triDesc.CullMode       = Arcbit::CullMode::None;
-        triDesc.ColorFormat    = swapFormat;
-        triDesc.DepthFormat    = Arcbit::Format::Undefined;
-        triDesc.DebugName      = "TrianglePipeline";
+        Arcbit::PipelineDesc fwdDesc{};
+        fwdDesc.VertexShader     = fwdVert;
+        fwdDesc.FragmentShader   = fwdFrag;
+        fwdDesc.CullMode         = Arcbit::CullMode::None;
+        fwdDesc.ColorFormat      = swapFormat;
+        fwdDesc.DepthFormat      = Arcbit::Format::Undefined;
+        fwdDesc.UseTextures      = true;    // set 0 = albedo
+        fwdDesc.UseNormalTexture = true;    // set 1 = normal map
+        fwdDesc.UseStorageBuffer = true;    // set 2 = light SSBO
+        // Alpha blending for sprite transparency.
+        fwdDesc.Blend.Enable   = true;
+        fwdDesc.Blend.SrcColor = Arcbit::BlendFactor::SrcAlpha;
+        fwdDesc.Blend.DstColor = Arcbit::BlendFactor::OneMinusSrcAlpha;
+        fwdDesc.Blend.ColorOp  = Arcbit::BlendOp::Add;
+        fwdDesc.Blend.SrcAlpha = Arcbit::BlendFactor::One;
+        fwdDesc.Blend.DstAlpha = Arcbit::BlendFactor::Zero;
+        fwdDesc.Blend.AlphaOp  = Arcbit::BlendOp::Add;
+        fwdDesc.DebugName      = "ForwardPipeline";
 
-        m_TriPipeline = GetDevice().CreatePipeline(triDesc);
-        ARCBIT_ASSERT(m_TriPipeline.IsValid(), "Failed to create triangle pipeline");
-        GetDevice().DestroyShader(triVert);
-        GetDevice().DestroyShader(triFrag);
-
-        // --- Quad pipeline (textured) ---
-        auto quadVertSpv = LoadSpv("shaders/quad.vert.spv");
-        auto quadFragSpv = LoadSpv("shaders/quad.frag.spv");
-
-        Arcbit::ShaderHandle quadVert = GetDevice().CreateShader({ Arcbit::ShaderStage::Vertex,   quadVertSpv.data(), static_cast<Arcbit::u32>(quadVertSpv.size()) });
-        Arcbit::ShaderHandle quadFrag = GetDevice().CreateShader({ Arcbit::ShaderStage::Fragment, quadFragSpv.data(), static_cast<Arcbit::u32>(quadFragSpv.size()) });
-
-        Arcbit::PipelineDesc quadDesc{};
-        quadDesc.VertexShader   = quadVert;
-        quadDesc.FragmentShader = quadFrag;
-        quadDesc.CullMode       = Arcbit::CullMode::None;
-        quadDesc.ColorFormat    = swapFormat;
-        quadDesc.DepthFormat    = Arcbit::Format::Undefined;
-        quadDesc.UseTextures    = true;
-        quadDesc.DebugName      = "QuadPipeline";
-
-        m_QuadPipeline = GetDevice().CreatePipeline(quadDesc);
-        ARCBIT_ASSERT(m_QuadPipeline.IsValid(), "Failed to create quad pipeline");
-        GetDevice().DestroyShader(quadVert);
-        GetDevice().DestroyShader(quadFrag);
+        m_ForwardPipeline = GetDevice().CreatePipeline(fwdDesc);
+        ARCBIT_ASSERT(m_ForwardPipeline.IsValid(), "Failed to create forward+ pipeline");
+        GetDevice().DestroyShader(fwdVert);
+        GetDevice().DestroyShader(fwdFrag);
 
         // --- Textures via TextureManager ---
         // Load the woods background texture. The manager caches by path, so
@@ -158,19 +148,32 @@ protected:
     }
 
     // -----------------------------------------------------------------------
-    // OnRender — push draw calls into the frame packet.
+    // OnRender — push draw calls and lights into the frame packet.
     // -----------------------------------------------------------------------
     void OnRender(Arcbit::FramePacket& packet) override
     {
+        // Ambient light — dim so point lights are clearly visible.
+        packet.AmbientColor = Arcbit::Color{ 0.1f, 0.1f, 0.15f, 1.0f };
+
+        // Test point light — warm orange, positioned at screen center.
+        {
+            Arcbit::PointLight light{};
+            light.Position   = { 0.0f, 0.0f };
+            light.Radius     = 0.6f;
+            light.Intensity  = 1.5f;
+            light.LightColor = Arcbit::Color{ 1.0f, 0.8f, 0.4f, 1.0f };
+            packet.Lights.push_back(light);
+        }
+
         // Woods texture — left half of the screen.
         {
             Arcbit::DrawCall dc{};
-            dc.Pipeline    = m_QuadPipeline;
+            dc.Pipeline    = m_ForwardPipeline;
             dc.Texture     = m_WoodsTex;
             dc.Sampler     = m_Sampler;
             dc.VertexCount = 6;
-            dc.Position = { -0.5f, 0.0f };
-            dc.Scale    = {  0.5f, 1.0f };
+            dc.Position    = { -0.5f, 0.0f };
+            dc.Scale       = {  0.5f, 1.0f };
             packet.DrawCalls.push_back(dc);
         }
 
@@ -178,12 +181,12 @@ protected:
         if (m_PlayerSheet.IsValid())
         {
             Arcbit::DrawCall dc{};
-            dc.Pipeline    = m_QuadPipeline;
+            dc.Pipeline    = m_ForwardPipeline;
             dc.Texture     = m_PlayerSheet.GetTexture();
             dc.Sampler     = m_Sampler;
             dc.VertexCount = 6;
-            dc.Position = { 0.5f, 0.0f };
-            dc.Scale    = { 0.5f, 1.0f };
+            dc.Position    = { 0.5f, 0.0f };
+            dc.Scale       = { 0.5f, 1.0f };
             if (auto uv = m_PlayerSheet.GetTile(0))
                 dc.UV = *uv;
             packet.DrawCalls.push_back(dc);
@@ -198,8 +201,7 @@ protected:
     void OnShutdown() override
     {
         GetDevice().DestroySampler(m_Sampler);
-        GetDevice().DestroyPipeline(m_QuadPipeline);
-        GetDevice().DestroyPipeline(m_TriPipeline);
+        GetDevice().DestroyPipeline(m_ForwardPipeline);
     }
 
 private:
@@ -212,8 +214,7 @@ private:
 
     // GPU resources — pipelines and samplers created in OnStart, destroyed in OnShutdown.
     // Textures are owned by the TextureManager and released automatically.
-    Arcbit::PipelineHandle m_TriPipeline;
-    Arcbit::PipelineHandle m_QuadPipeline;
+    Arcbit::PipelineHandle m_ForwardPipeline;
     Arcbit::SamplerHandle  m_Sampler;
 
     // Loaded via TextureManager — no manual destroy needed.

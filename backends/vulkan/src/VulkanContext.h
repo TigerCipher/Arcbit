@@ -19,9 +19,18 @@ namespace Arcbit {
 // this backend DLL — engine and game headers only ever see the opaque handles.
 // ---------------------------------------------------------------------------
 
+// Maximum number of frames the CPU is allowed to be ahead of the GPU.
+// 2 = double-buffering: one frame being rendered, one being prepared.
+// Declared before the resource structs so they can size their per-frame arrays.
+static constexpr u32 MaxFramesInFlight = 2;
+
 // Represents a GPU buffer — vertex data, index data, uniforms, SSBOs, etc.
 // HostVisible buffers are persistently mapped so the CPU can write directly;
 // device-local (GPU-only) buffers require a staging copy for uploads.
+//
+// Storage buffers additionally carry one descriptor set per frame-in-flight
+// slot. The render thread cycles through slots each frame, so DescriptorSets[N]
+// is always bound to the frame whose GPU work is using slot N.
 struct VulkanBuffer
 {
     VkBuffer      Buffer      = VK_NULL_HANDLE;
@@ -30,11 +39,17 @@ struct VulkanBuffer
     BufferUsage   Usage       = BufferUsage::None;
     bool          HostVisible = false;   // true → CPU can write via Mapped
     void*         Mapped      = nullptr; // non-null when HostVisible; VMA keeps it persistently mapped
-};
 
-// Maximum number of frames the CPU is allowed to be ahead of the GPU.
-// 2 = double-buffering: one frame being rendered, one being prepared.
-static constexpr u32 MaxFramesInFlight = 2;
+    // Allocated when Usage includes Storage; one set per frame-in-flight slot.
+    // Other buffer types leave these as VK_NULL_HANDLE.
+    std::array<VkDescriptorSet, MaxFramesInFlight> DescriptorSets = {};
+
+    // Tracks whether this frame slot's descriptor set has already been written
+    // with the current VkBuffer handle. BindStorageBuffer skips
+    // vkUpdateDescriptorSets when this is true to avoid invalidating the
+    // recording command buffer (same rule as LastSampler on VulkanTexture).
+    std::array<bool, MaxFramesInFlight> DescriptorSetWritten = {};
+};
 
 // Represents a 2D image on the GPU — textures, render targets, depth buffers.
 // Swapchain images are managed by the driver, not VMA, so IsSwapchainImage
@@ -55,6 +70,12 @@ struct VulkanTexture
     // AcquireNextImage already waited on InFlight[CurrentFrame], guaranteeing
     // that slot's previous command buffer is no longer executing on the GPU.
     std::array<VkDescriptorSet, MaxFramesInFlight> DescriptorSets = {};
+
+    // Tracks the last sampler written into each slot's descriptor set.
+    // BindTexture skips vkUpdateDescriptorSets when the sampler hasn't changed,
+    // which avoids the Vulkan rule against updating a descriptor set that is
+    // already recorded (bound) in the current command buffer.
+    std::array<VkSampler, MaxFramesInFlight> LastSampler = {};
 };
 
 // Represents a sampler — the small state object that describes how a texture
@@ -316,13 +337,18 @@ struct VulkanContext
     // -------------------------------------------------------------------------
     // Descriptor infrastructure
     //
-    // GlobalDescriptorPool is a shared pool from which we allocate one
-    // VkDescriptorSet per sampled texture.  TextureSetLayout describes that
-    // set: set 0, binding 0 = combined image sampler, fragment stage only.
-    // Pipelines that read textures include TextureSetLayout in their layout.
+    // GlobalDescriptorPool is a shared pool from which we allocate:
+    //   - One VkDescriptorSet per sampled texture (COMBINED_IMAGE_SAMPLER).
+    //   - One VkDescriptorSet per frame-in-flight slot per storage buffer (STORAGE_BUFFER).
+    //
+    // TextureSetLayout    — set N, binding 0 = combined image sampler, fragment stage.
+    //                       Reused for both albedo (set 0) and normal map (set 1) slots.
+    // StorageBufferSetLayout — set N, binding 0 = storage buffer, vertex+fragment stages.
+    //                          Used for the per-frame dynamic light list (set 2).
     // -------------------------------------------------------------------------
-    VkDescriptorPool      GlobalDescriptorPool = VK_NULL_HANDLE;
-    VkDescriptorSetLayout TextureSetLayout     = VK_NULL_HANDLE;
+    VkDescriptorPool      GlobalDescriptorPool   = VK_NULL_HANDLE;
+    VkDescriptorSetLayout TextureSetLayout       = VK_NULL_HANDLE;
+    VkDescriptorSetLayout StorageBufferSetLayout = VK_NULL_HANDLE;
 
     // -------------------------------------------------------------------------
     // Resource pools

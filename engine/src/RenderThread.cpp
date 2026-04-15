@@ -2,8 +2,35 @@
 #include <arcbit/core/Log.h>
 
 #include <array>
+#include <vector>
 
 namespace Arcbit {
+
+// GPU-side point light struct. Must match the GLSL std430 layout in forward.frag:
+//   struct PointLight { vec2 position; float radius; float intensity; vec4 color; };
+// 32 bytes, naturally aligned — no padding required.
+struct GpuPointLight
+{
+    f32 PosX, PosY;                          // NDC position
+    f32 Radius;
+    f32 Intensity;
+    f32 ColorR, ColorG, ColorB, ColorA;
+};
+
+// Push constant block. Must match the layout(push_constant) block in both shaders.
+//   vec2 position  — offset  0
+//   vec2 scale     — offset  8
+//   vec4 uv        — offset 16  (u0, v0, u1, v1)
+//   vec4 ambient   — offset 32  (r, g, b, a)
+//   uint lightCount — offset 48
+struct ForwardPushConstants
+{
+    f32 PositionX, PositionY;
+    f32 ScaleX, ScaleY;
+    f32 U0, V0, U1, V1;
+    f32 AmbientR, AmbientG, AmbientB, AmbientA;
+    u32 LightCount;
+};
 
 // ---------------------------------------------------------------------------
 // Lifetime
@@ -13,36 +40,83 @@ void RenderThread::Start(RenderDevice* device)
 {
     m_Device  = device;
 
-    // Set m_Running before spawning the thread so the thread never sees a
-    // false value on first entry into Run().
-    m_Running = true;
+    // --- Default flat-normal texture ----------------------------------------
+    //
+    // (0.5, 0.5, 1.0) encodes a normal pointing straight out of the screen in
+    // tangent space. Used as a fallback when a DrawCall has no NormalTexture,
+    // so the lighting math still works without a branch in the shader.
+    TextureDesc normalDesc{};
+    normalDesc.Width     = 1;
+    normalDesc.Height    = 1;
+    normalDesc.Format    = Format::RGBA8_UNorm;
+    normalDesc.Usage     = TextureUsage::Sampled | TextureUsage::Transfer;
+    normalDesc.DebugName = "default_normal";
 
-    // std::thread immediately begins executing Run() on the new OS thread.
-    // We store the thread object so we can join it later in Stop().
-    m_Thread = std::thread(&RenderThread::Run, this);
+    m_DefaultNormalTex = m_Device->CreateTexture(normalDesc);
+
+    // RGBA8 flat normal: R=128, G=128, B=255, A=255 → (0.502, 0.502, 1.0, 1.0)
+    const u8 flatNormal[4] = { 128, 128, 255, 255 };
+    m_Device->UploadTexture(m_DefaultNormalTex, flatNormal, sizeof(flatNormal));
+
+    // Nearest-neighbor sampler — the 1×1 texture doesn't benefit from filtering.
+    SamplerDesc samplerDesc{};
+    samplerDesc.MinFilter  = Filter::Nearest;
+    samplerDesc.MagFilter  = Filter::Nearest;
+    samplerDesc.AddressU   = AddressMode::ClampToEdge;
+    samplerDesc.AddressV   = AddressMode::ClampToEdge;
+    samplerDesc.DebugName  = "default_normal_sampler";
+
+    m_DefaultNormalSampler = m_Device->CreateSampler(samplerDesc);
+
+    // --- Per-frame light SSBOs -----------------------------------------------
+    //
+    // Pre-allocate one SSBO per frame-in-flight slot sized for 64 lights.
+    // They grow lazily if the scene submits more lights (see RenderFrame).
+    static constexpr u32 InitialLightCapacity = 64;
+    m_LightSSBOCapacity = InitialLightCapacity;
+
+    BufferDesc ssboDesc{};
+    ssboDesc.Size        = InitialLightCapacity * sizeof(GpuPointLight);
+    ssboDesc.Usage       = BufferUsage::Storage;
+    ssboDesc.HostVisible = true;
+    ssboDesc.DebugName   = "light_ssbo";
+
+    for (auto& ssbo : m_LightSSBO)
+        ssbo = m_Device->CreateBuffer(ssboDesc);
+
+    // Set m_Running before spawning the thread so the thread never sees false
+    // on first entry into Run().
+    m_Running = true;
+    m_Thread  = std::thread(&RenderThread::Run, this);
 
     LOG_INFO(Render, "Render thread started");
 }
 
 void RenderThread::Stop()
 {
-    // Write m_Running = false under the lock so the render thread's wait
-    // condition sees a consistent value — there is no window where the thread
-    // checks m_Running, finds it true, then we set it false and call notify
-    // before the thread has called wait.
     {
         std::lock_guard lock(m_Mutex);
         m_Running = false;
     }
 
-    // Wake the thread in case it is sleeping on m_FrameReady.
-    // If it is mid-frame it will see m_Running == false at the *next* iteration.
     m_FrameReady.notify_one();
 
-    // Block until the render thread has exited cleanly.
-    // After join() returns, no Vulkan calls from that thread are in flight.
     if (m_Thread.joinable())
         m_Thread.join();
+
+    // The render thread has exited, but the GPU may still be executing the last
+    // submitted frame. WaitIdle blocks until all GPU work is complete so the
+    // resources below can be safely destroyed.
+    m_Device->WaitIdle();
+
+    // Destroy forward+ resources — GPU is now idle, safe to free descriptors.
+    for (auto& ssbo : m_LightSSBO)
+    {
+        if (ssbo.IsValid()) m_Device->DestroyBuffer(ssbo);
+    }
+
+    if (m_DefaultNormalSampler.IsValid()) m_Device->DestroySampler(m_DefaultNormalSampler);
+    if (m_DefaultNormalTex.IsValid())     m_Device->DestroyTexture(m_DefaultNormalTex);
 
     LOG_INFO(Render, "Render thread stopped");
 }
@@ -56,22 +130,12 @@ void RenderThread::SubmitFrame(FramePacket packet)
     std::unique_lock lock(m_Mutex);
 
     // Back-pressure: wait until the render thread has finished the previous frame.
-    // m_SlotFree starts true, so the first call goes straight through.
-    //
-    // std::condition_variable::wait(lock, predicate) is equivalent to:
-    //   while (!predicate()) m_FrameDone.wait(lock);
-    // It re-checks the predicate after every wake to guard against spurious
-    // wakeups (the OS is allowed to wake a thread without a notify).
     m_FrameDone.wait(lock, [this] { return m_SlotFree; });
 
-    // Move the packet into shared storage. std::move avoids copying the
-    // DrawCalls vector — ownership transfers in O(1).
     m_Packet   = std::move(packet);
     m_HasFrame = true;
     m_SlotFree = false;
 
-    // Unlock before notifying: the render thread can be woken and immediately
-    // reacquire the lock without having to wait for us to release it first.
     lock.unlock();
     m_FrameReady.notify_one();
 }
@@ -82,36 +146,23 @@ void RenderThread::SubmitFrame(FramePacket packet)
 
 void RenderThread::Run()
 {
-    // This loop runs for the lifetime of the application on the render thread.
     while (true)
     {
         FramePacket packet;
 
-        // Sleep until the game thread submits a frame or Stop() is called.
         {
             std::unique_lock lock(m_Mutex);
             m_FrameReady.wait(lock, [this] { return m_HasFrame || !m_Running; });
 
-            // Stop() sets m_Running = false then notifies. If there is a
-            // pending frame we render it first so the last game frame is
-            // always displayed. If not, exit immediately.
             if (!m_Running && !m_HasFrame)
                 break;
 
-            // Take ownership of the packet so the game thread can write the
-            // *next* packet while we are rendering this one. This is the key
-            // benefit of double-buffering: both threads do useful work in
-            // parallel rather than taking turns.
             packet     = std::move(m_Packet);
             m_HasFrame = false;
         }
-        // Lock is released here — game thread may now call SubmitFrame again,
-        // but it will block on m_FrameDone until we set m_SlotFree below.
 
         RenderFrame(packet);
 
-        // Signal the game thread that the packet slot is free.
-        // Lock, write, unlock, notify — same careful ordering as SubmitFrame.
         {
             std::lock_guard lock(m_Mutex);
             m_SlotFree = true;
@@ -121,55 +172,96 @@ void RenderThread::Run()
 }
 
 // ---------------------------------------------------------------------------
-// Single-frame rendering (render thread side)
+// Single-frame rendering (render thread side) — Forward+ pass
 // ---------------------------------------------------------------------------
 
 void RenderThread::RenderFrame(const FramePacket& packet)
 {
     // --- Swapchain resize ---------------------------------------------------
-    //
-    // Process a resize *before* acquiring an image. If we acquired first, the
-    // acquire might return VK_ERROR_OUT_OF_DATE_KHR and we'd have already
-    // waited on the in-flight fence — wasted work. Resizing proactively avoids
-    // that in the common case.
     if (packet.NeedsResize)
         m_Device->ResizeSwapchain(packet.Swapchain, packet.Width, packet.Height);
 
     // --- Acquire backbuffer -------------------------------------------------
-    //
-    // AcquireNextImage blocks on the per-frame-slot in-flight fence (guaranteeing
-    // the GPU is done with this slot's resources) then asks the driver for the
-    // next swapchain image. Returns an invalid handle if the swapchain is
-    // out-of-date (e.g. a resize the driver noticed before we did).
     TextureHandle backbuffer = m_Device->AcquireNextImage(packet.Swapchain);
 
     if (!backbuffer.IsValid())
     {
-        // Swapchain went out of date between the resize check and the acquire
-        // (can happen with rapid back-to-back resize events). Recreate and retry.
         LOG_WARN(Render, "Swapchain out of date at acquire — recreating and retrying");
         m_Device->ResizeSwapchain(packet.Swapchain, packet.Width, packet.Height);
         backbuffer = m_Device->AcquireNextImage(packet.Swapchain);
 
         if (!backbuffer.IsValid())
         {
-            // Still invalid after recreation — surface is in an unusable state
-            // (e.g. window minimized to zero size on some platforms). Skip this
-            // frame entirely; the game thread will retry next tick.
             LOG_ERROR(Render, "Failed to acquire image after swapchain recreation — skipping frame");
             return;
         }
     }
 
-    // --- Command recording --------------------------------------------------
+    // --- Light SSBO upload --------------------------------------------------
+    //
+    // Convert PointLight entries to the GPU-side struct layout and upload to
+    // the SSBO slot for this frame. If the scene exceeds current capacity,
+    // recreate all SSBO slots at the new size (WaitIdle ensures the GPU is
+    // not reading from any slot).
+    const u32 lightCount = static_cast<u32>(packet.Lights.size());
 
+    if (lightCount > m_LightSSBOCapacity)
+    {
+        m_Device->WaitIdle();
+
+        // Grow to next power-of-two above lightCount (simple doubling strategy).
+        u32 newCapacity = m_LightSSBOCapacity;
+        while (newCapacity < lightCount) newCapacity *= 2;
+        m_LightSSBOCapacity = newCapacity;
+
+        BufferDesc ssboDesc{};
+        ssboDesc.Size        = newCapacity * sizeof(GpuPointLight);
+        ssboDesc.Usage       = BufferUsage::Storage;
+        ssboDesc.HostVisible = true;
+        ssboDesc.DebugName   = "light_ssbo";
+
+        for (auto& ssbo : m_LightSSBO)
+        {
+            m_Device->DestroyBuffer(ssbo);
+            ssbo = m_Device->CreateBuffer(ssboDesc);
+        }
+
+        LOG_INFO(Render, "Light SSBO resized to {} entries", newCapacity);
+    }
+
+    // Build the CPU-side GpuPointLight array and upload for this frame slot.
+    const u32 frameSlot = m_Device->GetCurrentFrameIndex(packet.Swapchain);
+    BufferHandle currentSSBO = m_LightSSBO[frameSlot];
+
+    if (lightCount > 0)
+    {
+        std::vector<GpuPointLight> gpuLights;
+        gpuLights.reserve(lightCount);
+
+        for (const PointLight& light : packet.Lights)
+        {
+            GpuPointLight& g = gpuLights.emplace_back();
+            g.PosX      = light.Position.X;
+            g.PosY      = light.Position.Y;
+            g.Radius    = light.Radius;
+            g.Intensity = light.Intensity;
+            g.ColorR    = light.LightColor.R;
+            g.ColorG    = light.LightColor.G;
+            g.ColorB    = light.LightColor.B;
+            g.ColorA    = light.LightColor.A;
+        }
+
+        m_Device->UpdateBuffer(currentSSBO, gpuLights.data(),
+            lightCount * sizeof(GpuPointLight));
+    }
+
+    // --- Command recording --------------------------------------------------
     CommandListHandle cmd = m_Device->BeginCommandList();
 
-    // Set up the color attachment with the requested clear color.
     Attachment colorAttach{};
-    colorAttach.Texture       = backbuffer;
-    colorAttach.Load          = LoadOp::Clear;
-    colorAttach.Store         = StoreOp::Store;
+    colorAttach.Texture    = backbuffer;
+    colorAttach.Load       = LoadOp::Clear;
+    colorAttach.Store      = StoreOp::Store;
     colorAttach.ClearColor = packet.ClearColor;
 
     std::array<Attachment, 1> attachments = { colorAttach };
@@ -178,34 +270,46 @@ void RenderThread::RenderFrame(const FramePacket& packet)
 
     m_Device->BeginRendering(cmd, renderDesc);
 
-    // Execute each draw call in submission order. The game thread is
-    // responsible for ordering (e.g. opaque before transparent).
     for (const DrawCall& dc : packet.DrawCalls)
     {
         m_Device->BindPipeline(cmd, dc.Pipeline);
 
-        // Full-viewport/scissor covering the current backbuffer dimensions.
         m_Device->SetViewport(cmd, 0.0f, 0.0f,
             static_cast<f32>(packet.Width),
             static_cast<f32>(packet.Height));
         m_Device->SetScissor(cmd, 0, 0, packet.Width, packet.Height);
 
+        // Albedo texture — set 0.
         if (dc.Texture.IsValid())
-            m_Device->BindTexture(cmd, dc.Texture, dc.Sampler);
+            m_Device->BindTexture(cmd, dc.Texture, dc.Sampler, 0);
 
-        // Push UV rect so the vertex shader can sample a sub-region of the
-        // texture (e.g. a single tile from an atlas). Matches the push_constant
-        // block layout in quad.vert: vec2 uvMin, vec2 uvMax = 16 bytes.
-        // Push quad transform + UV sub-region. Layout must match quad.vert's
-        // push_constant block exactly: position(vec2), scale(vec2), uvMin(vec2), uvMax(vec2).
-        // Must include all stages declared in the pipeline layout's range (Vertex|Fragment).
-        const f32 pcData[8] = {
-            dc.Position.X, dc.Position.Y,
-            dc.Scale.X,    dc.Scale.Y,
-            dc.UV.U0,      dc.UV.V0,
-            dc.UV.U1,      dc.UV.V1,
-        };
-        m_Device->PushConstants(cmd, ShaderStage::Vertex | ShaderStage::Fragment, pcData, sizeof(pcData));
+        // Normal map — set 1. Fall back to the default flat-normal texture when
+        // the draw call has no normal map, so the shader can run identically.
+        TextureHandle normalTex    = dc.NormalTexture.IsValid() ? dc.NormalTexture : m_DefaultNormalTex;
+        SamplerHandle normalSampler = dc.NormalTexture.IsValid() ? dc.Sampler : m_DefaultNormalSampler;
+        m_Device->BindTexture(cmd, normalTex, normalSampler, 1);
+
+        // Light SSBO — set 2.
+        m_Device->BindStorageBuffer(cmd, currentSSBO, 2, 0);
+
+        // Push constants: position, scale, UV rect, ambient color, light count.
+        ForwardPushConstants pc{};
+        pc.PositionX = dc.Position.X;
+        pc.PositionY = dc.Position.Y;
+        pc.ScaleX    = dc.Scale.X;
+        pc.ScaleY    = dc.Scale.Y;
+        pc.U0        = dc.UV.U0;
+        pc.V0        = dc.UV.V0;
+        pc.U1        = dc.UV.U1;
+        pc.V1        = dc.UV.V1;
+        pc.AmbientR  = packet.AmbientColor.R;
+        pc.AmbientG  = packet.AmbientColor.G;
+        pc.AmbientB  = packet.AmbientColor.B;
+        pc.AmbientA  = packet.AmbientColor.A;
+        pc.LightCount = lightCount;
+
+        m_Device->PushConstants(cmd, ShaderStage::Vertex | ShaderStage::Fragment,
+            &pc, sizeof(pc));
 
         m_Device->Draw(cmd, dc.VertexCount);
     }

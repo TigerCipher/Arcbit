@@ -28,6 +28,8 @@ set(SHADER_SOURCES
     triangle.frag
     quad.vert
     quad.frag
+    forward.vert
+    forward.frag
 )
 
 set(SHADER_OUTPUTS)

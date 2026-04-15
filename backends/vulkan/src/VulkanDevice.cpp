@@ -364,6 +364,23 @@ BufferHandle RenderDevice::CreateBuffer(const BufferDesc& desc)
     if (desc.HostVisible)
         vkBuffer.Mapped = allocResult.pMappedData;
 
+    // Storage buffers need one descriptor set per frame-in-flight slot so the
+    // render thread can cycle through them without racing the GPU.
+    if (HasFlag(desc.Usage, BufferUsage::Storage))
+    {
+        std::array<VkDescriptorSetLayout, MaxFramesInFlight> layouts;
+        layouts.fill(m_Context->StorageBufferSetLayout);
+
+        VkDescriptorSetAllocateInfo setAlloc{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+        setAlloc.descriptorPool     = m_Context->GlobalDescriptorPool;
+        setAlloc.descriptorSetCount = MaxFramesInFlight;
+        setAlloc.pSetLayouts        = layouts.data();
+
+        const VkResult setResult = vkAllocateDescriptorSets(
+            m_Context->Device, &setAlloc, vkBuffer.DescriptorSets.data());
+        ARCBIT_VERIFY(setResult == VK_SUCCESS, "vkAllocateDescriptorSets (SSBO) failed");
+    }
+
     if (desc.DebugName)
     {
         VkDebugUtilsObjectNameInfoEXT nameInfo{ VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
@@ -444,6 +461,16 @@ void RenderDevice::DestroyBuffer(BufferHandle handle)
 {
     auto resource = m_Context->Buffers.Free(handle);
     if (!resource) return;
+
+    // Free any SSBO descriptor sets before the pool is reset.
+    std::vector<VkDescriptorSet> setsToFree;
+    for (const auto& ds : resource->DescriptorSets)
+        if (ds != VK_NULL_HANDLE) setsToFree.push_back(ds);
+    if (!setsToFree.empty())
+    {
+        vkFreeDescriptorSets(m_Context->Device, m_Context->GlobalDescriptorPool,
+            static_cast<u32>(setsToFree.size()), setsToFree.data());
+    }
 
     if (resource->Buffer != VK_NULL_HANDLE)
         vmaDestroyBuffer(m_Context->Allocator, resource->Buffer, resource->Allocation);
@@ -851,12 +878,20 @@ PipelineHandle RenderDevice::CreatePipeline(const PipelineDesc& desc)
     layoutInfo.pushConstantRangeCount = 1;
     layoutInfo.pPushConstantRanges    = &pushRange;
 
-    // Optionally include the texture descriptor set layout so the shader can
-    // sample a texture via BindTexture. Set 0 = combined image sampler.
-    if (desc.UseTextures)
+    // Build the descriptor set layout list based on the pipeline's feature flags.
+    // The ordering must match what the shader expects:
+    //   set 0 — albedo texture      (UseTextures)
+    //   set 1 — normal map texture  (UseNormalTexture; requires UseTextures)
+    //   set 2 — storage buffer SSBO (UseStorageBuffer; appended after texture sets)
+    std::vector<VkDescriptorSetLayout> setLayouts;
+    if (desc.UseTextures)      setLayouts.push_back(m_Context->TextureSetLayout);
+    if (desc.UseNormalTexture) setLayouts.push_back(m_Context->TextureSetLayout);
+    if (desc.UseStorageBuffer) setLayouts.push_back(m_Context->StorageBufferSetLayout);
+
+    if (!setLayouts.empty())
     {
-        layoutInfo.setLayoutCount = 1;
-        layoutInfo.pSetLayouts    = &m_Context->TextureSetLayout;
+        layoutInfo.setLayoutCount = static_cast<u32>(setLayouts.size());
+        layoutInfo.pSetLayouts    = setLayouts.data();
     }
 
     VulkanPipeline vkPipeline{};
@@ -1311,8 +1346,13 @@ void RenderDevice::BindIndexBuffer(CommandListHandle cmd, BufferHandle buffer, I
 
 // Update the texture's pre-allocated descriptor set with the given sampler,
 // then bind it to the pipeline at the specified descriptor set slot.
-// vkUpdateDescriptorSets is called every bind — if perf becomes a concern,
-// we can cache the last-bound (texture, sampler) pair and skip the update.
+//
+// vkUpdateDescriptorSets is skipped when the same texture+sampler pair was
+// already written into this frame's slot. This avoids the Vulkan rule that
+// updating a descriptor set while it is already recorded (bound) in the
+// current command buffer puts the command buffer into an invalid state —
+// which happens when the same texture (e.g. the default flat-normal) is
+// bound more than once per frame.
 void RenderDevice::BindTexture(CommandListHandle cmd, TextureHandle texture,
                                 SamplerHandle sampler, u32 set, u32 /*binding*/)
 {
@@ -1332,26 +1372,82 @@ void RenderDevice::BindTexture(CommandListHandle cmd, TextureHandle texture,
 
     VkDescriptorSet dstSet = tex->DescriptorSets[frame];
 
-    // Write the current sampler + image view into the descriptor set.
-    VkDescriptorImageInfo imageInfo{};
-    imageInfo.sampler     = samp->Sampler;
-    imageInfo.imageView   = tex->View;
-    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    // Only call vkUpdateDescriptorSets if the sampler changed since last time.
+    // Updating a descriptor set that's already bound in the recording command
+    // buffer would invalidate the command buffer.
+    if (tex->LastSampler[frame] != samp->Sampler)
+    {
+        VkDescriptorImageInfo imageInfo{};
+        imageInfo.sampler     = samp->Sampler;
+        imageInfo.imageView   = tex->View;
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    VkWriteDescriptorSet write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-    write.dstSet          = dstSet;
-    write.dstBinding      = 0;
-    write.descriptorCount = 1;
-    write.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    write.pImageInfo      = &imageInfo;
+        VkWriteDescriptorSet write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+        write.dstSet          = dstSet;
+        write.dstBinding      = 0;
+        write.descriptorCount = 1;
+        write.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write.pImageInfo      = &imageInfo;
 
-    vkUpdateDescriptorSets(m_Context->Device, 1, &write, 0, nullptr);
+        vkUpdateDescriptorSets(m_Context->Device, 1, &write, 0, nullptr);
+        tex->LastSampler[frame] = samp->Sampler;
+    }
 
     vkCmdBindDescriptorSets(cmdList->Buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
         cmdList->BoundLayout, set, 1, &dstSet, 0, nullptr);
 }
 
-void RenderDevice::BindStorageBuffer(CommandListHandle, BufferHandle, u32, u32) {} // descriptor sets — Phase 9
+// Binds a storage buffer (SSBO) to the given descriptor set and binding.
+// Updates the descriptor set for the current frame-in-flight slot, then
+// calls vkCmdBindDescriptorSets so the shader can read it.
+void RenderDevice::BindStorageBuffer(CommandListHandle cmd, BufferHandle buffer,
+                                      u32 set, u32 binding)
+{
+    VulkanCommandList* cmdList = m_Context->CommandLists.Get(cmd);
+    ARCBIT_ASSERT(cmdList && cmdList->BoundLayout != VK_NULL_HANDLE,
+        "BindStorageBuffer: no pipeline bound");
+
+    VulkanBuffer* vkBuffer = m_Context->Buffers.Get(buffer);
+    ARCBIT_ASSERT(vkBuffer, "BindStorageBuffer: invalid buffer handle");
+
+    VulkanSwapchain* sc = m_Context->Swapchains.Get(m_Context->ActiveSwapchain);
+    ARCBIT_ASSERT(sc, "BindStorageBuffer: no active swapchain");
+
+    const u32 frame = sc->CurrentFrame;
+    VkDescriptorSet dstSet = vkBuffer->DescriptorSets[frame];
+    ARCBIT_ASSERT(dstSet != VK_NULL_HANDLE, "BindStorageBuffer: buffer has no SSBO descriptor set");
+
+    // Only update the descriptor set if it hasn't been written yet for this frame.
+    // Calling vkUpdateDescriptorSets on a set that's already recorded (bound) in
+    // the current command buffer would put the command buffer into an invalid state.
+    if (!vkBuffer->DescriptorSetWritten[frame])
+    {
+        VkDescriptorBufferInfo bufInfo{};
+        bufInfo.buffer = vkBuffer->Buffer;
+        bufInfo.offset = 0;
+        bufInfo.range  = vkBuffer->Size;
+
+        VkWriteDescriptorSet write{ VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+        write.dstSet          = dstSet;
+        write.dstBinding      = binding;
+        write.descriptorCount = 1;
+        write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        write.pBufferInfo     = &bufInfo;
+
+        vkUpdateDescriptorSets(m_Context->Device, 1, &write, 0, nullptr);
+        vkBuffer->DescriptorSetWritten[frame] = true;
+    }
+
+    vkCmdBindDescriptorSets(cmdList->Buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        cmdList->BoundLayout, set, 1, &dstSet, 0, nullptr);
+}
+
+u32 RenderDevice::GetCurrentFrameIndex(SwapchainHandle handle)
+{
+    VulkanSwapchain* sc = m_Context->Swapchains.Get(handle);
+    ARCBIT_ASSERT(sc, "GetCurrentFrameIndex: invalid swapchain handle");
+    return sc->CurrentFrame;
+}
 
 void RenderDevice::PushConstants(CommandListHandle cmd, ShaderStage stages,
                                   const void* data, u32 size, u32 offset)

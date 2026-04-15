@@ -313,9 +313,17 @@ struct PipelineDesc
     Format ColorFormat = Format::BGRA8_SRGB;
     Format DepthFormat = Format::Undefined;
 
-    // Set to true to include the texture descriptor set layout (set 0, binding 0)
-    // in the pipeline layout so shaders can sample textures via BindTexture.
+    // Set to true to include the albedo texture descriptor set (set 0, binding 0).
     bool UseTextures = false;
+
+    // Set to true to include a second texture descriptor set (set 1, binding 0)
+    // for normal maps. Requires UseTextures to also be true.
+    bool UseNormalTexture = false;
+
+    // Set to true to include a storage buffer descriptor set after any texture
+    // sets (set 2 when both UseTextures and UseNormalTexture are set).
+    // Used for the per-frame dynamic light list.
+    bool UseStorageBuffer = false;
 
     const char* DebugName = nullptr;
 };
