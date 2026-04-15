@@ -204,5 +204,7 @@ namespace Arcbit {
         static constexpr Color Cyan() { return {0.0f, 1.0f, 1.0f, 1.0f}; }
         static constexpr Color Magenta() { return {1.0f, 0.0f, 1.0f, 1.0f}; }
         static constexpr Color CornflowerBlue() { return {0.392f, 0.584f, 0.929f, 1.0f}; }
+        static constexpr Color NaturalLight() { return { 1.0f, 0.8f, 0.4f, 1.0f }; }
+        static constexpr Color WarmOrange() { return NaturalLight(); } // alias for natural light
     };
 } // namespace Arcbit

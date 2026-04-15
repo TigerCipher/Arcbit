@@ -35,7 +35,7 @@ class ArcbitGame : public Arcbit::Application
 {
 public:
     ArcbitGame()
-        : Application({ .Title = "Arcbit", .Width = 1280, .Height = 720 })
+        : Application({ .Title = "Arcbit", .Width = 1920, .Height = 1080 })
     {}
 
 protected:
@@ -118,7 +118,12 @@ protected:
         if (m_PlayerSheet.IsValid())
             LOG_INFO(Engine, "Player sheet loaded — {} tiles", m_PlayerSheet.TileCount());
 
-        // --- Sampler ---
+        // --- Floor texture ---
+        m_FloorTex = GetTextures().Load("assets/textures/floor.jpg");
+        ARCBIT_ASSERT(m_FloorTex.IsValid(), "Failed to load floor texture");
+
+        // --- Samplers ---
+        // Nearest-repeat: for pixel-art sprites where texels should stay crisp.
         Arcbit::SamplerDesc sampDesc{};
         sampDesc.MinFilter = Arcbit::Filter::Nearest;
         sampDesc.MagFilter = Arcbit::Filter::Nearest;
@@ -128,6 +133,26 @@ protected:
 
         m_Sampler = GetDevice().CreateSampler(sampDesc);
         ARCBIT_ASSERT(m_Sampler.IsValid(), "Failed to create sampler");
+
+        // Linear-repeat: for the floor tile so it blends smoothly when scaled.
+        Arcbit::SamplerDesc floorSampDesc{};
+        floorSampDesc.MinFilter = Arcbit::Filter::Linear;
+        floorSampDesc.MagFilter = Arcbit::Filter::Linear;
+        floorSampDesc.AddressU  = Arcbit::AddressMode::Repeat;
+        floorSampDesc.AddressV  = Arcbit::AddressMode::Repeat;
+        floorSampDesc.DebugName = "LinearRepeat";
+
+        m_FloorSampler = GetDevice().CreateSampler(floorSampDesc);
+        ARCBIT_ASSERT(m_FloorSampler.IsValid(), "Failed to create floor sampler");
+
+        // Create random lights
+        for (int i = 0; i < NumRandomLights; ++i)
+        {
+            m_Lights[i].Position   = { static_cast<float>(rand() % 100) / 100.0f - 0.5f, static_cast<float>(rand() % 100) / 100.0f - 0.5f };
+            m_Lights[i].Radius     = static_cast<float>(rand() % 100) / 100.0f * 0.5f + 0.1f;
+            m_Lights[i].Intensity  = static_cast<float>(rand() % 100) / 100.0f + 0.5f;
+            m_Lights[i].LightColor = Arcbit::Color{ static_cast<float>(rand() % 100) / 100.0f, static_cast<float>(rand() % 100) / 100.0f, static_cast<float>(rand() % 100) / 100.0f, 1.0f };
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -161,8 +186,49 @@ protected:
             light.Position   = { 0.0f, 0.0f };
             light.Radius     = 0.6f;
             light.Intensity  = 1.5f;
-            light.LightColor = Arcbit::Color{ 1.0f, 0.8f, 0.4f, 1.0f };
+            light.LightColor = Arcbit::Color::NaturalLight();
             packet.Lights.push_back(light);
+        }
+
+        // Test point light — green, positioned at right half
+        {
+            Arcbit::PointLight light{};
+            light.Position   = { 0.9f, -0.3f };
+            light.Radius     = 0.2f;
+            light.Intensity  = 1.5f;
+            light.LightColor = Arcbit::Color::Green();
+            packet.Lights.push_back(light);
+        }
+
+        // Test point light — red, positioned at left half
+        {
+            Arcbit::PointLight light{};
+            light.Position   = { -0.9f, 0.6f };
+            light.Radius     = 0.4f;
+            light.Intensity  = 1.9f;
+            light.LightColor = Arcbit::Color::Red();
+            packet.Lights.push_back(light);
+        }
+
+        // Now various random lights
+        for (int i = 0; i < NumRandomLights; ++i)
+        {
+            Arcbit::PointLight light = m_Lights[i];
+            packet.Lights.push_back(light);
+        }
+
+        // Floor — full screen, drawn first so sprites render on top.
+        // UV scale of 4×4 tiles the 512px texture across the 1280×720 window.
+        {
+            Arcbit::DrawCall dc{};
+            dc.Pipeline    = m_ForwardPipeline;
+            dc.Texture     = m_FloorTex;
+            dc.Sampler     = m_FloorSampler;
+            dc.VertexCount = 6;
+            dc.Position    = { 0.0f, 0.0f };
+            dc.Scale       = { 1.0f, 1.0f };
+            dc.UV          = { 0.0f, 0.0f, 4.0f, 4.0f }; // tile 4x
+            packet.DrawCalls.push_back(dc);
         }
 
         // Woods texture — left half of the screen.
@@ -187,7 +253,7 @@ protected:
             dc.VertexCount = 6;
             dc.Position    = { 0.5f, 0.0f };
             dc.Scale       = { 0.5f, 1.0f };
-            if (auto uv = m_PlayerSheet.GetTile(0))
+            if (auto uv = m_PlayerSheet.GetTile(3))
                 dc.UV = *uv;
             packet.DrawCalls.push_back(dc);
         }
@@ -200,6 +266,7 @@ protected:
     // -----------------------------------------------------------------------
     void OnShutdown() override
     {
+        GetDevice().DestroySampler(m_FloorSampler);
         GetDevice().DestroySampler(m_Sampler);
         GetDevice().DestroyPipeline(m_ForwardPipeline);
     }
@@ -216,10 +283,15 @@ private:
     // Textures are owned by the TextureManager and released automatically.
     Arcbit::PipelineHandle m_ForwardPipeline;
     Arcbit::SamplerHandle  m_Sampler;
+    Arcbit::SamplerHandle  m_FloorSampler;
 
     // Loaded via TextureManager — no manual destroy needed.
+    Arcbit::TextureHandle  m_FloorTex;
     Arcbit::TextureHandle  m_WoodsTex;
     Arcbit::SpriteSheet    m_PlayerSheet;
+
+    static constexpr Arcbit::isize NumRandomLights = 10;
+    std::array<Arcbit::PointLight, NumRandomLights> m_Lights = {};
 };
 
 // ---------------------------------------------------------------------------
