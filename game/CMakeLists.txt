@@ -30,6 +30,8 @@ set(SHADER_SOURCES
     quad.frag
     forward.vert
     forward.frag
+    sprite.vert
+    sprite.frag
 )
 
 set(SHADER_OUTPUTS)

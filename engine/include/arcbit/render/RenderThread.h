@@ -3,8 +3,10 @@
 #include <arcbit/render/RenderDevice.h>
 #include <arcbit/render/RenderTypes.h>
 #include <arcbit/assets/AssetTypes.h>
+#include <arcbit/core/Math.h>
 
 #include <array>
+#include <atomic>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -37,32 +39,55 @@ struct PointLight
 };
 
 // ---------------------------------------------------------------------------
-// DrawCall
+// Sprite
 //
-// A single draw call baked into a FramePacket by the game thread.
-// The render thread issues one quad draw per entry, binding the albedo and
-// optional normal textures and reading lights from the per-frame SSBO.
+// A world-space sprite submitted by the game thread each frame.
+// The render thread sorts sprites by layer then groups them by texture to
+// minimize descriptor switches, then issues one instanced draw call per group.
+//
+// Coordinate system
+// -----------------
+// Position and Size are in world-space pixels. The camera (CameraPosition on
+// FramePacket) defines which world point maps to screen center. At zoom 1:
+//   NDC = (worldPos - cameraPos) / (viewportSize * 0.5)
+// Y+ is downward (screen-style), consistent with most 2D games.
+// ---------------------------------------------------------------------------
+struct Sprite
+{
+    TextureHandle Texture;                            // albedo / sprite texture (set 0, required)
+    TextureHandle NormalTexture;                      // normal map (set 1); leave invalid for flat-normal fallback
+    SamplerHandle Sampler;                            // filtering / addressing for albedo and normal
+
+    Vec2   Position = { 0.0f, 0.0f };                // world-space center in pixels
+    Vec2   Size     = { 64.0f, 64.0f };              // full width × height in pixels
+    UVRect UV       = { 0.0f, 0.0f, 1.0f, 1.0f };   // normalized sub-region; defaults to whole texture
+    Color  Tint     = Color::White();                 // per-sprite RGBA tint multiplied against the albedo
+
+    // Draw order. Sprites are rendered lower-layer-first (painter's algorithm).
+    // Sprites on the same layer with the same texture are batched into one draw.
+    i32 Layer = 0;
+};
+
+// ---------------------------------------------------------------------------
+// DrawCall  (low-level escape hatch — prefer Sprite for game code)
+//
+// Directly specifies NDC-space position, scale, and UV, and requires the
+// caller to own the pipeline. Rendered after all Sprites, in submission order.
+// Useful for special effects or post-processing quads that don't fit the
+// sprite batcher model.
 // ---------------------------------------------------------------------------
 struct DrawCall
 {
-    PipelineHandle Pipeline;        // forward+ sprite pipeline to bind
-    TextureHandle  Texture;         // albedo / sprite texture (set 0)
-    TextureHandle  NormalTexture;   // normal map (set 1); leave invalid for the flat-normal fallback
-    SamplerHandle  Sampler;         // used for both albedo and normal texture samples
-    u32            VertexCount = 0; // vertices to emit (6 for a quad)
+    PipelineHandle Pipeline;        // pipeline to bind (must be a forward-compatible pipeline)
+    TextureHandle  Texture;         // albedo texture (set 0)
+    TextureHandle  NormalTexture;   // normal map (set 1); leave invalid for flat-normal fallback
+    SamplerHandle  Sampler;
+    u32            VertexCount = 0;
 
-    // Position of the quad's center in NDC space (-1 to 1 on each axis).
-    // (0, 0) is the screen center; (-1,-1) is top-left; (1,1) is bottom-right.
-    Vec2 Position = { 0.0f, 0.0f };
-
-    // Half-size of the quad in NDC space. (1, 1) fills the entire screen.
-    // For a 256×256 sprite on a 1280×720 window, use roughly (0.2, 0.35).
-    Vec2 Scale = { 1.0f, 1.0f };
-
-    // Sub-region of the texture to sample, in normalized (0-1) UV space.
-    // Defaults to the full texture. Use SpriteSheet::GetTile() / GetSprite()
-    // to get the UV rect for a specific frame and assign it here.
-    UVRect UV = { 0.0f, 0.0f, 1.0f, 1.0f };
+    // NDC-space position and half-size.  (0,0) = screen center; (1,1) = bottom-right.
+    Vec2   Position = { 0.0f, 0.0f };
+    Vec2   Scale    = { 1.0f, 1.0f };
+    UVRect UV       = { 0.0f, 0.0f, 1.0f, 1.0f };
 };
 
 // ---------------------------------------------------------------------------
@@ -86,8 +111,16 @@ struct FramePacket
     u32             Height    = 0;
     Color           ClearColor = Color::Black(); // RGBA clear color for the color attachment
 
-    // Ordered list of draw calls. The render thread executes them in order
-    // inside a single BeginRendering / EndRendering scope.
+    // High-level sprite list. Sorted by layer then grouped by texture; the
+    // render thread issues one instanced draw per texture group.
+    std::vector<Sprite> Sprites;
+
+    // World-space position that maps to the center of the screen.
+    // Defaults to (0, 0) — a sprite at world (0, 0) renders at screen center.
+    Vec2 CameraPosition = { 0.0f, 0.0f };
+
+    // Low-level draw calls rendered after all sprites, in submission order.
+    // Requires the caller to own the pipeline and specify NDC coordinates.
     std::vector<DrawCall> DrawCalls;
 
     // Dynamic point light list. Uploaded to a per-frame SSBO each tick.
@@ -101,6 +134,21 @@ struct FramePacket
     // acquiring the next image. Set this when the window has been resized.
     // The flag is consumed once and does not persist across frames.
     bool NeedsResize = false;
+};
+
+// ---------------------------------------------------------------------------
+// RenderStats
+//
+// Snapshot of per-frame rendering statistics written by the render thread
+// after each frame and readable from any thread via RenderThread::GetStats().
+// Values reflect the most recently completed frame.
+// ---------------------------------------------------------------------------
+struct RenderStats
+{
+    u32 SpritesSubmitted = 0;  // total sprites in packet.Sprites
+    u32 SpriteBatches    = 0;  // instanced GPU draw calls emitted by the batcher
+    u32 LegacyDrawCalls  = 0;  // GPU draw calls from packet.DrawCalls
+    u32 LightsActive     = 0;  // point lights uploaded to the SSBO
 };
 
 // ---------------------------------------------------------------------------
@@ -142,7 +190,9 @@ class RenderThread
 {
 public:
     // Launch the render thread. device must outlive the RenderThread.
-    void Start(RenderDevice* device);
+    // swapchainFormat is needed to create the sprite pipeline with the correct
+    // color attachment format — pass RenderDevice::GetSwapchainColorFormat().
+    void Start(RenderDevice* device, Format swapchainFormat);
 
     // Signal the thread to exit and block until it does.
     // After this returns, no Vulkan calls are in flight and the device can
@@ -152,6 +202,11 @@ public:
     // Hand a completed FramePacket to the render thread for rendering.
     // Blocks briefly if the render thread is still finishing the previous frame.
     void SubmitFrame(FramePacket packet);
+
+    // Returns a snapshot of the statistics from the most recently completed frame.
+    // Safe to call from any thread — values are written with relaxed atomics.
+    [[nodiscard]] RenderStats GetStats() const;
+
 
 private:
     // Thread entry point — loops calling RenderFrame until Stop() is called.
@@ -180,24 +235,40 @@ private:
     bool        m_SlotFree = true;  // true once the render thread has consumed the packet
     bool        m_Running  = false; // set to false by Stop() to signal the thread to exit
 
-    // ----- Forward+ resources — owned by the render thread -----------------
+    // ----- Per-frame render statistics (atomic — written by render thread) --
 
-    // One SSBO per frame-in-flight slot. The render thread uploads lights to
-    // m_LightSSBO[currentFrame] each tick; the other slot is still being read
-    // by the GPU, so writing to it would race.
-    static constexpr u32 GBufferSlots = RenderDevice::MaxFramesInFlight;
-    std::array<BufferHandle, GBufferSlots> m_LightSSBO = {};
+    std::atomic<u32> m_StatSpritesSubmitted{0};
+    std::atomic<u32> m_StatSpriteBatches{0};
+    std::atomic<u32> m_StatLegacyDrawCalls{0};
+    std::atomic<u32> m_StatLightsActive{0};
 
-    // Capacity (in light entries) currently allocated for each SSBO slot.
-    // When the Lights list grows beyond this, the SSBO is recreated.
-    u32 m_LightSSBOCapacity = 0;
+    // ----- Shared GPU resources — owned by the render thread ---------------
+
+    static constexpr u32 FrameSlots = RenderDevice::MaxFramesInFlight;
 
     // Default 1×1 RGBA texture encoding a flat normal (0.5, 0.5, 1.0, 1.0).
-    // Bound to set 1 when a DrawCall does not provide a NormalTexture.
+    // Bound to set 1 when a Sprite or DrawCall provides no NormalTexture.
     TextureHandle m_DefaultNormalTex;
-
-    // Nearest-neighbor sampler shared for the default normal texture.
     SamplerHandle m_DefaultNormalSampler;
+
+    // ----- Sprite batcher resources ----------------------------------------
+
+    // Pipeline created from sprite.vert + sprite.frag in Start().
+    // Per-instance vertex layout: 3 × vec4 (posSize, uv, tint) = 48 bytes/sprite.
+    PipelineHandle m_SpritePipeline;
+
+    // Per-frame instance buffers. The CPU writes sprite instances into
+    // m_InstanceBuffers[currentFrame]; the other slot is still being read.
+    std::array<BufferHandle, FrameSlots> m_InstanceBuffers = {};
+
+    // Allocated capacity in each instance buffer (number of sprites).
+    u32 m_InstanceBufferCapacity = 0;
+
+    // ----- Forward+ light SSBO resources -----------------------------------
+
+    // One SSBO per frame-in-flight slot — same cycling rationale as instance buffers.
+    std::array<BufferHandle, FrameSlots> m_LightSSBO = {};
+    u32 m_LightSSBOCapacity = 0;
 };
 
 } // namespace Arcbit

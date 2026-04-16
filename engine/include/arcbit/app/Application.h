@@ -8,7 +8,8 @@
 
 #include <memory>
 
-namespace Arcbit {
+namespace Arcbit
+{
 
 class Window; // full type only needed in Application.cpp
 
@@ -145,12 +146,12 @@ private:
     //   m_Device       — raw pointer; destroyed explicitly in Run()
     //
     // So declaration order is the reverse of that (destructor fires bottom-up):
-    RenderDevice*                    m_Device = nullptr;
-    std::unique_ptr<TextureManager>  m_Textures;          // created after device; reset before DestroyDevice
-    SwapchainHandle                  m_Swapchain;
-    RenderThread                     m_RenderThread;
-    std::unique_ptr<Window>          m_Window;            // SDL_Quit in destructor
-    InputManager                     m_Input;             // SDL gamepad cleanup in destructor
+    RenderDevice*                   m_Device = nullptr;
+    std::unique_ptr<TextureManager> m_Textures; // created after device; reset before DestroyDevice
+    SwapchainHandle                 m_Swapchain;
+    RenderThread                    m_RenderThread;
+    std::unique_ptr<Window>         m_Window; // SDL_Quit in destructor
+    InputManager                    m_Input;  // SDL gamepad cleanup in destructor
 
     // Accumulates real time to rate-limit hot-reload checks to once per second.
     f64 m_HotReloadAccumulator = 0.0;

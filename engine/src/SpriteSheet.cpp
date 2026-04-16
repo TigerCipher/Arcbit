@@ -84,8 +84,15 @@ std::optional<UVRect> SpriteSheet::GetTile(const u32 index) const
     return m_Tiles[index];
 }
 
-void SpriteSheet::LoadNamedSpritesFromJson(std::string_view metaPath, nlohmann::json json, SpriteSheet sheet, const f32 invW,
-                                           const f32 invH)
+std::optional<UVRect> SpriteSheet::GetTile(const u32 x, const u32 y) const
+{
+    if (m_Columns == 0 || x >= m_Columns)
+        return std::nullopt;
+    return GetTile(y * m_Columns + x);
+}
+
+void SpriteSheet::LoadNamedSpritesFromJson(std::string_view metaPath, const nlohmann::json& json, SpriteSheet& sheet,
+                                           const f32 invW, const f32 invH)
 {
     if (!json.contains("sprites"))
         return;
@@ -107,39 +114,44 @@ void SpriteSheet::LoadNamedSpritesFromJson(std::string_view metaPath, nlohmann::
     LOG_DEBUG(Engine, "SpriteSheet: loaded {} named sprites from '{}'", sheet.m_NamedSprites.size(), metaPath);
 }
 
-void SpriteSheet::LoadFromTileGrid(std::string_view metaPath, nlohmann::json json, SpriteSheet sheet, const u32 Width,
-                                   const u32 Height, const f32 invW, const f32 invH)
+void SpriteSheet::LoadFromTileGrid(std::string_view metaPath, const nlohmann::json& json, SpriteSheet& sheet,
+                                   const u32 width, const u32 height, const f32 invW, const f32 invH)
 {
-    if (!json.contains("tile_width") && json.contains("tile_height"))
+    if (!json.contains("tile_width") || !json.contains("tile_height"))
         return;
+
     const u32 tileW   = json["tile_width"].get<u32>();
     const u32 tileH   = json["tile_height"].get<u32>();
-    const u32 columns = Width / tileW;
+    const u32 columns = width / tileW;
+    const u32 rows    = height / tileH;
 
-    if (const u32 rows = Height / tileH; columns == 0 || rows == 0)
+    if (columns == 0 || rows == 0)
     {
-        LOG_WARN(Engine, "SpriteSheet: tile size {}x{} is larger than texture {}x{} in '{}'", tileW, tileH, Width, Height,
-                 metaPath);
-    } else
-    {
-        sheet.m_Tiles.reserve(columns * rows);
-        for (u32 row = 0; row < rows; ++row)
-        {
-            for (u32 col = 0; col < columns; ++col)
-            {
-                const auto px = static_cast<f32>(col * tileW);
-                const auto py = static_cast<f32>(row * tileH);
-                sheet.m_Tiles.push_back(UVRect{
-                    px * invW,
-                    py * invH,
-                    (px + static_cast<f32>(tileW)) * invW,
-                    (py + static_cast<f32>(tileH)) * invH,
-                });
-            }
-        }
-        LOG_DEBUG(Engine, "SpriteSheet: built {}x{} tile grid ({} tiles) from '{}'", columns, rows, sheet.m_Tiles.size(),
-                  metaPath);
+        LOG_WARN(Engine, "SpriteSheet: tile size {}x{} is larger than texture {}x{} in '{}'",
+                 tileW, tileH, width, height, metaPath);
+        return;
     }
+
+    sheet.m_Columns = columns;
+    sheet.m_Tiles.reserve(columns * rows);
+
+    for (u32 row = 0; row < rows; ++row)
+    {
+        for (u32 col = 0; col < columns; ++col)
+        {
+            const auto px = static_cast<f32>(col * tileW);
+            const auto py = static_cast<f32>(row * tileH);
+            sheet.m_Tiles.push_back(UVRect{
+                px * invW,
+                py * invH,
+                (px + static_cast<f32>(tileW)) * invW,
+                (py + static_cast<f32>(tileH)) * invH,
+            });
+        }
+    }
+
+    LOG_DEBUG(Engine, "SpriteSheet: built {}x{} tile grid ({} tiles) from '{}'",
+              columns, rows, sheet.m_Tiles.size(), metaPath);
 }
 
 } // namespace Arcbit

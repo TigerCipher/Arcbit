@@ -64,20 +64,32 @@ public:
     // defined with named sprites only (no tile_width / tile_height).
     [[nodiscard]] std::optional<UVRect> GetTile(u32 index) const;
 
+    // Look up a tile by 2D grid coordinates (column, row), both 0-based.
+    // Equivalent to GetTile(y * columns + x).
+    // Returns std::nullopt if the coordinates are out of range.
+    [[nodiscard]] std::optional<UVRect> GetTile(u32 x, u32 y) const;
+
     // Total number of tiles in the grid (0 if not a tile-grid sheet).
-    [[nodiscard]] u32 TileCount() const { return static_cast<u32>(m_Tiles.size()); }
-    
+    [[nodiscard]] u32 TileCount()   const { return static_cast<u32>(m_Tiles.size()); }
+
+    // Number of columns in the tile grid (0 if not a tile-grid sheet).
+    [[nodiscard]] u32 TileColumns() const { return m_Columns; }
+
+    // Number of rows in the tile grid (0 if not a tile-grid sheet).
+    [[nodiscard]] u32 TileRows()    const { return m_Columns > 0 ? static_cast<u32>(m_Tiles.size()) / m_Columns : 0; }
+
 private:
-    static void LoadNamedSpritesFromJson(std::string_view metaPath, nlohmann::json json, SpriteSheet sheet, f32 invW,
-                                         f32 invH);
-    
-    static void LoadFromTileGrid(std::string_view metaPath, nlohmann::json json, SpriteSheet sheet, u32 Width, u32 Height,
-                                 f32 invW, f32 invH);
+    static void LoadNamedSpritesFromJson(std::string_view metaPath, const nlohmann::json& json, SpriteSheet& sheet,
+                                         f32 invW, f32 invH);
+
+    static void LoadFromTileGrid(std::string_view metaPath, const nlohmann::json& json, SpriteSheet& sheet,
+                                 u32 width, u32 height, f32 invW, f32 invH);
 
 private:
     TextureHandle                            m_Texture;
     std::unordered_map<std::string, UVRect>  m_NamedSprites;
     std::vector<UVRect>                      m_Tiles;
+    u32                                      m_Columns = 0; // tile grid columns; 0 if not a tile-grid sheet
 };
 
 } // namespace Arcbit
