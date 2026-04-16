@@ -212,10 +212,49 @@ private:
     // Thread entry point — loops calling RenderFrame until Stop() is called.
     void Run();
 
-    // Execute one frame: resize if requested, acquire image, record commands,
-    // submit, present. Called only from the render thread.
+    // Execute one frame: acquire image, record commands, submit, present.
     void RenderFrame(const FramePacket& packet);
 
+    // ----- Start() helpers (called once on the render thread at startup) -----
+
+    void CreateDefaultNormalResources();
+    void CreateSpritePipeline(Format swapchainFormat);
+    void CreateInstanceBuffers();
+    void CreateLightSSBOs();
+
+    // ----- RenderFrame() helpers (called once per frame) ---------------------
+
+    // Handles NeedsResize and AcquireNextImage with one automatic retry.
+    // Returns an invalid handle if the frame should be skipped.
+    [[nodiscard]] TextureHandle AcquireBackbuffer(const FramePacket& packet) const;
+
+    // Grows the light SSBO if needed, uploads this frame's lights.
+    // Returns the light count for use in push constants.
+    [[nodiscard]] u32 UploadLights(const FramePacket& packet, u32 frameSlot);
+
+    // Returns pointers into packet.Sprites sorted by (layer, texture, sampler).
+    [[nodiscard]] static std::vector<const Sprite*> SortSprites(const std::vector<Sprite>& sprites);
+
+    // Grows the instance buffer if needed, uploads sorted sprite data.
+    void UploadInstances(const std::vector<const Sprite*>& sorted, u32 frameSlot);
+
+    // Records BeginRendering with a single cleared color attachment.
+    void BeginRenderPass(CommandListHandle cmd, TextureHandle backbuffer,
+                         const FramePacket& packet) const;
+
+    // Binds the sprite pipeline, uploads push constants, and issues one
+    // instanced draw call per texture group. Returns the batch count.
+    [[nodiscard]] u32 DrawSpriteBatches(CommandListHandle cmd,
+                                        const std::vector<const Sprite*>& sorted,
+                                        u32 frameSlot, const FramePacket& packet,
+                                        u32 lightCount) const;
+
+    // Issues legacy DrawCall entries in submission order, after all sprites.
+    void DrawLegacyCalls(CommandListHandle cmd, const FramePacket& packet,
+                         u32 frameSlot, u32 lightCount) const;
+
+private:
+    
     RenderDevice* m_Device = nullptr;
     std::thread   m_Thread;
 

@@ -126,10 +126,10 @@ Checkbox list of every major milestone. Check off items as they are completed.
 ---
 
 ## Phase 14: Sprite Batch Renderer
-- [ ] Per-frame CPU-side sprite buffer (position, UV rect, tint, layer)
-- [ ] Sort / group by texture to minimize descriptor switches
-- [ ] Single instance buffer upload + one `Draw` call per texture group
-- [ ] World-space coordinate system (pixels or tiles); push constant projects world → NDC
+- [x] Per-frame CPU-side sprite buffer (position, UV rect, tint, layer)
+- [x] Sort / group by texture to minimize descriptor switches
+- [x] Single instance buffer upload + one `Draw` call per texture group
+- [x] World-space coordinate system (pixels or tiles); push constant projects world → NDC
 
 ---
 
@@ -360,9 +360,17 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 - [ ] `.arcasset` binary container format: magic bytes, version, table of contents, compressed payload sections
 - [ ] Supported asset types in v1: `Texture` (raw pixels + metadata), `SpriteSheet` (texture + UV table), `AnimationClip` (frame list + events), `TileAtlas` (texture + tile property table), `AudioClip` (decoded PCM + loop points)
+- [ ] **Texture atlas packer**: bin individual sprites and spritesheets into power-of-two atlas pages grouped by sampler type (nearest / linear); output UV mapping table in `.arcasset` so game code still refers to sprites by name; `arcbit-pack` supports `--atlas` mode for batch packing
 - [ ] Import pipeline: source file (PNG, JSON, WAV, etc.) → validated → packed into `.arcasset`
 - [ ] Export pipeline: `.arcasset` → engine `TextureHandle` / `AudioClip` / etc. at runtime
-- [ ] Obfuscation flag: shuffle byte layout + XOR key stored in `project.arcbit` so end users cannot trivially edit asset files
+- [ ] **Two-key asset protection system**:
+  - *Dev key*: generated per project, stored in the dev's `project.arcbit` (never shipped with the game); baked into the game binary by the packaging step at build time; required to open `.arcasset` files in full editor mode
+  - *Mod key*: a separate per-project key included in the shipped `project.arcbit` only when `mod_support = true`; used to sign assets produced by end users in mod editor mode; engine distinguishes mod assets from dev assets by key
+  - When `mod_support = false`, shipped builds contain no key material; `.arcasset` files are opaque to end users (obfuscation, not hard encryption — raises the bar for casual extraction)
+- [ ] **Mod editor mode** (activated when the editor opens a shipped `project.arcbit` with `mod_support = true`):
+  - Open and preview original dev assets (decrypted in memory via the mod key where possible, or by asking the game runtime)
+  - Extract audio and image assets to standard formats (WAV, PNG, etc.) for use as mod source material
+  - "Save" is disabled on original assets — only "Save as Mod" is available, which always writes to the project's `mods/` directory signed with the mod key; original `.arcasset` files are never overwritten
 - [ ] Hot-reload: engine watches `.arcasset` mtime and re-imports on change (extends Phase 12 stub)
 - [ ] CLI tool (`arcbit-pack`) for batch import from a source assets directory
 
@@ -375,7 +383,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 - [ ] `mod.json`: mod ID, display name, version, load order, list of Lua entry scripts
 - [ ] Load order resolution: mods declare soft dependencies; engine topologically sorts them
 - [ ] Lua mod API extensions (on top of Phase 25): `Entity.Spawn`, `Tilemap.SetTile`, `ItemRegistry.Register`, `DialogRegistry.Register`, `Event.Subscribe`
-- [ ] Asset override: mod can shadow engine assets by placing an `.arcasset` at the same relative path
+- [ ] Asset override: mod can shadow engine assets by placing an `.arcasset` at the same relative path; mod assets must be signed with the mod key (produced by the mod editor) — the engine rejects any file signed with the dev key that did not ship with the game
 - [ ] Conflict detection: warn when two mods override the same asset or define the same item ID
 - [ ] Mod can be disabled at runtime; save system tags which mods were active (warn on load if missing)
 - [ ] Steam Workshop integration: wires into mod discovery when `steam_workshop = true` in `project.arcbit` (requires Phase 37)
@@ -424,3 +432,4 @@ Checkbox list of every major milestone. Check off items as they are completed.
 - [ ] **Engine log panel**: the running game pipes its spdlog output back to the editor over a named pipe or local socket; displayed in a filterable log panel in the editor
 - [ ] Content export to Phase 36 folder layout (`project.arcbit` + `.arcasset` files via Phase 34 content tools)
 - [ ] Asset importer UI: drag source files in, editor calls `arcbit-pack` and shows result
+- [ ] **Editor mode detection**: on open, inspect the loaded `project.arcbit` to determine mode — full dev mode (dev key present) or restricted mod mode (mod key only, `mod_support = true`); mod mode disables save-over-original and shows a clear "Mod Editor" banner so end users know what they are working with
