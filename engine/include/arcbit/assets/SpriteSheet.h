@@ -8,6 +8,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <vector>
+#include <nlohmann/json.hpp>
 
 namespace Arcbit {
 
@@ -65,6 +66,13 @@ public:
 
     // Total number of tiles in the grid (0 if not a tile-grid sheet).
     [[nodiscard]] u32 TileCount() const { return static_cast<u32>(m_Tiles.size()); }
+    
+private:
+    static void LoadNamedSpritesFromJson(std::string_view metaPath, nlohmann::json json, SpriteSheet sheet, f32 invW,
+                                         f32 invH);
+    
+    static void LoadFromTileGrid(std::string_view metaPath, nlohmann::json json, SpriteSheet sheet, u32 Width, u32 Height,
+                                 f32 invW, f32 invH);
 
 private:
     TextureHandle                            m_Texture;
