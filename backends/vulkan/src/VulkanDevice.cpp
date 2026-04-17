@@ -1596,7 +1596,7 @@ void RenderDevice::Present(SwapchainHandle handle)
 
     const VkResult result = vkQueuePresentKHR(_context->PresentQueue, &presentInfo);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
-        LOG_WARN(Render, "Present: swapchain suboptimal — resize on next frame");
+        LOG_WARN(Render, "Present: swapchain suboptimal - resize on next frame");
 
     // Advance the frame slot index so the next frame uses different sync objects.
     sc->CurrentFrame = (sc->CurrentFrame + 1) % MaxFramesInFlight;
