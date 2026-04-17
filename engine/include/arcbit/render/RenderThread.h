@@ -278,7 +278,7 @@ private:
 
     std::atomic<u32> m_StatSpritesSubmitted{0};
     std::atomic<u32> m_StatSpriteBatches{0};
-    std::atomic<u32> m_StatLegacyDrawCalls{0};
+    std::atomic<u32> m_StatDrawCalls{0};
     std::atomic<u32> m_StatLightsActive{0};
 
     // ----- Shared GPU resources — owned by the render thread ---------------

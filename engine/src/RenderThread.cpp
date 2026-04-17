@@ -246,7 +246,7 @@ RenderStats RenderThread::GetStats() const
     return {
         m_StatSpritesSubmitted.load(std::memory_order_relaxed),
         m_StatSpriteBatches.load(std::memory_order_relaxed),
-        m_StatLegacyDrawCalls.load(std::memory_order_relaxed),
+        m_StatDrawCalls.load(std::memory_order_relaxed),
         m_StatLightsActive.load(std::memory_order_relaxed),
     };
 }
@@ -575,7 +575,7 @@ void RenderThread::RenderFrame(const FramePacket& packet)
 
     m_StatSpritesSubmitted.store(static_cast<u32>(sorted.size()), std::memory_order_relaxed);
     m_StatSpriteBatches.store(batchCount, std::memory_order_relaxed);
-    m_StatLegacyDrawCalls.store(static_cast<u32>(packet.DrawCalls.size()), std::memory_order_relaxed);
+    m_StatDrawCalls.store(static_cast<u32>(packet.DrawCalls.size()) + batchCount, std::memory_order_relaxed);
     m_StatLightsActive.store(lightCount, std::memory_order_relaxed);
 
     m_Device->EndCommandList(cmd);

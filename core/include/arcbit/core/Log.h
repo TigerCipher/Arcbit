@@ -40,6 +40,8 @@ enum class Channel : uint8_t
     Audio,
     Combat,
     Scripting,
+    EventBus,
+    Game,
     Count
 };
 

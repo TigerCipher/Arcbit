@@ -68,14 +68,14 @@ protected:
         m_PlayerSheet = Arcbit::SpriteSheet::Load("assets/spritesheets/player.json", GetTextures());
         if (m_PlayerSheet.IsValid())
         {
-            LOG_INFO(Engine, "Player sheet loaded - {}x{} grid, {} tiles", m_PlayerSheet.TileColumns(), m_PlayerSheet.TileRows(),
+            LOG_INFO(Game, "Player sheet loaded - {}x{} grid, {} tiles", m_PlayerSheet.TileColumns(), m_PlayerSheet.TileRows(),
                      m_PlayerSheet.TileCount());
 
             // Demonstrate both GetTile overloads.
             if (auto uv = m_PlayerSheet.GetTile(3)) // by linear index
-                LOG_DEBUG(Engine, "GetTile(3)   - u0={:.3f}", uv->U0);
+                LOG_DEBUG(Game, "GetTile(3)   - u0={:.3f}", uv->U0);
             if (auto uv = m_PlayerSheet.GetTile(1, 0)) // by (column, row)
-                LOG_DEBUG(Engine, "GetTile(1,0) - u0={:.3f}", uv->U0);
+                LOG_DEBUG(Game, "GetTile(1,0) - u0={:.3f}", uv->U0);
         }
 
         // --- Samplers ---
@@ -110,6 +110,8 @@ protected:
                 Arcbit::Color{ static_cast<float>(rand() % 100) / 100.0f, static_cast<float>(rand() % 100) / 100.0f,
                                static_cast<float>(rand() % 100) / 100.0f, 1.0f };
         }
+        
+        CreateSprites();
     }
 
     // -----------------------------------------------------------------------
@@ -118,15 +120,15 @@ protected:
     void OnUpdate(Arcbit::f32 /*dt*/) override
     {
         if (GetInput().JustPressed(ActionInteract))
-            LOG_DEBUG(Engine, "Interact triggered");
+            LOG_DEBUG(Game, "Interact triggered");
         if (GetInput().IsPressed(ActionMoveLeft))
-            LOG_DEBUG(Engine, "Moving left  (axis={:.2f})", GetInput().AxisValue(ActionMoveLeft));
+            LOG_DEBUG(Game, "Moving left  (axis={:.2f})", GetInput().AxisValue(ActionMoveLeft));
         if (GetInput().IsPressed(ActionMoveRight))
-            LOG_DEBUG(Engine, "Moving right (axis={:.2f})", GetInput().AxisValue(ActionMoveRight));
+            LOG_DEBUG(Game, "Moving right (axis={:.2f})", GetInput().AxisValue(ActionMoveRight));
         if (GetInput().IsPressed(ActionMoveUp))
-            LOG_DEBUG(Engine, "Moving up    (axis={:.2f})", GetInput().AxisValue(ActionMoveUp));
+            LOG_DEBUG(Game, "Moving up    (axis={:.2f})", GetInput().AxisValue(ActionMoveUp));
         if (GetInput().IsPressed(ActionMoveDown))
-            LOG_DEBUG(Engine, "Moving down  (axis={:.2f})", GetInput().AxisValue(ActionMoveDown));
+            LOG_DEBUG(Game, "Moving down  (axis={:.2f})", GetInput().AxisValue(ActionMoveDown));
     }
 
     // -----------------------------------------------------------------------
@@ -177,7 +179,26 @@ protected:
         }
         for (int i = 0; i < NumRandomLights; ++i)
             packet.Lights.push_back(m_Lights[i]);
+        
+        packet.Sprites.reserve(m_Sprites.size());
+        packet.Sprites.assign(m_Sprites.begin(), m_Sprites.end());
+    }
 
+    // -----------------------------------------------------------------------
+    // OnShutdown — destroy GPU resources.
+    // The sprite pipeline is owned by RenderThread — only samplers need
+    // explicit cleanup here.
+    // -----------------------------------------------------------------------
+    void OnShutdown() override
+    {
+        GetDevice().DestroySampler(m_FloorSampler);
+        GetDevice().DestroySampler(m_Sampler);
+    }
+
+private:
+    void CreateSprites()
+    {
+        LOG_DEBUG(Game, "Creating sprites...");
         // --- Floor — full screen, layer -1 (1 sprite → 1 batch) ---
         {
             Arcbit::Sprite s{};
@@ -187,7 +208,7 @@ protected:
             s.Size     = { 1920.0f, 1080.0f };
             s.UV       = { 0.0f, 0.0f, 4.0f, 4.0f }; // tile 4× across screen
             s.Layer    = -1;
-            packet.Sprites.push_back(s);
+            m_Sprites.push_back(s);
         }
 
         // --- Oak trees — 4 corners, layer 0 (4 sprites → 1 batch) ---
@@ -206,7 +227,7 @@ protected:
             s.Position = pos;
             s.Size     = { TreeSize, TreeSize };
             s.Layer    = 0;
-            packet.Sprites.push_back(s);
+            m_Sprites.push_back(s);
         }
 
         // --- Player tiles — 12 across the top row, layer 1 (12 sprites → 1 batch) ---
@@ -229,47 +250,47 @@ protected:
                     if (auto uv = m_PlayerSheet.GetTile(static_cast<Arcbit::u32>(i) % cols, 0))
                         s.UV = *uv;
                 s.Layer = 1;
-                packet.Sprites.push_back(s);
+                m_Sprites.push_back(s);
             }
         }
 
         constexpr float SpriteSize  = 180.0f;
-        constexpr int   SpriteCount = 100;
+        constexpr int   SpriteCount = 10000;
         // --- Skeletons — 100 across, layer 1 (100 sprites → 1 batch) ---
         {
-            constexpr float startX      = -(SpriteCount - 1) * SpriteSize * 0.5f;
+            constexpr float startX = -(SpriteCount - 1) * SpriteSize * 0.5f;
             for (int i = 0; i < SpriteCount; ++i)
             {
-                float spriteSize = SpriteSize * 3;
+                float          spriteSize = SpriteSize * 3;
                 Arcbit::Sprite s{};
                 s.Texture  = m_SkeletonTex;
                 s.Sampler  = m_Sampler;
                 s.Position = { startX + static_cast<float>(i) * spriteSize, -150.0f };
                 s.Size     = { spriteSize, spriteSize };
                 s.Layer    = 1;
-                packet.Sprites.push_back(s);
+                m_Sprites.push_back(s);
             }
         }
 
         // --- Slimes — 100 across, layer 5 (100 sprites → 1 batch) ---
         {
-            constexpr float startX      = -(SpriteCount - 1) * SpriteSize * 0.5f;
+            constexpr float startX = -(SpriteCount - 1) * SpriteSize * 0.5f;
             for (int i = 0; i < SpriteCount; ++i)
             {
-                float spriteSize = SpriteSize * 3;
+                float          spriteSize = SpriteSize * 3;
                 Arcbit::Sprite s{};
                 s.Texture  = m_SlimeTex;
                 s.Sampler  = m_Sampler;
                 s.Position = { startX + static_cast<float>(i) * spriteSize, 0.0f };
                 s.Size     = { spriteSize, spriteSize };
                 s.Layer    = 5;
-                packet.Sprites.push_back(s);
+                m_Sprites.push_back(s);
             }
         }
 
         // --- Chickens — 100 across, layer 2 (100 sprites → 1 batch) ---
         {
-            constexpr float startX      = -(SpriteCount - 1) * SpriteSize * 0.5f;
+            constexpr float startX = -(SpriteCount - 1) * SpriteSize * 0.5f;
             for (int i = 0; i < SpriteCount; ++i)
             {
                 Arcbit::Sprite s{};
@@ -278,13 +299,13 @@ protected:
                 s.Position = { startX + i * SpriteSize, 150.0f };
                 s.Size     = { SpriteSize, SpriteSize };
                 s.Layer    = 2;
-                packet.Sprites.push_back(s);
+                m_Sprites.push_back(s);
             }
         }
 
         // --- Pigs — 100 across, layer 2 (100 sprites → 1 batch) ---
         {
-            constexpr float startX      = -(SpriteCount - 1) * SpriteSize * 0.5f;
+            constexpr float startX = -(SpriteCount - 1) * SpriteSize * 0.5f;
             for (int i = 0; i < SpriteCount; ++i)
             {
                 Arcbit::Sprite s{};
@@ -293,20 +314,11 @@ protected:
                 s.Position = { startX + i * SpriteSize, 300.0f };
                 s.Size     = { SpriteSize, SpriteSize };
                 s.Layer    = 2;
-                packet.Sprites.push_back(s);
+                m_Sprites.push_back(s);
             }
         }
-    }
-
-    // -----------------------------------------------------------------------
-    // OnShutdown — destroy GPU resources.
-    // The sprite pipeline is owned by RenderThread — only samplers need
-    // explicit cleanup here.
-    // -----------------------------------------------------------------------
-    void OnShutdown() override
-    {
-        GetDevice().DestroySampler(m_FloorSampler);
-        GetDevice().DestroySampler(m_Sampler);
+        
+        LOG_DEBUG(Game, "Created {} sprites", m_Sprites.size());
     }
 
 private:
@@ -332,6 +344,8 @@ private:
 
     static constexpr Arcbit::isize                  NumRandomLights = 10;
     std::array<Arcbit::PointLight, NumRandomLights> m_Lights        = {};
+
+    std::vector<Arcbit::Sprite> m_Sprites{};
 };
 
 // ---------------------------------------------------------------------------
