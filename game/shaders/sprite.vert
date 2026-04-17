@@ -11,8 +11,12 @@
 // -----------------
 // Position is in world pixels. The camera push constant defines which world
 // point maps to screen center. Y+ is downward (screen convention).
-//   NDC.x = (worldX - camPos.x) / (viewportSize.x * 0.5)
-//   NDC.y = (worldY - camPos.y) / (viewportSize.y * 0.5)
+// Camera rotation is pre-decomposed into (rotCos, rotSin) to avoid
+// per-vertex trig. The view transform is:
+//   delta  = worldPos - camPos
+//   rotated.x = rotCos * delta.x + rotSin * delta.y
+//   rotated.y = -rotSin * delta.x + rotCos * delta.y
+//   NDC    = rotated / (viewportSize * 0.5)
 // ---------------------------------------------------------------------------
 
 // Per-instance attributes — one entry per sprite in the instance buffer.
@@ -23,7 +27,9 @@ layout(location = 2) in vec4 a_Tint;    // (r, g, b, a) linear tint color
 
 layout(push_constant) uniform PC {
     vec2  camPos;       // world-space position at screen center (pixels)
-    vec2  viewportSize; // viewport dimensions in world units (same as window pixels at zoom 1)
+    vec2  viewportSize; // effective viewport in world units (window pixels / zoom)
+    float rotCos;       // cos(cameraRotation) — precomputed on CPU
+    float rotSin;       // sin(cameraRotation)
     vec4  ambient;      // rgb ambient light + unused alpha
     uint  lightCount;   // active point lights in the SSBO
 } pc;
@@ -49,10 +55,13 @@ void main()
     vec2 corner   = corners[gl_VertexIndex % 6];
     vec2 worldPos = a_PosSize.xy + corner * a_PosSize.zw;
 
-    // World → NDC. Camera position maps to (0, 0); Y+ is downward.
-    vec2 ndc;
-    ndc.x = (worldPos.x - pc.camPos.x) / (pc.viewportSize.x * 0.5);
-    ndc.y = (worldPos.y - pc.camPos.y) / (pc.viewportSize.y * 0.5);
+    // World → NDC with camera rotation. Rotate delta by -cameraAngle so the
+    // world appears to rotate in the opposite direction to the camera.
+    vec2  delta = worldPos - pc.camPos;
+    vec2  rotated;
+    rotated.x =  pc.rotCos * delta.x + pc.rotSin * delta.y;
+    rotated.y = -pc.rotSin * delta.x + pc.rotCos * delta.y;
+    vec2  ndc  = rotated / (pc.viewportSize * 0.5);
 
     // UV: bilinearly map the local corner to the atlas sub-region.
     // corner * 0.5 + 0.5 converts [-1,1] → [0,1]; mix selects between (u0,v0) and (u1,v1).

@@ -25,6 +25,8 @@ layout(std430, set = 2, binding = 0) readonly buffer LightBuffer {
 layout(push_constant) uniform PC {
     vec2  camPos;
     vec2  viewportSize;
+    float rotCos;
+    float rotSin;
     vec4  ambient;
     uint  lightCount;
 } pc;

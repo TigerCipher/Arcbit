@@ -134,12 +134,13 @@ Checkbox list of every major milestone. Check off items as they are completed.
 ---
 
 ## Phase 15: Camera System
-- [ ] `Camera2D` — world position, zoom level, rotation
-- [ ] Smooth follow (lerp toward target entity, configurable lag)
-- [ ] Viewport clamping (prevent camera from showing outside world bounds)
-- [ ] Screen shake (trauma-based decay; add trauma on hit, explosion, etc.)
-- [ ] World-to-screen and screen-to-world conversion helpers
-- [ ] Camera push constant integrated into Sprite Batch and Tilemap renderers
+- [x] `Camera2D` — world position, zoom level, rotation
+- [x] Smooth follow (lerp toward target entity, configurable lag)
+- [x] Viewport clamping (prevent camera from showing outside world bounds)
+- [x] Screen shake (trauma-based decay; add trauma on hit, explosion, etc.)
+- [x] World-to-screen and screen-to-world conversion helpers
+- [x] Camera push constant integrated into Sprite Batch renderer
+- [ ] Camera push constant integrated into Tilemap renderer (deferred to Phase 19)
 
 ---
 
@@ -149,6 +150,25 @@ Checkbox list of every major milestone. Check off items as they are completed.
 - [ ] Query API (iterate entities matching a component mask)
 - [ ] System registration + execution order
 - [ ] Starter components: `Transform2D`, `Sprite`, `PointLight`
+
+### Movement Components (mix-and-match design)
+Controller components drive *where* an entity wants to move; style components
+define *how* it gets there. Any controller pairs with any style.
+
+**Controller components** (who decides the destination):
+- [ ] `InputMovement` — reads input bindings each tick; converts pressed directions into movement requests
+- [ ] `AIMovement` — driven by pathfinding / behavior system; pushes movement requests programmatically
+
+**Style components** (how the entity actually moves):
+- [ ] `SmoothTileMovement` — lerps from tile center to tile center; plays a walk animation mid-transit; next input queued but not consumed until landing
+- [ ] `SnapTileMovement` — jumps instantly to the destination tile; no interpolation; useful for puzzle / grid games
+- [ ] `FreeMovement` — pixel-perfect world-space velocity; not tile-aligned; intended for live-combat sections where precise sub-tile positioning matters
+
+**Usage examples:**
+- Overworld player → `InputMovement` + `SmoothTileMovement`
+- Puzzle NPC      → `AIMovement`    + `SnapTileMovement`
+- Combat enemy    → `AIMovement`    + `FreeMovement`
+- Combat player   → `InputMovement` + `FreeMovement`
 
 ---
 

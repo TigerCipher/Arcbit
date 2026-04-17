@@ -8,21 +8,24 @@ namespace Arcbit {
 // ---------------------------------------------------------------------------
 // Camera2D
 //
-// Tracks world-space viewport position, zoom, and screen shake.
+// Tracks world-space viewport position, zoom, rotation, and screen shake.
 // Apply to a FramePacket each frame via:
 //   packet.CameraPosition = camera.GetEffectivePosition();
 //   packet.CameraZoom     = camera.Zoom;
+//   packet.CameraRotation = camera.Rotation;
 //
 // Coordinate system
 // -----------------
 // Positions are in world-space pixels, matching Sprite::Position.
 // CameraPosition maps to screen center; Y+ is downward (screen convention).
+// Rotation is in radians, counter-clockwise positive.
 // ---------------------------------------------------------------------------
 class Camera2D
 {
 public:
     Vec2 Position = {};
     f32  Zoom     = 1.0f;
+    f32  Rotation = 0.0f; // radians; world rotates opposite direction to camera
 
     // Call once per update tick. Decays trauma and recomputes the shake offset.
     void Update(f32 dt);
@@ -30,6 +33,11 @@ public:
     // Frame-rate-independent smooth move toward a world-space target.
     // smoothing: higher = faster catch-up. Typical range: 3 (lazy) – 12 (snappy).
     void Follow(Vec2 target, f32 smoothing, f32 dt);
+
+    // Clamps Position so the visible viewport stays fully inside [worldMin, worldMax].
+    // Call after Follow() each tick. Does nothing if the world is smaller than the
+    // viewport (no valid clamp range), so safe to call unconditionally.
+    void ClampToBounds(Vec2 worldMin, Vec2 worldMax, Vec2 viewportSize);
 
     // Add screen-shake trauma [0, 1]. Values accumulate and are clamped to 1.
     // Trauma decays automatically in Update(). Shake magnitude = trauma².

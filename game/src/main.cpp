@@ -168,6 +168,7 @@ protected:
         packet.AmbientColor   = Arcbit::Color{ 0.1f, 0.1f, 0.15f, 1.0f };
         packet.CameraPosition = _camera.GetEffectivePosition();
         packet.CameraZoom     = _camera.Zoom;
+        packet.CameraRotation = _camera.Rotation;
 
         // --- Static world lights (world-space pixels) ---
         {

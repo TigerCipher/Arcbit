@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <fstream>
 #include <vector>
 
@@ -44,9 +45,10 @@ struct SpritePushConstants
 {
     f32 CamPosX, CamPosY;
     f32 ViewportW, ViewportH;
+    f32 RotCos, RotSin;         // precomputed cos/sin of camera rotation
     f32 AmbientR, AmbientG, AmbientB, AmbientA;
     u32 LightCount;
-}; // 36 bytes
+}; // 44 bytes
 
 // Push constants for the legacy DrawCall (forward) pipeline.
 // Must match ForwardPushConstants layout in forward.vert / forward.frag.
@@ -466,6 +468,8 @@ u32 RenderThread::DrawSpriteBatches(const CommandListHandle cmd, const std::vect
     // Dividing by zoom shrinks the effective viewport, making world pixels appear larger.
     pc.ViewportW  = viewW / packet.CameraZoom;
     pc.ViewportH  = viewH / packet.CameraZoom;
+    pc.RotCos     = std::cos(packet.CameraRotation);
+    pc.RotSin     = std::sin(packet.CameraRotation);
     pc.AmbientR   = packet.AmbientColor.R;
     pc.AmbientG   = packet.AmbientColor.G;
     pc.AmbientB   = packet.AmbientColor.B;

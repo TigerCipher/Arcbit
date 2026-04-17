@@ -26,6 +26,21 @@ void Camera2D::Follow(const Vec2 target, const f32 smoothing, const f32 dt)
     Position.Y  += (target.Y - Position.Y) * t;
 }
 
+void Camera2D::ClampToBounds(const Vec2 worldMin, const Vec2 worldMax, const Vec2 viewportSize)
+{
+    // Half-extents of the visible area in world pixels at the current zoom.
+    const f32 halfW = (viewportSize.X / Zoom) * 0.5f;
+    const f32 halfH = (viewportSize.Y / Zoom) * 0.5f;
+
+    // Only clamp each axis if the world is larger than the viewport along that axis.
+    // If the world is smaller the camera stays centered rather than snapping to an edge.
+    if (worldMax.X - worldMin.X > viewportSize.X / Zoom)
+        Position.X = std::clamp(Position.X, worldMin.X + halfW, worldMax.X - halfW);
+
+    if (worldMax.Y - worldMin.Y > viewportSize.Y / Zoom)
+        Position.Y = std::clamp(Position.Y, worldMin.Y + halfH, worldMax.Y - halfH);
+}
+
 void Camera2D::AddTrauma(const f32 amount)
 {
     _trauma = std::min(1.0f, _trauma + amount);
@@ -38,21 +53,35 @@ Vec2 Camera2D::GetEffectivePosition() const
 
 Vec2 Camera2D::ScreenToWorld(const Vec2 screenPos, const Vec2 viewportSize) const
 {
-    // Invert the NDC transform: screen center → camera world position.
-    // Divide by Zoom to account for the zoomed effective viewport.
+    // Un-project: screen → centered NDC → rotate back → world.
     const Vec2 eff = GetEffectivePosition();
+    const f32 cx = (screenPos.X - viewportSize.X * 0.5f) / Zoom;
+    const f32 cy = (screenPos.Y - viewportSize.Y * 0.5f) / Zoom;
+
+    // Apply inverse camera rotation (rotate by +Rotation to undo -Rotation view transform).
+    const f32 cosR = std::cos(Rotation);
+    const f32 sinR = std::sin(Rotation);
     return {
-        eff.X + (screenPos.X - viewportSize.X * 0.5f) / Zoom,
-        eff.Y + (screenPos.Y - viewportSize.Y * 0.5f) / Zoom,
+        eff.X + cosR * cx - sinR * cy,
+        eff.Y + sinR * cx + cosR * cy,
     };
 }
 
 Vec2 Camera2D::WorldToScreen(const Vec2 worldPos, const Vec2 viewportSize) const
 {
     const Vec2 eff = GetEffectivePosition();
+    const f32 dx = worldPos.X - eff.X;
+    const f32 dy = worldPos.Y - eff.Y;
+
+    // Apply camera rotation (rotate delta by -Rotation).
+    const f32 cosR = std::cos(Rotation);
+    const f32 sinR = std::sin(Rotation);
+    const f32 rx =  cosR * dx + sinR * dy;
+    const f32 ry = -sinR * dx + cosR * dy;
+
     return {
-        (worldPos.X - eff.X) * Zoom + viewportSize.X * 0.5f,
-        (worldPos.Y - eff.Y) * Zoom + viewportSize.Y * 0.5f,
+        rx * Zoom + viewportSize.X * 0.5f,
+        ry * Zoom + viewportSize.Y * 0.5f,
     };
 }
 

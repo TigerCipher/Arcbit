@@ -122,6 +122,9 @@ struct FramePacket
     // Applied by dividing the effective viewport size before the NDC transform.
     f32 CameraZoom = 1.0f;
 
+    // Camera rotation in radians. The world rotates opposite to the camera angle.
+    f32 CameraRotation = 0.0f;
+
     // Low-level draw calls rendered after all sprites, in submission order.
     // Requires the caller to own the pipeline and specify NDC coordinates.
     std::vector<DrawCall> DrawCalls;
