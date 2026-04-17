@@ -7,14 +7,14 @@ namespace Arcbit {
 
 void Camera2D::Update(const f32 dt)
 {
-    m_Trauma = std::max(0.0f, m_Trauma - TraumaDecayRate * dt);
-    m_ShakeTime += dt;
+    _trauma = std::max(0.0f, _trauma - TraumaDecayRate * dt);
+    _shakeTime += dt;
 
     // Shake magnitude scales with trauma² — small trauma = subtle shake.
-    const f32 magnitude = m_Trauma * m_Trauma * MaxShakePixels;
-    m_ShakeOffset = {
-        magnitude * std::sin(m_ShakeTime * ShakeFrequency * 2.0f),
-        magnitude * std::cos(m_ShakeTime * ShakeFrequency * 1.7f),
+    const f32 magnitude = _trauma * _trauma * MaxShakePixels;
+    _shakeOffset = {
+        magnitude * std::sin(_shakeTime * ShakeFrequency * 2.0f),
+        magnitude * std::cos(_shakeTime * ShakeFrequency * 1.7f),
     };
 }
 
@@ -28,12 +28,12 @@ void Camera2D::Follow(const Vec2 target, const f32 smoothing, const f32 dt)
 
 void Camera2D::AddTrauma(const f32 amount)
 {
-    m_Trauma = std::min(1.0f, m_Trauma + amount);
+    _trauma = std::min(1.0f, _trauma + amount);
 }
 
 Vec2 Camera2D::GetEffectivePosition() const
 {
-    return { Position.X + m_ShakeOffset.X, Position.Y + m_ShakeOffset.Y };
+    return { Position.X + _shakeOffset.X, Position.Y + _shakeOffset.Y };
 }
 
 Vec2 Camera2D::ScreenToWorld(const Vec2 screenPos, const Vec2 viewportSize) const

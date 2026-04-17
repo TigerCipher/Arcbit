@@ -98,11 +98,11 @@ public:
     static void Flush();
 
     // True if any setting has changed since the last Init() or Flush().
-    [[nodiscard]] static bool IsDirty() { return s_Dirty; }
+    [[nodiscard]] static bool IsDirty() { return s_dirty; }
 
     // Mark settings as modified. Call after writing directly to Graphics or
     // Audio fields so Shutdown()/Flush() knows to persist the change.
-    static void MarkDirty() { s_Dirty = true; }
+    static void MarkDirty() { s_dirty = true; }
 
     // -----------------------------------------------------------------------
     // Well-known settings sections
@@ -125,8 +125,8 @@ public:
     template<typename T>
     [[nodiscard]] static T Get(std::string_view key, const T& defaultValue = T{})
     {
-        const auto it = s_Store.find(std::string(key));
-        if (it == s_Store.end()) return defaultValue;
+        const auto it = s_store.find(std::string(key));
+        if (it == s_store.end()) return defaultValue;
         const T* val = std::get_if<T>(&it->second);
         return val ? *val : defaultValue;
     }
@@ -135,8 +135,8 @@ public:
     template<typename T>
     static void Set(std::string_view key, const T& value)
     {
-        s_Store[std::string(key)] = Value(value);
-        s_Dirty = true;
+        s_store[std::string(key)] = Value(value);
+        s_dirty = true;
     }
 
     // -----------------------------------------------------------------------
@@ -158,9 +158,9 @@ private:
     // The variant covers all types supported by Get<T>/Set<T>.
     using Value = std::variant<bool, i32, u32, f32, std::string>;
 
-    static bool                                   s_Dirty;
-    static std::string                            s_FilePath;
-    static std::unordered_map<std::string, Value> s_Store;
+    static bool                                   s_dirty;
+    static std::string                            s_filePath;
+    static std::unordered_map<std::string, Value> s_store;
 
     // Helpers called by Init() and Flush().
     static void ReadFile();

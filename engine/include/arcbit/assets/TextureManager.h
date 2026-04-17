@@ -102,13 +102,13 @@ private:
     // Re-decode and re-upload a cached entry (same handle, new pixels).
     void ReloadFromDisk(const std::string& path);
 
-    RenderDevice& m_Device;
+    RenderDevice& _device;
 
     // Primary lookup: normalized path → cache entry.
-    std::unordered_map<std::string, CacheEntry> m_PathCache;
+    std::unordered_map<std::string, CacheEntry> _pathCache;
 
     // Reverse lookup: handle.Value → path (for Unload and Reload).
-    std::unordered_map<u32, std::string> m_HandleToPath;
+    std::unordered_map<u32, std::string> _handleToPath;
 };
 
 } // namespace Arcbit

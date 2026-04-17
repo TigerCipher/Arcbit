@@ -42,7 +42,7 @@ struct Handle
     bool operator!=(const Handle& o) const noexcept { return Value != o.Value; }
 };
 
-static_assert(sizeof(Handle<struct _DummyTag>) == sizeof(u32));
+static_assert(sizeof(Handle<struct DummyTag>) == sizeof(u32));
 
 // ---------------------------------------------------------------------------
 // Concrete handle types

@@ -131,7 +131,7 @@ SDL_Scancode ToScancode(const Key key)
 
 // Map MouseButton → the SDL button index used by SDL_BUTTON_MASK.
 // SDL3 mouse button indices: Left=1, Middle=2, Right=3, X1=4, X2=5.
-int ToSDLMouseButton(const MouseButton button)
+i32 ToSDLMouseButton(const MouseButton button)
 {
     switch (button)
     {
@@ -202,7 +202,7 @@ InputManager::InputManager() = default;
 InputManager::~InputManager()
 {
     // Close all open gamepad handles so SDL can release its resources.
-    for (auto &handle: m_Gamepads | std::views::values)
+    for (auto& handle : _gamepads | std::views::values)
         SDL_CloseGamepad(static_cast<SDL_Gamepad*>(handle));
 }
 
@@ -242,7 +242,7 @@ void InputManager::BindGamepadAxis(const ActionID action, const GamepadAxis axis
 
 void InputManager::ClearBindings(const ActionID action)
 {
-    if (const auto it = m_Actions.find(action); it != m_Actions.end())
+    if (const auto it = _actions.find(action); it != _actions.end())
         it->second.Bindings.clear();
 }
 
@@ -250,22 +250,22 @@ void InputManager::ClearBindings(const ActionID action)
 // Input event injection — called by Application during Window::PollEvents
 // ---------------------------------------------------------------------------
 
-void InputManager::InjectKeyEvent(const int scancode, const bool down)
+void InputManager::InjectKeyEvent(const i32 scancode, const bool down)
 {
-    if (down) m_PendingKeyDown.insert(scancode);
-    else       m_PendingKeyUp.insert(scancode);
+    if (down) _pendingKeyDown.insert(scancode);
+    else       _pendingKeyUp.insert(scancode);
 }
 
-void InputManager::InjectMouseButton(const int sdlButton, const bool down)
+void InputManager::InjectMouseButton(const i32 sdlButton, const bool down)
 {
-    if (down) m_PendingMouseDown.insert(sdlButton);
-    else       m_PendingMouseUp.insert(sdlButton);
+    if (down) _pendingMouseDown.insert(sdlButton);
+    else       _pendingMouseUp.insert(sdlButton);
 }
 
-void InputManager::InjectGamepadButton(const u32 joystickId, const int sdlButton, const bool down)
+void InputManager::InjectGamepadButton(const u32 joystickId, const i32 sdlButton, const bool down)
 {
-    if (down) m_PendingGamepadDown.push_back({ joystickId, sdlButton });
-    else       m_PendingGamepadUp.push_back({ joystickId, sdlButton });
+    if (down) _pendingGamepadDown.push_back({ joystickId, sdlButton });
+    else       _pendingGamepadUp.push_back({ joystickId, sdlButton });
 }
 
 // ---------------------------------------------------------------------------
@@ -275,52 +275,40 @@ void InputManager::InjectGamepadButton(const u32 joystickId, const int sdlButton
 void InputManager::Update()
 {
     // --- Keyboard -----------------------------------------------------------
-    // SDL_GetKeyboardState returns a pointer to an internal array. We capture
-    // it here; the pointer stays valid until the next SDL_PumpEvents call, but
-    // we only use it within this function so that's fine.
-    int numKeys = 0;
-    m_KeyState  = SDL_GetKeyboardState(&numKeys);
+    i32 numKeys = 0;
+    _keyState   = SDL_GetKeyboardState(&numKeys);
 
     // --- Mouse --------------------------------------------------------------
-    m_PrevMouseX = m_MouseX;
-    m_PrevMouseY = m_MouseY;
+    _prevMouseX = _mouseX;
+    _prevMouseY = _mouseY;
 
-    // SDL3: SDL_GetMouseState returns a bitmask of pressed buttons and writes
-    // the cursor position into the provided floats.
-    float mx = 0.0f, my = 0.0f;
-    m_MouseButtonMask = SDL_GetMouseState(&mx, &my);
-    m_MouseX = static_cast<i32>(mx);
-    m_MouseY = static_cast<i32>(my);
+    f32 mx = 0.0f, my = 0.0f;
+    _mouseButtonMask = SDL_GetMouseState(&mx, &my);
+    _mouseX = static_cast<i32>(mx);
+    _mouseY = static_cast<i32>(my);
 
     // --- Gamepad connect / disconnect ---------------------------------------
-    // SDL_GetGamepads allocates and returns the list of currently connected
-    // gamepad IDs. We diff against m_Gamepads to open new ones and close
-    // removed ones — no event processing required.
-    int gamepadCount = 0;
+    i32 gamepadCount = 0;
 
     if (SDL_JoystickID* connectedIDs = SDL_GetGamepads(&gamepadCount))
     {
-        // Build a set of currently connected IDs for O(n) comparison.
-        // (Gamepad counts are tiny so std::vector is fine here.)
         std::vector<u32> currentIDs(connectedIDs, connectedIDs + gamepadCount);
         SDL_free(connectedIDs);
 
-        // Open newly connected gamepads.
         for (u32 id : currentIDs)
         {
-            if (!m_Gamepads.contains(id))
+            if (!_gamepads.contains(id))
             {
                 if (SDL_Gamepad* gp = SDL_OpenGamepad(id))
                 {
-                    m_Gamepads[id] = gp;
+                    _gamepads[id] = gp;
                     LOG_INFO(Platform, "Gamepad connected: {} (id={})",
                         SDL_GetGamepadName(gp), id);
                 }
             }
         }
 
-        // Close disconnected gamepads.
-        for (auto it = m_Gamepads.begin(); it != m_Gamepads.end(); )
+        for (auto it = _gamepads.begin(); it != _gamepads.end(); )
         {
             const bool stillConnected = std::ranges::find(currentIDs,
                                                     it->first) != currentIDs.end();
@@ -328,7 +316,7 @@ void InputManager::Update()
             {
                 LOG_INFO(Platform, "Gamepad disconnected (id={})", it->first);
                 SDL_CloseGamepad(static_cast<SDL_Gamepad*>(it->second));
-                it = m_Gamepads.erase(it);
+                it = _gamepads.erase(it);
             }
             else
             {
@@ -341,7 +329,7 @@ void InputManager::Update()
     // Compute IsPressed and AxisValue from current SDL state.
     // JustPressed / JustReleased are NOT set here — ProcessEdges() handles
     // those from the accumulated event queue, called once per game tick.
-    for (auto& entry : m_Actions | std::views::values)
+    for (auto& entry : _actions | std::views::values)
     {
         bool anyPressed  = false;
         f32  bestAxisVal = 0.0f;
@@ -364,36 +352,12 @@ void InputManager::Update()
 }
 
 // ---------------------------------------------------------------------------
-// Queries
+// ProcessEdges — called once per game tick inside the fixed-timestep loop
 // ---------------------------------------------------------------------------
-
-bool InputManager::IsPressed(const ActionID action) const
-{
-    const auto it = m_Actions.find(action);
-    return it != m_Actions.end() && it->second.Pressed;
-}
-
-bool InputManager::JustPressed(const ActionID action) const
-{
-    const auto it = m_Actions.find(action);
-    return it != m_Actions.end() && it->second.JustPressed;
-}
-
-bool InputManager::JustReleased(const ActionID action) const
-{
-    const auto it = m_Actions.find(action);
-    return it != m_Actions.end() && it->second.JustReleased;
-}
-
-f32 InputManager::AxisValue(const ActionID action) const
-{
-    const auto it = m_Actions.find(action);
-    return it != m_Actions.end() ? it->second.AxisValue : 0.0f;
-}
 
 void InputManager::ProcessEdges()
 {
-    for (auto& entry : m_Actions | std::views::values)
+    for (auto& entry : _actions | std::views::values)
     {
         bool anyJustPressed  = false;
         bool anyJustReleased = false;
@@ -404,24 +368,24 @@ void InputManager::ProcessEdges()
             {
                 case Binding::Type::Key:
                 {
-                    const int sc = static_cast<int>(ToScancode(b.BoundKey));
-                    if (m_PendingKeyDown.contains(sc)) anyJustPressed  = true;
-                    if (m_PendingKeyUp.contains(sc))   anyJustReleased = true;
+                    const i32 sc = static_cast<i32>(ToScancode(b.BoundKey));
+                    if (_pendingKeyDown.contains(sc)) anyJustPressed  = true;
+                    if (_pendingKeyUp.contains(sc))   anyJustReleased = true;
                     break;
                 }
                 case Binding::Type::MouseButton:
                 {
-                    const int btn = ToSDLMouseButton(b.BoundMouse);
-                    if (m_PendingMouseDown.contains(btn)) anyJustPressed  = true;
-                    if (m_PendingMouseUp.contains(btn))   anyJustReleased = true;
+                    const i32 btn = ToSDLMouseButton(b.BoundMouse);
+                    if (_pendingMouseDown.contains(btn)) anyJustPressed  = true;
+                    if (_pendingMouseUp.contains(btn))   anyJustReleased = true;
                     break;
                 }
                 case Binding::Type::GamepadButton:
                 {
-                    const int sdlBtn = static_cast<int>(ToSDLGamepadButton(b.BoundButton));
-                    for (const auto& [id, btn] : m_PendingGamepadDown)
+                    const i32 sdlBtn = static_cast<i32>(ToSDLGamepadButton(b.BoundButton));
+                    for (const auto& [id, btn] : _pendingGamepadDown)
                         if (btn == sdlBtn) { anyJustPressed = true; break; }
-                    for (const auto& [id, btn] : m_PendingGamepadUp)
+                    for (const auto& [id, btn] : _pendingGamepadUp)
                         if (btn == sdlBtn) { anyJustReleased = true; break; }
                     break;
                 }
@@ -430,29 +394,57 @@ void InputManager::ProcessEdges()
             }
         }
 
-        // JustReleased is only meaningful when the action is no longer pressed.
         entry.JustPressed  = anyJustPressed;
+        // JustReleased is only meaningful when the action is no longer pressed.
         entry.JustReleased = anyJustReleased && !entry.Pressed;
     }
 
-    m_PendingKeyDown.clear();
-    m_PendingKeyUp.clear();
-    m_PendingMouseDown.clear();
-    m_PendingMouseUp.clear();
-    m_PendingGamepadDown.clear();
-    m_PendingGamepadUp.clear();
+    _pendingKeyDown.clear();
+    _pendingKeyUp.clear();
+    _pendingMouseDown.clear();
+    _pendingMouseUp.clear();
+    _pendingGamepadDown.clear();
+    _pendingGamepadUp.clear();
+}
+
+// ---------------------------------------------------------------------------
+// Queries
+// ---------------------------------------------------------------------------
+
+bool InputManager::IsPressed(const ActionID action) const
+{
+    const auto it = _actions.find(action);
+    return it != _actions.end() && it->second.Pressed;
+}
+
+bool InputManager::JustPressed(const ActionID action) const
+{
+    const auto it = _actions.find(action);
+    return it != _actions.end() && it->second.JustPressed;
+}
+
+bool InputManager::JustReleased(const ActionID action) const
+{
+    const auto it = _actions.find(action);
+    return it != _actions.end() && it->second.JustReleased;
+}
+
+f32 InputManager::AxisValue(const ActionID action) const
+{
+    const auto it = _actions.find(action);
+    return it != _actions.end() ? it->second.AxisValue : 0.0f;
 }
 
 void InputManager::GetMousePosition(i32& outX, i32& outY) const
 {
-    outX = m_MouseX;
-    outY = m_MouseY;
+    outX = _mouseX;
+    outY = _mouseY;
 }
 
 void InputManager::GetMouseDelta(i32& outDx, i32& outDy) const
 {
-    outDx = m_MouseX - m_PrevMouseX;
-    outDy = m_MouseY - m_PrevMouseY;
+    outDx = _mouseX - _prevMouseX;
+    outDy = _mouseY - _prevMouseY;
 }
 
 // ---------------------------------------------------------------------------
@@ -461,21 +453,21 @@ void InputManager::GetMouseDelta(i32& outDx, i32& outDy) const
 
 std::string_view InputManager::GetActionName(const ActionID action) const
 {
-    const auto it = m_Actions.find(action);
-    return it != m_Actions.end() ? std::string_view(it->second.Name) : std::string_view{};
+    const auto it = _actions.find(action);
+    return it != _actions.end() ? std::string_view(it->second.Name) : std::string_view{};
 }
 
 const std::vector<Binding>& InputManager::GetBindings(const ActionID action) const
 {
-    const auto it = m_Actions.find(action);
-    return it != m_Actions.end() ? it->second.Bindings : s_EmptyBindings;
+    const auto it = _actions.find(action);
+    return it != _actions.end() ? it->second.Bindings : s_EmptyBindings;
 }
 
 std::vector<ActionID> InputManager::GetAllActions() const
 {
     std::vector<ActionID> result;
-    result.reserve(m_Actions.size());
-    for (const auto& [id, _] : m_Actions)
+    result.reserve(_actions.size());
+    for (const auto& [id, _] : _actions)
         result.push_back(id);
     return result;
 }
@@ -486,7 +478,7 @@ std::vector<ActionID> InputManager::GetAllActions() const
 
 InputManager::ActionEntry& InputManager::GetOrCreate(const ActionID action)
 {
-    return m_Actions[action]; // default-constructs if not present
+    return _actions[action]; // default-constructs if not present
 }
 
 f32 InputManager::EvaluateBinding(const Binding& binding) const
@@ -496,26 +488,23 @@ f32 InputManager::EvaluateBinding(const Binding& binding) const
         // ----- Keyboard -----------------------------------------------------
         case Binding::Type::Key:
         {
-            if (!m_KeyState) return 0.0f;
+            if (!_keyState) return 0.0f;
             const SDL_Scancode sc = ToScancode(binding.BoundKey);
-            return (sc != SDL_SCANCODE_UNKNOWN && m_KeyState[sc]) ? 1.0f : 0.0f;
+            return (sc != SDL_SCANCODE_UNKNOWN && _keyState[sc]) ? 1.0f : 0.0f;
         }
 
         // ----- Mouse button -------------------------------------------------
         case Binding::Type::MouseButton:
         {
-            // SDL_GetMouseState returns a bitmask; SDL_BUTTON_MASK converts
-            // a button index to the corresponding bit position.
-            const int sdlBtn = ToSDLMouseButton(binding.BoundMouse);
-            return (m_MouseButtonMask & SDL_BUTTON_MASK(sdlBtn)) ? 1.0f : 0.0f;
+            const i32 sdlBtn = ToSDLMouseButton(binding.BoundMouse);
+            return (_mouseButtonMask & SDL_BUTTON_MASK(sdlBtn)) ? 1.0f : 0.0f;
         }
 
         // ----- Gamepad button -----------------------------------------------
         case Binding::Type::GamepadButton:
         {
             const SDL_GamepadButton sdlBtn = ToSDLGamepadButton(binding.BoundButton);
-            // Any connected gamepad having the button pressed counts.
-            for (const auto &handle: m_Gamepads | std::views::values)
+            for (const auto& handle : _gamepads | std::views::values)
             {
                 if (SDL_GetGamepadButton(static_cast<SDL_Gamepad*>(handle), sdlBtn))
                     return 1.0f;
@@ -528,11 +517,10 @@ f32 InputManager::EvaluateBinding(const Binding& binding) const
         {
             const SDL_GamepadAxis sdlAxis = ToSDLGamepadAxis(binding.BoundAxis);
             f32 best = 0.0f;
-            for (const auto &handle: m_Gamepads | std::views::values)
+            for (const auto& handle : _gamepads | std::views::values)
             {
                 const i16 raw  = SDL_GetGamepadAxis(static_cast<SDL_Gamepad*>(handle), sdlAxis);
                 f32 norm = NormalizeAxis(raw);
-                // Apply deadzone — values within [-deadzone, deadzone] are zero.
                 if (std::abs(norm) < binding.Deadzone)
                     norm = 0.0f;
                 if (std::abs(norm) > std::abs(best))

@@ -15,10 +15,10 @@ namespace Arcbit {
 
 GraphicsSettings Settings::Graphics{};
 AudioSettings    Settings::Audio{};
-bool             Settings::s_Dirty   = false;
-std::string      Settings::s_FilePath;
+bool             Settings::s_dirty   = false;
+std::string      Settings::s_filePath;
 
-std::unordered_map<std::string, Settings::Value> Settings::s_Store;
+std::unordered_map<std::string, Settings::Value> Settings::s_store;
 
 // ---------------------------------------------------------------------------
 // Input section
@@ -227,21 +227,21 @@ bool DeserializeBinding(const nlohmann::json& obj, Binding& out)
 
 void Settings::Init(const std::string_view path)
 {
-    s_FilePath = std::string(path);
-    s_Dirty    = false;
-    s_Store.clear();
+    s_filePath = std::string(path);
+    s_dirty    = false;
+    s_store.clear();
     s_InputSection = {};
 
     ReadFile();
-    LOG_INFO(Engine, "Settings initialized from '{}'", s_FilePath);
+    LOG_INFO(Engine, "Settings initialized from '{}'", s_filePath);
 }
 
 void Settings::Shutdown()
 {
-    if (s_Dirty)
+    if (s_dirty)
         Flush();
 
-    s_Store.clear();
+    s_store.clear();
     s_InputSection = {};
 }
 
@@ -249,8 +249,8 @@ void Settings::Flush()
 {
     SyncToStore();
     WriteFile();
-    s_Dirty = false;
-    LOG_INFO(Engine, "Settings saved to '{}'", s_FilePath);
+    s_dirty = false;
+    LOG_INFO(Engine, "Settings saved to '{}'", s_filePath);
 }
 
 // ---------------------------------------------------------------------------
@@ -259,11 +259,11 @@ void Settings::Flush()
 
 void Settings::ReadFile()
 {
-    std::ifstream file(s_FilePath);
+    std::ifstream file(s_filePath);
     if (!file.is_open())
     {
         // First run — no file yet. Defaults from the structs are already set.
-        LOG_INFO(Engine, "Settings file '{}' not found, using defaults", s_FilePath);
+        LOG_INFO(Engine, "Settings file '{}' not found, using defaults", s_filePath);
         return;
     }
 
@@ -307,11 +307,11 @@ void Settings::ReadFile()
     {
         for (const auto& [key, val] : doc["custom"].items())
         {
-            if      (val.is_boolean())        s_Store[key] = val.get<bool>();
-            else if (val.is_number_integer())  s_Store[key] = val.get<i32>();
-            else if (val.is_number_unsigned()) s_Store[key] = val.get<u32>();
-            else if (val.is_number_float())    s_Store[key] = val.get<f32>();
-            else if (val.is_string())          s_Store[key] = val.get<std::string>();
+            if      (val.is_boolean())        s_store[key] = val.get<bool>();
+            else if (val.is_number_integer())  s_store[key] = val.get<i32>();
+            else if (val.is_number_unsigned()) s_store[key] = val.get<u32>();
+            else if (val.is_number_float())    s_store[key] = val.get<f32>();
+            else if (val.is_string())          s_store[key] = val.get<std::string>();
             // Nested objects / arrays are not supported in the flat store.
         }
     }
@@ -338,15 +338,15 @@ void Settings::WriteFile()
         doc["input"] = s_InputSection;
 
     // --- Custom store ---
-    for (const auto& [key, val] : s_Store)
+    for (const auto& [key, val] : s_store)
     {
         std::visit([&](auto&& v) { doc["custom"][key] = v; }, val);
     }
 
-    std::ofstream file(s_FilePath);
+    std::ofstream file(s_filePath);
     if (!file.is_open())
     {
-        LOG_ERROR(Engine, "Failed to open '{}' for writing", s_FilePath);
+        LOG_ERROR(Engine, "Failed to open '{}' for writing", s_filePath);
         return;
     }
 
@@ -388,7 +388,7 @@ void Settings::SaveInputBindings(const InputManager& input)
 
     LOG_INFO(Engine, "Saved {} input bindings", bindings.size());
     s_InputSection["bindings"] = std::move(bindings);
-    s_Dirty = true;
+    s_dirty = true;
 }
 
 bool Settings::LoadInputBindings(InputManager& input)

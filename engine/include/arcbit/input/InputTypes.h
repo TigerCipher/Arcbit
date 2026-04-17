@@ -4,8 +4,10 @@
 
 #include <string_view>
 
-namespace Arcbit {
+namespace Arcbit
+{
 
+// clang-format off
 // ---------------------------------------------------------------------------
 // Key — physical keyboard keys (scancode-based, layout-independent).
 //
@@ -58,6 +60,8 @@ enum class Key : u32
     Count
 };
 
+// clang-format on
+
 // ---------------------------------------------------------------------------
 // MouseButton
 // ---------------------------------------------------------------------------
@@ -66,8 +70,8 @@ enum class MouseButton : u8
     Left = 0,
     Middle,
     Right,
-    X1,   // back thumb button (browser back)
-    X2,   // forward thumb button (browser forward)
+    X1, // back thumb button (browser back)
+    X2, // forward thumb button (browser forward)
     Count
 };
 
@@ -80,18 +84,21 @@ enum class MouseButton : u8
 // ---------------------------------------------------------------------------
 enum class GamepadButton : u8
 {
-    South,          // Xbox A  / PS Cross     / Switch B
-    East,           // Xbox B  / PS Circle    / Switch A
-    West,           // Xbox X  / PS Square    / Switch Y
-    North,          // Xbox Y  / PS Triangle  / Switch X
-    LeftShoulder,   // Xbox LB / PS L1        / Switch L
-    RightShoulder,  // Xbox RB / PS R1        / Switch R
-    LeftStick,      // Xbox L3 / PS L3        (click left stick)
-    RightStick,     // Xbox R3 / PS R3        (click right stick)
-    Start,          // Xbox Menu   / PS Options / Switch +
-    Back,           // Xbox View   / PS Share   / Switch -
-    Guide,          // Xbox / PS button (may not be accessible on all platforms)
-    DPadUp, DPadDown, DPadLeft, DPadRight,
+    South,         // Xbox A  / PS Cross     / Switch B
+    East,          // Xbox B  / PS Circle    / Switch A
+    West,          // Xbox X  / PS Square    / Switch Y
+    North,         // Xbox Y  / PS Triangle  / Switch X
+    LeftShoulder,  // Xbox LB / PS L1        / Switch L
+    RightShoulder, // Xbox RB / PS R1        / Switch R
+    LeftStick,     // Xbox L3 / PS L3        (click left stick)
+    RightStick,    // Xbox R3 / PS R3        (click right stick)
+    Start,         // Xbox Menu   / PS Options / Switch +
+    Back,          // Xbox View   / PS Share   / Switch -
+    Guide,         // Xbox / PS button (may not be accessible on all platforms)
+    DPadUp,
+    DPadDown,
+    DPadLeft,
+    DPadRight,
     Count
 };
 
@@ -100,12 +107,12 @@ enum class GamepadButton : u8
 // ---------------------------------------------------------------------------
 enum class GamepadAxis : u8
 {
-    LeftX,          // left stick horizontal  (-1 = left,  +1 = right)
-    LeftY,          // left stick vertical    (-1 = up,    +1 = down)
-    RightX,         // right stick horizontal
-    RightY,         // right stick vertical
-    LeftTrigger,    // left trigger  [0, 1]
-    RightTrigger,   // right trigger [0, 1]
+    LeftX,        // left stick horizontal  (-1 = left,  +1 = right)
+    LeftY,        // left stick vertical    (-1 = up,    +1 = down)
+    RightX,       // right stick horizontal
+    RightY,       // right stick vertical
+    LeftTrigger,  // left trigger  [0, 1]
+    RightTrigger, // right trigger [0, 1]
     Count
 };
 
@@ -156,7 +163,13 @@ constexpr ActionID MakeAction(const std::string_view name)
 // ---------------------------------------------------------------------------
 struct Binding
 {
-    enum class Type : u8 { Key, MouseButton, GamepadButton, GamepadAxis };
+    enum class Type : u8
+    {
+        Key,
+        MouseButton,
+        GamepadButton,
+        GamepadAxis
+    };
 
     Type          BindingType = Type::Key;
     Key           BoundKey    = Key::Unknown;

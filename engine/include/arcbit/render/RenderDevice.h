@@ -338,7 +338,7 @@ public:
     explicit RenderDevice(std::unique_ptr<VulkanContext> context);
 
 private:
-    std::unique_ptr<VulkanContext> m_Context;
+    std::unique_ptr<VulkanContext> _context;
 };
 
 } // namespace Arcbit

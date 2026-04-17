@@ -45,9 +45,9 @@ public:
     [[nodiscard]] Vec2 WorldToScreen(Vec2 worldPos, Vec2 viewportSize) const;
 
 private:
-    f32  m_Trauma      = 0.0f;
-    Vec2 m_ShakeOffset = {};
-    f32  m_ShakeTime   = 0.0f;
+    f32  _trauma      = 0.0f;
+    Vec2 _shakeOffset = {};
+    f32  _shakeTime   = 0.0f;
 
     // Shake tuning knobs.
     static constexpr f32 TraumaDecayRate = 1.5f;  // trauma units lost per second

@@ -84,7 +84,7 @@ public:
 
     // The input manager — use in OnStart to register actions and add bindings,
     // then query it in OnUpdate.
-    [[nodiscard]] InputManager& GetInput() { return m_Input; }
+    [[nodiscard]] InputManager& GetInput() { return _input; }
 
     // The window — use in OnStart / OnUpdate for size queries or title changes.
     [[nodiscard]] Window& GetWindow();
@@ -92,7 +92,7 @@ public:
     // The texture manager — load textures from disk in OnStart; the manager
     // caches by path so repeated loads are free. Application clears it
     // automatically during shutdown, but you can also Unload() explicitly.
-    [[nodiscard]] TextureManager& GetTextures() { return *m_Textures; }
+    [[nodiscard]] TextureManager& GetTextures() { return *_textures; }
 
     // Color format of the swapchain — pass to PipelineDesc::ColorFormat so
     // pipelines match the actual surface format chosen by the driver.
@@ -132,29 +132,29 @@ protected:
     f32 _fixedTimestep = 1.0f / 60.0f;
 
 private:
-    ApplicationConfig m_Config;
+    ApplicationConfig _config;
 
     // Member declaration order determines both initialization and destruction
     // order (destruction is reverse of initialization).
     //
     // Required destruction order:
-    //   m_Input        — closes SDL gamepad handles (SDL must still be alive)
-    //   m_Window       — calls SDL_Quit (must outlive InputManager)
-    //   m_RenderThread — stopped explicitly in Run(); destructor is a no-op
-    //   m_Swapchain    — handle only; destroyed explicitly in Run()
-    //   m_Textures     — unique_ptr; reset() called explicitly before DestroyDevice
-    //   m_Device       — raw pointer; destroyed explicitly in Run()
+    //   _input        — closes SDL gamepad handles (SDL must still be alive)
+    //   _window       — calls SDL_Quit (must outlive InputManager)
+    //   _renderThread — stopped explicitly in Run(); destructor is a no-op
+    //   _swapchain    — handle only; destroyed explicitly in Run()
+    //   _textures     — unique_ptr; reset() called explicitly before DestroyDevice
+    //   _device       — raw pointer; destroyed explicitly in Run()
     //
     // So declaration order is the reverse of that (destructor fires bottom-up):
-    RenderDevice*                   m_Device = nullptr;
-    std::unique_ptr<TextureManager> m_Textures; // created after device; reset before DestroyDevice
-    SwapchainHandle                 m_Swapchain;
-    RenderThread                    m_RenderThread;
-    std::unique_ptr<Window>         m_Window; // SDL_Quit in destructor
-    InputManager                    m_Input;  // SDL gamepad cleanup in destructor
+    RenderDevice*                   _device = nullptr;
+    std::unique_ptr<TextureManager> _textures;
+    SwapchainHandle                 _swapchain;
+    RenderThread                    _renderThread;
+    std::unique_ptr<Window>         _window;
+    InputManager                    _input;
 
     // Accumulates real time to rate-limit hot-reload checks to once per second.
-    f64 m_HotReloadAccumulator = 0.0;
+    f64 _hotReloadAccumulator = 0.0;
 };
 
 } // namespace Arcbit

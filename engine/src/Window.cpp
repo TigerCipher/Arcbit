@@ -25,17 +25,17 @@ Window::Window(const Desc& desc)
 
     ARCBIT_ASSERT(win != nullptr, "SDL_CreateWindow failed");
 
-    m_Window = win;
-    m_Width  = desc.Width;
-    m_Height = desc.Height;
+    _window = win;
+    _width  = desc.Width;
+    _height = desc.Height;
 
     LOG_INFO(Platform, "Window created: '{}' ({}x{})", desc.Title, desc.Width, desc.Height);
 }
 
 Window::~Window()
 {
-    if (m_Window)
-        SDL_DestroyWindow(ToSDL(m_Window));
+    if (_window)
+        SDL_DestroyWindow(ToSDL(_window));
 
     SDL_Quit();
     LOG_INFO(Platform, "Window destroyed");
@@ -45,7 +45,7 @@ bool Window::PollEvents()
 {
     // Clear the resize flag at the start of every frame — it should only be
     // true for the single frame in which the resize event was received.
-    m_ResizedThisFrame = false;
+    _resizedThisFrame = false;
 
     SDL_Event event;
     while (SDL_PollEvent(&event))
@@ -59,42 +59,42 @@ bool Window::PollEvents()
                 if (event.key.key == SDLK_ESCAPE)
                     return false;
                 // Suppress repeat events — only forward physical press transitions.
-                if (!event.key.repeat && m_KeyEventFn)
-                    m_KeyEventFn(static_cast<int>(event.key.scancode), true);
+                if (!event.key.repeat && _keyEventFn)
+                    _keyEventFn(static_cast<i32>(event.key.scancode), true);
                 break;
 
             case SDL_EVENT_KEY_UP:
-                if (m_KeyEventFn)
-                    m_KeyEventFn(static_cast<int>(event.key.scancode), false);
+                if (_keyEventFn)
+                    _keyEventFn(static_cast<i32>(event.key.scancode), false);
                 break;
 
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
-                if (m_MouseButtonFn)
-                    m_MouseButtonFn(static_cast<int>(event.button.button), true);
+                if (_mouseButtonFn)
+                    _mouseButtonFn(static_cast<i32>(event.button.button), true);
                 break;
 
             case SDL_EVENT_MOUSE_BUTTON_UP:
-                if (m_MouseButtonFn)
-                    m_MouseButtonFn(static_cast<int>(event.button.button), false);
+                if (_mouseButtonFn)
+                    _mouseButtonFn(static_cast<i32>(event.button.button), false);
                 break;
 
             case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
-                if (m_GamepadButtonFn)
-                    m_GamepadButtonFn(static_cast<u32>(event.gbutton.which),
-                                      static_cast<int>(event.gbutton.button), true);
+                if (_gamepadButtonFn)
+                    _gamepadButtonFn(static_cast<u32>(event.gbutton.which),
+                                     static_cast<i32>(event.gbutton.button), true);
                 break;
 
             case SDL_EVENT_GAMEPAD_BUTTON_UP:
-                if (m_GamepadButtonFn)
-                    m_GamepadButtonFn(static_cast<u32>(event.gbutton.which),
-                                      static_cast<int>(event.gbutton.button), false);
+                if (_gamepadButtonFn)
+                    _gamepadButtonFn(static_cast<u32>(event.gbutton.which),
+                                     static_cast<i32>(event.gbutton.button), false);
                 break;
 
             case SDL_EVENT_WINDOW_RESIZED:
-                m_Width            = static_cast<u32>(event.window.data1);
-                m_Height           = static_cast<u32>(event.window.data2);
-                m_ResizedThisFrame = true;
-                LOG_DEBUG(Platform, "Window resized to {}x{}", m_Width, m_Height);
+                _width            = static_cast<u32>(event.window.data1);
+                _height           = static_cast<u32>(event.window.data2);
+                _resizedThisFrame = true;
+                LOG_DEBUG(Platform, "Window resized to {}x{}", _width, _height);
                 break;
 
             default:
@@ -105,24 +105,24 @@ bool Window::PollEvents()
     return true; // window is still open
 }
 
-void Window::SetKeyEventCallback(std::function<void(int, bool)> fn)
-{
-    m_KeyEventFn = std::move(fn);
-}
-
-void Window::SetMouseButtonCallback(std::function<void(int, bool)> fn)
-{
-    m_MouseButtonFn = std::move(fn);
-}
-
-void Window::SetGamepadButtonCallback(std::function<void(u32, int, bool)> fn)
-{
-    m_GamepadButtonFn = std::move(fn);
-}
-
 void* Window::GetNativeHandle() const
 {
-    return m_Window;
+    return _window;
+}
+
+void Window::SetKeyEventCallback(std::function<void(i32, bool)> fn)
+{
+    _keyEventFn = std::move(fn);
+}
+
+void Window::SetMouseButtonCallback(std::function<void(i32, bool)> fn)
+{
+    _mouseButtonFn = std::move(fn);
+}
+
+void Window::SetGamepadButtonCallback(std::function<void(u32, i32, bool)> fn)
+{
+    _gamepadButtonFn = std::move(fn);
 }
 
 } // namespace Arcbit

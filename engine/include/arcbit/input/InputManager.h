@@ -32,10 +32,14 @@ namespace Arcbit {
 //        input.BindKey(Actions::MoveLeft, Key::A);
 //        input.BindKey(Actions::MoveLeft, Key::Left);
 //
-//   2. Each frame, call Update() AFTER Window::PollEvents():
+//   2. Each frame, call Update() AFTER Window::PollEvents(), then
+//      ProcessEdges() once per game tick inside the fixed-timestep loop:
 //
-//        window.PollEvents();   // drains SDL event queue → state is current
-//        input.Update();        // polls that state, computes JustPressed etc.
+//        window.PollEvents();   // routes key/mouse/gamepad events via callbacks
+//        input.Update();        // polls current pressed state
+//        // inside fixed-timestep loop:
+//        input.ProcessEdges();  // consumes events → sets JustPressed/JustReleased
+//        input.OnUpdate();      // game logic reads JustPressed here
 //
 //   3. Query actions anywhere in game logic:
 //
@@ -44,8 +48,8 @@ namespace Arcbit {
 //
 // Thread safety
 // -------------
-//   NOT thread-safe. Call Update() and all query methods from the same thread
-//   (the main/game thread). The render thread never touches InputManager.
+//   NOT thread-safe. Call Update()/ProcessEdges() and all query methods from
+//   the same thread (the main/game thread).
 //
 // Gamepad support
 // ---------------
@@ -100,9 +104,9 @@ public:
     // Events accumulate in pending sets between ProcessEdges() calls so they
     // are never lost if the fixed-timestep loop fires zero times in a frame.
     // -----------------------------------------------------------------------
-    void InjectKeyEvent     (int scancode,   bool down);
-    void InjectMouseButton  (int sdlButton,  bool down);
-    void InjectGamepadButton(u32 joystickId, int sdlButton, bool down);
+    void InjectKeyEvent     (i32 scancode,   bool down);
+    void InjectMouseButton  (i32 sdlButton,  bool down);
+    void InjectGamepadButton(u32 joystickId, i32 sdlButton, bool down);
 
     // -----------------------------------------------------------------------
     // Per-frame update
@@ -135,10 +139,10 @@ public:
     // True every frame that at least one binding for this action is held.
     [[nodiscard]] bool IsPressed    (ActionID action) const;
 
-    // True for exactly ONE frame — the frame the action first becomes pressed.
+    // True for exactly ONE tick — the tick the action first becomes pressed.
     [[nodiscard]] bool JustPressed  (ActionID action) const;
 
-    // True for exactly ONE frame — the frame all bindings are released.
+    // True for exactly ONE tick — the tick all bindings are released.
     [[nodiscard]] bool JustReleased (ActionID action) const;
 
     // Analogue value in [-1, 1] (axes) or 0/1 (buttons/keys).
@@ -174,10 +178,10 @@ private:
     // Per-action data stored in the registry.
     struct ActionEntry
     {
-        std::string       Name;     // registered name (may be empty)
+        std::string       Name;
         std::vector<Binding> Bindings;
 
-        // State computed by Update() each frame.
+        // State computed each frame.
         bool Pressed      = false;
         bool JustPressed  = false;
         bool JustReleased = false;
@@ -194,22 +198,20 @@ private:
     // --- SDL state (populated by Update) ------------------------------------
 
     // SDL keyboard state array — pointer into SDL's internal buffer, valid
-    // until the next SDL_PollEvent / SDL_PumpEvents call. We capture it in
-    // Update() and use it for the duration of that call only.
-    // SDL3 changed this from Uint8* (SDL2) to bool* (SDL3).
-    const bool* m_KeyState = nullptr;
+    // until the next SDL_PollEvent / SDL_PumpEvents call.
+    const bool* _keyState = nullptr;
 
     // SDL mouse state bitmask and position.
-    u32 m_MouseButtonMask = 0;
-    i32 m_MouseX = 0, m_MouseY = 0;
-    i32 m_PrevMouseX = 0, m_PrevMouseY = 0;
+    u32 _mouseButtonMask = 0;
+    i32 _mouseX = 0, _mouseY = 0;
+    i32 _prevMouseX = 0, _prevMouseY = 0;
 
     // Open gamepad handles. Keys are SDL_JoystickID (opaque u32 in SDL3).
     // Stored as void* to keep SDL3/SDL.h out of this header.
-    std::unordered_map<u32, void*> m_Gamepads; // SDL_JoystickID → SDL_Gamepad*
+    std::unordered_map<u32, void*> _gamepads; // SDL_JoystickID → SDL_Gamepad*
 
     // --- Action registry ----------------------------------------------------
-    std::unordered_map<ActionID, ActionEntry> m_Actions;
+    std::unordered_map<ActionID, ActionEntry> _actions;
 
     // Returned by GetBindings when the action has no entry, so we never
     // return a dangling reference.
@@ -219,14 +221,14 @@ private:
     // Populated by InjectKeyEvent / InjectMouseButton / InjectGamepadButton.
     // ProcessEdges() reads these to set JustPressed/JustReleased, then clears them.
 
-    struct PendingGamepadEvent { u32 JoystickId; int Button; };
+    struct PendingGamepadEvent { u32 JoystickId; i32 Button; };
 
-    std::unordered_set<int>           m_PendingKeyDown;
-    std::unordered_set<int>           m_PendingKeyUp;
-    std::unordered_set<int>           m_PendingMouseDown;
-    std::unordered_set<int>           m_PendingMouseUp;
-    std::vector<PendingGamepadEvent>  m_PendingGamepadDown;
-    std::vector<PendingGamepadEvent>  m_PendingGamepadUp;
+    std::unordered_set<i32>           _pendingKeyDown;
+    std::unordered_set<i32>           _pendingKeyUp;
+    std::unordered_set<i32>           _pendingMouseDown;
+    std::unordered_set<i32>           _pendingMouseUp;
+    std::vector<PendingGamepadEvent>  _pendingGamepadDown;
+    std::vector<PendingGamepadEvent>  _pendingGamepadUp;
 };
 
 } // namespace Arcbit

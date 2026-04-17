@@ -42,11 +42,11 @@ SpriteSheet SpriteSheet::Load(std::string_view metaPath, TextureManager& texture
     const std::string           texPath    = (metaDir / texRelPath).lexically_normal().string();
 
     SpriteSheet sheet{};
-    sheet.m_Texture = textures.Load(texPath);
-    if (!sheet.m_Texture.IsValid())
+    sheet._texture = textures.Load(texPath);
+    if (!sheet._texture.IsValid())
         return {};
 
-    const auto [Width, Height] = textures.GetInfo(sheet.m_Texture);
+    const auto [Width, Height] = textures.GetInfo(sheet._texture);
     if (Width == 0 || Height == 0)
     {
         LOG_ERROR(Engine, "SpriteSheet: zero-dimension texture for '{}'", texPath);
@@ -71,24 +71,24 @@ SpriteSheet SpriteSheet::Load(std::string_view metaPath, TextureManager& texture
 
 std::optional<UVRect> SpriteSheet::GetSprite(const std::string_view name) const
 {
-    const auto it = m_NamedSprites.find(std::string(name));
-    if (it == m_NamedSprites.end())
+    const auto it = _namedSprites.find(std::string(name));
+    if (it == _namedSprites.end())
         return std::nullopt;
     return it->second;
 }
 
 std::optional<UVRect> SpriteSheet::GetTile(const u32 index) const
 {
-    if (index >= m_Tiles.size())
+    if (index >= _tiles.size())
         return std::nullopt;
-    return m_Tiles[index];
+    return _tiles[index];
 }
 
 std::optional<UVRect> SpriteSheet::GetTile(const u32 x, const u32 y) const
 {
-    if (m_Columns == 0 || x >= m_Columns)
+    if (_columns == 0 || x >= _columns)
         return std::nullopt;
-    return GetTile(y * m_Columns + x);
+    return GetTile(y * _columns + x);
 }
 
 void SpriteSheet::LoadNamedSpritesFromJson(std::string_view metaPath, const nlohmann::json& json, SpriteSheet& sheet,
@@ -104,14 +104,14 @@ void SpriteSheet::LoadNamedSpritesFromJson(std::string_view metaPath, const nloh
         const f32         w    = s.at("w").get<f32>();
         const f32         h    = s.at("h").get<f32>();
 
-        sheet.m_NamedSprites[name] = UVRect{
+        sheet._namedSprites[name] = UVRect{
             x * invW,
             y * invH,
             (x + w) * invW,
             (y + h) * invH,
         };
     }
-    LOG_DEBUG(Engine, "SpriteSheet: loaded {} named sprites from '{}'", sheet.m_NamedSprites.size(), metaPath);
+    LOG_DEBUG(Engine, "SpriteSheet: loaded {} named sprites from '{}'", sheet._namedSprites.size(), metaPath);
 }
 
 void SpriteSheet::LoadFromTileGrid(std::string_view metaPath, const nlohmann::json& json, SpriteSheet& sheet,
@@ -132,8 +132,8 @@ void SpriteSheet::LoadFromTileGrid(std::string_view metaPath, const nlohmann::js
         return;
     }
 
-    sheet.m_Columns = columns;
-    sheet.m_Tiles.reserve(columns * rows);
+    sheet._columns = columns;
+    sheet._tiles.reserve(columns * rows);
 
     for (u32 row = 0; row < rows; ++row)
     {
@@ -141,7 +141,7 @@ void SpriteSheet::LoadFromTileGrid(std::string_view metaPath, const nlohmann::js
         {
             const auto px = static_cast<f32>(col * tileW);
             const auto py = static_cast<f32>(row * tileH);
-            sheet.m_Tiles.push_back(UVRect{
+            sheet._tiles.push_back(UVRect{
                 px * invW,
                 py * invH,
                 (px + static_cast<f32>(tileW)) * invW,
@@ -151,7 +151,7 @@ void SpriteSheet::LoadFromTileGrid(std::string_view metaPath, const nlohmann::js
     }
 
     LOG_DEBUG(Engine, "SpriteSheet: built {}x{} tile grid ({} tiles) from '{}'",
-              columns, rows, sheet.m_Tiles.size(), metaPath);
+              columns, rows, sheet._tiles.size(), metaPath);
 }
 
 } // namespace Arcbit

@@ -11,7 +11,7 @@
 namespace Arcbit {
 
 TextureManager::TextureManager(RenderDevice& device)
-    : m_Device(device)
+    : _device(device)
 {}
 
 TextureManager::~TextureManager()
@@ -33,7 +33,7 @@ TextureHandle TextureManager::Load(std::string_view path)
     const std::string key = std::filesystem::path(path).lexically_normal().string();
 
     // Cache hit — return existing handle without re-uploading.
-    if (const auto it = m_PathCache.find(key); it != m_PathCache.end())
+    if (const auto it = _pathCache.find(key); it != _pathCache.end())
         return it->second.Handle;
 
     return LoadFromDisk(key);
@@ -41,8 +41,8 @@ TextureHandle TextureManager::Load(std::string_view path)
 
 void TextureManager::Reload(TextureHandle handle)
 {
-    const auto it = m_HandleToPath.find(handle.Value);
-    if (it == m_HandleToPath.end())
+    const auto it = _handleToPath.find(handle.Value);
+    if (it == _handleToPath.end())
         return;
 
     ReloadFromDisk(it->second);
@@ -50,26 +50,26 @@ void TextureManager::Reload(TextureHandle handle)
 
 void TextureManager::Unload(TextureHandle handle)
 {
-    const auto handleIt = m_HandleToPath.find(handle.Value);
-    if (handleIt == m_HandleToPath.end())
+    const auto handleIt = _handleToPath.find(handle.Value);
+    if (handleIt == _handleToPath.end())
         return;
 
     const std::string path = handleIt->second;
-    m_HandleToPath.erase(handleIt);
+    _handleToPath.erase(handleIt);
 
-    if (const auto pathIt = m_PathCache.find(path); pathIt != m_PathCache.end()) {
-        m_Device.DestroyTexture(pathIt->second.Handle);
-        m_PathCache.erase(pathIt);
+    if (const auto pathIt = _pathCache.find(path); pathIt != _pathCache.end()) {
+        _device.DestroyTexture(pathIt->second.Handle);
+        _pathCache.erase(pathIt);
     }
 }
 
 void TextureManager::Clear()
 {
-    for (const auto& [path, entry] : m_PathCache)
-        m_Device.DestroyTexture(entry.Handle);
+    for (const auto& [path, entry] : _pathCache)
+        _device.DestroyTexture(entry.Handle);
 
-    m_PathCache.clear();
-    m_HandleToPath.clear();
+    _pathCache.clear();
+    _handleToPath.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ void TextureManager::Clear()
 
 void TextureManager::CheckReloads()
 {
-    for (auto& [path, entry] : m_PathCache) {
+    for (auto& [path, entry] : _pathCache) {
         std::error_code ec;
         const auto currentTime = std::filesystem::last_write_time(path, ec);
         if (ec) continue; // file deleted or inaccessible — skip silently
@@ -94,12 +94,12 @@ void TextureManager::CheckReloads()
 
 TextureInfo TextureManager::GetInfo(TextureHandle handle) const
 {
-    const auto it = m_HandleToPath.find(handle.Value);
-    if (it == m_HandleToPath.end())
+    const auto it = _handleToPath.find(handle.Value);
+    if (it == _handleToPath.end())
         return {};
 
-    const auto entryIt = m_PathCache.find(it->second);
-    if (entryIt == m_PathCache.end())
+    const auto entryIt = _pathCache.find(it->second);
+    if (entryIt == _pathCache.end())
         return {};
 
     return TextureInfo{ entryIt->second.Width, entryIt->second.Height };
@@ -125,14 +125,14 @@ TextureHandle TextureManager::LoadFromDisk(const std::string& path)
     desc.Usage     = TextureUsage::Sampled | TextureUsage::Transfer;
     desc.DebugName = path.c_str();
 
-    const TextureHandle handle = m_Device.CreateTexture(desc);
+    const TextureHandle handle = _device.CreateTexture(desc);
     if (!handle.IsValid()) {
         stbi_image_free(pixels);
         LOG_ERROR(Engine, "TextureManager: GPU texture creation failed for '{}'", path);
         return TextureHandle::Invalid();
     }
 
-    m_Device.UploadTexture(handle, pixels, static_cast<u64>(w) * h * 4);
+    _device.UploadTexture(handle, pixels, static_cast<u64>(w) * h * 4);
     stbi_image_free(pixels);
 
     CacheEntry entry{};
@@ -142,8 +142,8 @@ TextureHandle TextureManager::LoadFromDisk(const std::string& path)
     entry.Height       = static_cast<u32>(h);
     entry.LastModified = std::filesystem::last_write_time(path);
 
-    m_PathCache.emplace(path, entry);
-    m_HandleToPath.emplace(handle.Value, path);
+    _pathCache.emplace(path, entry);
+    _handleToPath.emplace(handle.Value, path);
 
     LOG_DEBUG(Engine, "TextureManager: loaded '{}' ({}x{})", path, w, h);
     return handle;
@@ -151,8 +151,8 @@ TextureHandle TextureManager::LoadFromDisk(const std::string& path)
 
 void TextureManager::ReloadFromDisk(const std::string& path)
 {
-    auto it = m_PathCache.find(path);
-    if (it == m_PathCache.end()) return;
+    auto it = _pathCache.find(path);
+    if (it == _pathCache.end()) return;
 
     CacheEntry& entry = it->second;
 
@@ -166,7 +166,7 @@ void TextureManager::ReloadFromDisk(const std::string& path)
     if (static_cast<u32>(w) == entry.Width && static_cast<u32>(h) == entry.Height) {
         // Same dimensions — re-upload to the existing handle so all users
         // automatically see the new content without handle invalidation.
-        m_Device.UploadTexture(entry.Handle, pixels, static_cast<u64>(w) * h * 4);
+        _device.UploadTexture(entry.Handle, pixels, static_cast<u64>(w) * h * 4);
         entry.LastModified = std::filesystem::last_write_time(path);
         LOG_INFO(Engine, "TextureManager: hot-reloaded '{}'", path);
     } else {

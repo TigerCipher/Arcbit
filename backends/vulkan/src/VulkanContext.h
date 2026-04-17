@@ -9,7 +9,8 @@
 #include <vector>
 #include <optional>
 
-namespace Arcbit {
+namespace Arcbit
+{
 
 // ---------------------------------------------------------------------------
 // Internal Vulkan resource types
@@ -56,14 +57,14 @@ struct VulkanBuffer
 // distinguishes them to avoid double-free during cleanup.
 struct VulkanTexture
 {
-    VkImage          Image           = VK_NULL_HANDLE;
-    VkImageView      View            = VK_NULL_HANDLE; // required to bind the image in shaders or as attachment
-    VmaAllocation    Allocation      = VK_NULL_HANDLE; // null for swapchain images (driver-owned)
-    VkFormat         Format          = VK_FORMAT_UNDEFINED;
-    u32              Width           = 0;
-    u32              Height          = 0;
-    TextureUsage     Usage            = TextureUsage::None;
-    bool             IsSwapchainImage = false;   // swapchain images aren't VMA-owned; skip vmaDestroyImage
+    VkImage       Image            = VK_NULL_HANDLE;
+    VkImageView   View             = VK_NULL_HANDLE; // required to bind the image in shaders or as attachment
+    VmaAllocation Allocation       = VK_NULL_HANDLE; // null for swapchain images (driver-owned)
+    VkFormat      Format           = VK_FORMAT_UNDEFINED;
+    u32           Width            = 0;
+    u32           Height           = 0;
+    TextureUsage  Usage            = TextureUsage::None;
+    bool          IsSwapchainImage = false; // swapchain images aren't VMA-owned; skip vmaDestroyImage
 
     // One descriptor set per frame-in-flight slot.
     // We update DescriptorSets[CurrentFrame] in BindTexture — safe because
@@ -99,8 +100,8 @@ struct VulkanShader
 // that shaders expect — it must be kept alive for as long as the pipeline is used.
 struct VulkanPipeline
 {
-    VkPipeline            Pipeline = VK_NULL_HANDLE;
-    VkPipelineLayout      Layout   = VK_NULL_HANDLE;
+    VkPipeline       Pipeline = VK_NULL_HANDLE;
+    VkPipelineLayout Layout   = VK_NULL_HANDLE;
 };
 
 // Wraps a VkSwapchainKHR and all its associated per-frame resources.
@@ -112,12 +113,12 @@ struct VulkanPipeline
 //                    command buffers or resources that the GPU is still reading.
 struct VulkanSwapchain
 {
-    VkSwapchainKHR           Swapchain = VK_NULL_HANDLE;
-    VkSurfaceKHR             Surface   = VK_NULL_HANDLE; // the WSI surface this swapchain presents to
-    VkFormat                 Format    = VK_FORMAT_UNDEFINED;
-    VkExtent2D               Extent    = {};
-    std::vector<VkImage>     Images;       // driver-owned swapchain images
-    std::vector<VkImageView> ImageViews;   // one view per image for use as color attachments
+    VkSwapchainKHR             Swapchain = VK_NULL_HANDLE;
+    VkSurfaceKHR               Surface   = VK_NULL_HANDLE; // the WSI surface this swapchain presents to
+    VkFormat                   Format    = VK_FORMAT_UNDEFINED;
+    VkExtent2D                 Extent    = {};
+    std::vector<VkImage>       Images;       // driver-owned swapchain images
+    std::vector<VkImageView>   ImageViews;   // one view per image for use as color attachments
     std::vector<TextureHandle> ImageHandles; // engine-side handle for each swapchain image
 
     // Per-frame-in-flight synchronisation primitives.
@@ -126,9 +127,9 @@ struct VulkanSwapchain
     std::vector<VkSemaphore> RenderFinished; // GPU→GPU: "rendering is done, safe to present"
     std::vector<VkFence>     InFlight;       // GPU→CPU: "frame N is done, you can reuse its resources"
 
-    u32  CurrentImageIndex = 0;     // index into Images[] of the currently acquired swapchain image
-    u32  CurrentFrame      = 0;     // index into per-frame sync arrays; wraps at MaxFramesInFlight
-    bool VSync             = true;  // stored to allow ResizeSwapchain to recreate with same mode
+    u32  CurrentImageIndex = 0;    // index into Images[] of the currently acquired swapchain image
+    u32  CurrentFrame      = 0;    // index into per-frame sync arrays; wraps at MaxFramesInFlight
+    bool VSync             = true; // stored to allow ResizeSwapchain to recreate with same mode
 };
 
 // Wraps a VkCommandBuffer allocated from the context's command pool.
@@ -164,7 +165,7 @@ public:
     HandlePool()
     {
         // Reserve slot 0 permanently so index 0 is always the "invalid" sentinel.
-        m_Slots.push_back({});
+        _slots.push_back({});
     }
 
     // Allocate a slot for the given resource and return a typed handle.
@@ -174,22 +175,21 @@ public:
     {
         u32 index;
 
-        if (!m_FreeList.empty())
+        if (!_freeList.empty())
         {
             // Reuse an existing slot — generation was already bumped on Free.
-            index = m_FreeList.back();
-            m_FreeList.pop_back();
-        }
-        else
+            index = _freeList.back();
+            _freeList.pop_back();
+        } else
         {
             // Append a fresh slot.
-            index = static_cast<u32>(m_Slots.size());
-            m_Slots.push_back({});
+            index = static_cast<u32>(_slots.size());
+            _slots.push_back({});
         }
 
-        auto& slot      = m_Slots[index];
-        slot.Resource   = std::move(resource);
-        slot.Occupied   = true;
+        auto& slot    = _slots[index];
+        slot.Resource = std::move(resource);
+        slot.Occupied = true;
         // Generation was bumped on the previous Free; keep it as-is to embed it in the handle.
         return Handle<Tag>::Make(index, slot.Generation);
     }
@@ -199,12 +199,15 @@ public:
     template<typename Tag>
     T* Get(Handle<Tag> handle)
     {
-        if (!handle.IsValid()) return nullptr;
+        if (!handle.IsValid())
+            return nullptr;
         const u32 index = handle.Index();
-        if (index >= m_Slots.size()) return nullptr;
-        auto& slot = m_Slots[index];
+        if (index >= _slots.size())
+            return nullptr;
+        auto& slot = _slots[index];
         // Generation mismatch means the handle is stale — the slot holds a different resource.
-        if (!slot.Occupied || slot.Generation != handle.Generation()) return nullptr;
+        if (!slot.Occupied || slot.Generation != handle.Generation())
+            return nullptr;
         return &slot.Resource;
     }
 
@@ -214,18 +217,21 @@ public:
     template<typename Tag>
     std::optional<T> Free(Handle<Tag> handle)
     {
-        if (!handle.IsValid()) return std::nullopt;
+        if (!handle.IsValid())
+            return std::nullopt;
         const u32 index = handle.Index();
-        if (index >= m_Slots.size()) return std::nullopt;
-        auto& slot = m_Slots[index];
-        if (!slot.Occupied || slot.Generation != handle.Generation()) return std::nullopt;
+        if (index >= _slots.size())
+            return std::nullopt;
+        auto& slot = _slots[index];
+        if (!slot.Occupied || slot.Generation != handle.Generation())
+            return std::nullopt;
 
-        T resource      = std::move(slot.Resource);
-        slot.Resource   = {};
-        slot.Occupied   = false;
+        T resource    = std::move(slot.Resource);
+        slot.Resource = {};
+        slot.Occupied = false;
         // Bump generation so any remaining copies of this handle are now stale.
         slot.Generation = (slot.Generation + 1) & Handle<Tag>::GenMask;
-        m_FreeList.push_back(index);
+        _freeList.push_back(index);
         return resource;
     }
 
@@ -233,19 +239,19 @@ public:
     u32 Count() const
     {
         // Total slots minus the reserved slot 0 and the free-listed slots.
-        return static_cast<u32>(m_Slots.size() - 1 - m_FreeList.size());
+        return static_cast<u32>(_slots.size() - 1 - _freeList.size());
     }
 
 private:
     struct Slot
     {
-        T    Resource   = {};  // the stored resource; undefined when !Occupied
-        u32  Generation = 0;   // incremented on every Free; embedded in issued handles
+        T    Resource   = {}; // the stored resource; undefined when !Occupied
+        u32  Generation = 0;  // incremented on every Free; embedded in issued handles
         bool Occupied   = false;
     };
 
-    std::vector<Slot> m_Slots;    // slot 0 is permanently reserved
-    std::vector<u32>  m_FreeList; // indices of freed slots available for reuse
+    std::vector<Slot> _slots;    // slot 0 is permanently reserved
+    std::vector<u32>  _freeList; // indices of freed slots available for reuse
 };
 
 // ---------------------------------------------------------------------------
@@ -273,7 +279,7 @@ struct VulkanContext
 
     // The Vulkan instance — the connection between the application and the Vulkan
     // loader. All other Vulkan objects are ultimately derived from it.
-    VkInstance               Instance       = VK_NULL_HANDLE;
+    VkInstance Instance = VK_NULL_HANDLE;
 
     // Debug messenger that routes validation layer messages through DebugCallback
     // to the engine's Log system. Only created when EnableValidation is true.
@@ -286,9 +292,9 @@ struct VulkanContext
     // The selected GPU — a VkPhysicalDevice is a handle to the physical hardware.
     // We pick the best one via ScoreDevice (discrete > integrated; must support
     // Vulkan 1.3 + dynamic rendering + synchronization2 + swapchain extension).
-    VkPhysicalDevice                 PhysicalDevice      = VK_NULL_HANDLE;
-    VkPhysicalDeviceProperties       PhysicalDeviceProps = {}; // name, limits, type, Vulkan version
-    VkPhysicalDeviceFeatures         PhysicalDeviceFeats = {}; // optional feature support flags
+    VkPhysicalDevice           PhysicalDevice      = VK_NULL_HANDLE;
+    VkPhysicalDeviceProperties PhysicalDeviceProps = {}; // name, limits, type, Vulkan version
+    VkPhysicalDeviceFeatures   PhysicalDeviceFeats = {}; // optional feature support flags
 
     // -------------------------------------------------------------------------
     // Queue families
@@ -307,12 +313,12 @@ struct VulkanContext
     // The logical device — our interface to the physical hardware. Created once
     // we know which extensions and features we need. All resource creation calls
     // (vkCreateBuffer, vkCreateImageView, etc.) go through this.
-    VkDevice Device        = VK_NULL_HANDLE;
+    VkDevice Device = VK_NULL_HANDLE;
 
     // Handles to the actual queue objects within the logical device.
     // We submit command buffers to GraphicsQueue and present frames via PresentQueue.
-    VkQueue  GraphicsQueue = VK_NULL_HANDLE;
-    VkQueue  PresentQueue  = VK_NULL_HANDLE;
+    VkQueue GraphicsQueue = VK_NULL_HANDLE;
+    VkQueue PresentQueue  = VK_NULL_HANDLE;
 
     // -------------------------------------------------------------------------
     // Memory allocator
@@ -375,7 +381,7 @@ struct VulkanContext
     // and cycled each frame. They are reset at the start of each frame after
     // the in-flight fence confirms the GPU is done with that slot.
     // -------------------------------------------------------------------------
-    SwapchainHandle ActiveSwapchain;
+    SwapchainHandle                                ActiveSwapchain;
     std::array<VkCommandBuffer, MaxFramesInFlight> FrameCommandBuffers = {};
 
     // -------------------------------------------------------------------------

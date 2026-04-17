@@ -14,7 +14,7 @@ namespace Arcbit
 // Constructor — initializes all engine systems in dependency order.
 // ---------------------------------------------------------------------------
 
-Application::Application(const ApplicationConfig& config) : m_Config(config)
+Application::Application(const ApplicationConfig& config) : _config(config)
 {
     Log::Init();
     LOG_INFO(Engine, "Arcbit starting");
@@ -26,7 +26,7 @@ Application::Application(const ApplicationConfig& config) : m_Config(config)
     Settings::Graphics.ResolutionHeight = config.Height;
     Settings::Init(config.SettingsPath);
 
-    m_Window = std::make_unique<Window>(Window::Desc{
+    _window = std::make_unique<Window>(Window::Desc{
         .Title     = config.Title,
         .Width     = Settings::Graphics.ResolutionWidth,
         .Height    = Settings::Graphics.ResolutionHeight,
@@ -34,27 +34,27 @@ Application::Application(const ApplicationConfig& config) : m_Config(config)
     });
 
     DeviceDesc deviceDesc{};
-    deviceDesc.NativeWindowHandle = m_Window->GetNativeHandle();
+    deviceDesc.NativeWindowHandle = _window->GetNativeHandle();
     deviceDesc.AppName            = config.Title;
     deviceDesc.AppVersion         = 1;
 #ifdef ARCBIT_DEBUG
     deviceDesc.EnableValidation = true;
 #endif
-    m_Device = Arcbit_CreateDevice(deviceDesc);
-    ARCBIT_ASSERT(m_Device != nullptr, "Failed to create render device");
+    _device = Arcbit_CreateDevice(deviceDesc);
+    ARCBIT_ASSERT(_device != nullptr, "Failed to create render device");
     LOG_INFO(Render, "Render device ready");
 
     SwapchainDesc swapDesc{};
-    swapDesc.NativeWindowHandle = m_Window->GetNativeHandle();
-    swapDesc.Width              = m_Window->GetWidth();
-    swapDesc.Height             = m_Window->GetHeight();
+    swapDesc.NativeWindowHandle = _window->GetNativeHandle();
+    swapDesc.Width              = _window->GetWidth();
+    swapDesc.Height             = _window->GetHeight();
     swapDesc.VSync              = Settings::Graphics.VSync;
-    m_Swapchain                 = m_Device->CreateSwapchain(swapDesc);
-    ARCBIT_ASSERT(m_Swapchain.IsValid(), "Failed to create swapchain");
+    _swapchain                  = _device->CreateSwapchain(swapDesc);
+    ARCBIT_ASSERT(_swapchain.IsValid(), "Failed to create swapchain");
 
-    m_RenderThread.Start(m_Device, m_Device->GetSwapchainColorFormat(m_Swapchain));
+    _renderThread.Start(_device, _device->GetSwapchainColorFormat(_swapchain));
 
-    m_Textures = std::make_unique<TextureManager>(*m_Device);
+    _textures = std::make_unique<TextureManager>(*_device);
 }
 
 // ---------------------------------------------------------------------------
@@ -69,15 +69,15 @@ Application::~Application() = default;
 
 RenderDevice& Application::GetDevice()
 {
-    ARCBIT_ASSERT(m_Device != nullptr, "GetDevice() called after shutdown");
-    return *m_Device;
+    ARCBIT_ASSERT(_device != nullptr, "GetDevice() called after shutdown");
+    return *_device;
 }
 
 Window& Application::GetWindow()
-{ return *m_Window; }
+{ return *_window; }
 
 Format Application::GetSwapchainFormat() const
-{ return m_Device->GetSwapchainColorFormat(m_Swapchain); }
+{ return _device->GetSwapchainColorFormat(_swapchain); }
 
 // ---------------------------------------------------------------------------
 // Run — the main loop.
@@ -89,20 +89,20 @@ void Application::Run()
     // Input bindings are loaded from settings AFTER OnStart so that default
     // bindings set up in OnStart are overwritten by any user-saved bindings.
     OnStart();
-    Settings::LoadInputBindings(m_Input);
+    Settings::LoadInputBindings(_input);
 
     // Route Window input events to InputManager so JustPressed/JustReleased are
     // driven by the SDL event queue rather than polling-based state comparison.
     // This prevents edge events from being missed when the fixed-timestep
     // accumulator fires zero update ticks in a given display frame.
-    m_Window->SetKeyEventCallback([this](int sc, bool down) {
-        m_Input.InjectKeyEvent(sc, down);
+    _window->SetKeyEventCallback([this](i32 sc, bool down) {
+        _input.InjectKeyEvent(sc, down);
     });
-    m_Window->SetMouseButtonCallback([this](int btn, bool down) {
-        m_Input.InjectMouseButton(btn, down);
+    _window->SetMouseButtonCallback([this](i32 btn, bool down) {
+        _input.InjectMouseButton(btn, down);
     });
-    m_Window->SetGamepadButtonCallback([this](u32 which, int btn, bool down) {
-        m_Input.InjectGamepadButton(which, btn, down);
+    _window->SetGamepadButtonCallback([this](u32 which, i32 btn, bool down) {
+        _input.InjectGamepadButton(which, btn, down);
     });
 
     // High-resolution wall-clock timer for accurate delta time.
@@ -118,7 +118,7 @@ void Application::Run()
 
     LOG_INFO(Engine, "Entering game loop");
 
-    while (m_Window->PollEvents())
+    while (_window->PollEvents())
     {
         // Record the frame start time before any work so the FPS limiter can
         // measure the total cost of this frame (including SubmitFrame's back-
@@ -127,7 +127,7 @@ void Application::Run()
 
         // Input must be updated after PollEvents so SDL's internal state
         // reflects all events from this tick.
-        m_Input.Update();
+        _input.Update();
 
         // --- Fixed-timestep update -------------------------------------------
         // Accumulate real elapsed time and drain it in fixed-size chunks so
@@ -144,22 +144,22 @@ void Application::Run()
             // and sets JustPressed/JustReleased for this tick. Events are held in
             // the pending sets until ProcessEdges() runs, so they survive frames
             // where the accumulator doesn't reach the threshold.
-            m_Input.ProcessEdges();
+            _input.ProcessEdges();
             OnUpdate(_fixedTimestep);
             accumulator -= static_cast<f64>(_fixedTimestep);
         }
 
         // --- Variable-rate render --------------------------------------------
         FramePacket packet{};
-        packet.Swapchain   = m_Swapchain;
-        packet.Width       = m_Window->GetWidth();
-        packet.Height      = m_Window->GetHeight();
+        packet.Swapchain   = _swapchain;
+        packet.Width       = _window->GetWidth();
+        packet.Height      = _window->GetHeight();
         packet.ClearColor  = _clearColor;
-        packet.NeedsResize = m_Window->WasResizedThisFrame();
+        packet.NeedsResize = _window->WasResizedThisFrame();
 
         OnRender(packet);
 
-        m_RenderThread.SubmitFrame(std::move(packet));
+        _renderThread.SubmitFrame(std::move(packet));
 
         // --- FPS counter + render stats --------------------------------------
         // Count completed frames; report once per second alongside the most
@@ -167,7 +167,7 @@ void Application::Run()
         ++fpsFrameCount;
         if (const f64 fpsElapsed = Duration(Clock::now() - fpsWindowStart).count(); fpsElapsed >= 1.0)
         {
-            const RenderStats stats = m_RenderThread.GetStats();
+            const RenderStats stats = _renderThread.GetStats();
             LOG_TRACE(Engine, "FPS: {:.1f} | Sprites: {} ({} batches) | DrawCalls: {} | Lights: {}",
                       static_cast<f64>(fpsFrameCount) / fpsElapsed, stats.SpritesSubmitted, stats.SpriteBatches,
                       stats.LegacyDrawCalls, stats.LightsActive);
@@ -178,11 +178,11 @@ void Application::Run()
         // --- Asset hot-reload ------------------------------------------------
         // Checked once per second rather than every frame to avoid the cost
         // of stat()-ing every loaded texture path each tick.
-        m_HotReloadAccumulator += dt;
-        if (m_HotReloadAccumulator >= 1.0)
+        _hotReloadAccumulator += dt;
+        if (_hotReloadAccumulator >= 1.0)
         {
-            m_Textures->CheckReloads();
-            m_HotReloadAccumulator -= 1.0;
+            _textures->CheckReloads();
+            _hotReloadAccumulator -= 1.0;
         }
 
         // --- FPS limiter -----------------------------------------------------
@@ -204,21 +204,21 @@ void Application::Run()
     // Stop the render thread first (joins the thread, so the last frame is
     // guaranteed to have been submitted), then WaitIdle to flush the GPU queue.
     // Only then is it safe for OnShutdown to destroy pipelines, textures, etc.
-    m_RenderThread.Stop();
-    m_Device->WaitIdle();
+    _renderThread.Stop();
+    _device->WaitIdle();
 
     OnShutdown();
 
     // Release all cached textures before the device is destroyed.
-    m_Textures->Clear();
-    m_Textures.reset();
+    _textures->Clear();
+    _textures.reset();
 
-    m_Device->DestroySwapchain(m_Swapchain);
-    Arcbit_DestroyDevice(m_Device);
-    m_Device = nullptr;
+    _device->DestroySwapchain(_swapchain);
+    Arcbit_DestroyDevice(_device);
+    _device = nullptr;
 
     // Capture any runtime rebinds before writing the settings file.
-    Settings::SaveInputBindings(m_Input);
+    Settings::SaveInputBindings(_input);
     Settings::Shutdown();
 
     LOG_INFO(Engine, "Arcbit shutdown complete");

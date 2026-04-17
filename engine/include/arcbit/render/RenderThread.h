@@ -258,31 +258,31 @@ private:
 
 private:
     
-    RenderDevice* m_Device = nullptr;
-    std::thread   m_Thread;
+    RenderDevice* _device = nullptr;
+    std::thread   _thread;
 
-    // ----- Shared state — always accessed under m_Mutex --------------------
+    // ----- Shared state — always accessed under _mutex --------------------
 
-    std::mutex m_Mutex;
+    std::mutex _mutex;
 
     // Render thread sleeps here waiting for the game thread to submit a frame.
-    std::condition_variable m_FrameReady;
+    std::condition_variable _frameReady;
 
     // Game thread sleeps here when it is already one frame ahead of the render
-    // thread (m_SlotFree == false). This is the back-pressure mechanism.
-    std::condition_variable m_FrameDone;
+    // thread (_slotFree == false). This is the back-pressure mechanism.
+    std::condition_variable _frameDone;
 
-    FramePacket m_Packet;           // pending frame written by SubmitFrame
-    bool        m_HasFrame = false; // true while m_Packet holds an unrendered frame
-    bool        m_SlotFree = true;  // true once the render thread has consumed the packet
-    bool        m_Running  = false; // set to false by Stop() to signal the thread to exit
+    FramePacket _packet;           // pending frame written by SubmitFrame
+    bool        _hasFrame = false; // true while _packet holds an unrendered frame
+    bool        _slotFree = true;  // true once the render thread has consumed the packet
+    bool        _running  = false; // set to false by Stop() to signal the thread to exit
 
     // ----- Per-frame render statistics (atomic — written by render thread) --
 
-    std::atomic<u32> m_StatSpritesSubmitted{0};
-    std::atomic<u32> m_StatSpriteBatches{0};
-    std::atomic<u32> m_StatDrawCalls{0};
-    std::atomic<u32> m_StatLightsActive{0};
+    std::atomic<u32> _statSpritesSubmitted{0};
+    std::atomic<u32> _statSpriteBatches{0};
+    std::atomic<u32> _statDrawCalls{0};
+    std::atomic<u32> _statLightsActive{0};
 
     // ----- Shared GPU resources — owned by the render thread ---------------
 
@@ -290,27 +290,27 @@ private:
 
     // Default 1×1 RGBA texture encoding a flat normal (0.5, 0.5, 1.0, 1.0).
     // Bound to set 1 when a Sprite or DrawCall provides no NormalTexture.
-    TextureHandle m_DefaultNormalTex;
-    SamplerHandle m_DefaultNormalSampler;
+    TextureHandle _defaultNormalTex;
+    SamplerHandle _defaultNormalSampler;
 
     // ----- Sprite batcher resources ----------------------------------------
 
     // Pipeline created from sprite.vert + sprite.frag in Start().
     // Per-instance vertex layout: 3 × vec4 (posSize, uv, tint) = 48 bytes/sprite.
-    PipelineHandle m_SpritePipeline;
+    PipelineHandle _spritePipeline;
 
     // Per-frame instance buffers. The CPU writes sprite instances into
-    // m_InstanceBuffers[currentFrame]; the other slot is still being read.
-    std::array<BufferHandle, FrameSlots> m_InstanceBuffers = {};
+    // _instanceBuffers[currentFrame]; the other slot is still being read.
+    std::array<BufferHandle, FrameSlots> _instanceBuffers = {};
 
     // Allocated capacity in each instance buffer (number of sprites).
-    u32 m_InstanceBufferCapacity = 0;
+    u32 _instanceBufferCapacity = 0;
 
     // ----- Forward+ light SSBO resources -----------------------------------
 
     // One SSBO per frame-in-flight slot — same cycling rationale as instance buffers.
-    std::array<BufferHandle, FrameSlots> m_LightSSBO = {};
-    u32 m_LightSSBOCapacity = 0;
+    std::array<BufferHandle, FrameSlots> _lightSSBO = {};
+    u32 _lightSSBOCapacity = 0;
 };
 
 } // namespace Arcbit

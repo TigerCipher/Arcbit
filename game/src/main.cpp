@@ -53,32 +53,32 @@ protected:
         GetInput().BindGamepadAxis(ActionMoveDown, Arcbit::GamepadAxis::LeftY);
 
         // --- Textures ---
-        m_FloorTex = GetTextures().Load("assets/textures/floor.jpg");
-        ARCBIT_ASSERT(m_FloorTex.IsValid(), "Failed to load floor texture");
+        _floorTex = GetTextures().Load("assets/textures/floor.jpg");
+        ARCBIT_ASSERT(_floorTex.IsValid(), "Failed to load floor texture");
 
-        m_SkeletonTex = GetTextures().Load("assets/textures/Cute_Fantasy_Free/Enemies/Skeleton.png");
-        m_SlimeTex    = GetTextures().Load("assets/textures/Cute_Fantasy_Free/Enemies/Slime_Green.png");
-        m_ChickenTex  = GetTextures().Load("assets/textures/Cute_Fantasy_Free/Animals/Chicken/Chicken.png");
-        m_PigTex      = GetTextures().Load("assets/textures/Cute_Fantasy_Free/Animals/Pig/Pig.png");
-        m_TreeTex     = GetTextures().Load("assets/textures/Cute_Fantasy_Free/Outdoor decoration/Oak_Tree.png");
+        _skeletonTex = GetTextures().Load("assets/textures/Cute_Fantasy_Free/Enemies/Skeleton.png");
+        _slimeTex    = GetTextures().Load("assets/textures/Cute_Fantasy_Free/Enemies/Slime_Green.png");
+        _chickenTex  = GetTextures().Load("assets/textures/Cute_Fantasy_Free/Animals/Chicken/Chicken.png");
+        _pigTex      = GetTextures().Load("assets/textures/Cute_Fantasy_Free/Animals/Pig/Pig.png");
+        _treeTex     = GetTextures().Load("assets/textures/Cute_Fantasy_Free/Outdoor decoration/Oak_Tree.png");
 
-        ARCBIT_ASSERT(m_SkeletonTex.IsValid(), "Failed to load skeleton texture");
-        ARCBIT_ASSERT(m_SlimeTex.IsValid(), "Failed to load slime texture");
-        ARCBIT_ASSERT(m_ChickenTex.IsValid(), "Failed to load chicken texture");
-        ARCBIT_ASSERT(m_PigTex.IsValid(), "Failed to load pig texture");
-        ARCBIT_ASSERT(m_TreeTex.IsValid(), "Failed to load tree texture");
+        ARCBIT_ASSERT(_skeletonTex.IsValid(), "Failed to load skeleton texture");
+        ARCBIT_ASSERT(_slimeTex.IsValid(), "Failed to load slime texture");
+        ARCBIT_ASSERT(_chickenTex.IsValid(), "Failed to load chicken texture");
+        ARCBIT_ASSERT(_pigTex.IsValid(), "Failed to load pig texture");
+        ARCBIT_ASSERT(_treeTex.IsValid(), "Failed to load tree texture");
 
         // --- SpriteSheet ---
-        m_PlayerSheet = Arcbit::SpriteSheet::Load("assets/spritesheets/player.json", GetTextures());
-        if (m_PlayerSheet.IsValid())
+        _playerSheet = Arcbit::SpriteSheet::Load("assets/spritesheets/player.json", GetTextures());
+        if (_playerSheet.IsValid())
         {
-            LOG_INFO(Game, "Player sheet loaded - {}x{} grid, {} tiles", m_PlayerSheet.TileColumns(), m_PlayerSheet.TileRows(),
-                     m_PlayerSheet.TileCount());
+            LOG_INFO(Game, "Player sheet loaded - {}x{} grid, {} tiles", _playerSheet.TileColumns(), _playerSheet.TileRows(),
+                     _playerSheet.TileCount());
 
             // Demonstrate both GetTile overloads.
-            if (auto uv = m_PlayerSheet.GetTile(3)) // by linear index
+            if (auto uv = _playerSheet.GetTile(3)) // by linear index
                 LOG_DEBUG(Game, "GetTile(3)   - u0={:.3f}", uv->U0);
-            if (auto uv = m_PlayerSheet.GetTile(1, 0)) // by (column, row)
+            if (auto uv = _playerSheet.GetTile(1, 0)) // by (column, row)
                 LOG_DEBUG(Game, "GetTile(1,0) - u0={:.3f}", uv->U0);
         }
 
@@ -90,8 +90,8 @@ protected:
         nearestDesc.AddressU  = Arcbit::AddressMode::Repeat;
         nearestDesc.AddressV  = Arcbit::AddressMode::Repeat;
         nearestDesc.DebugName = "NearestRepeat";
-        m_Sampler             = GetDevice().CreateSampler(nearestDesc);
-        ARCBIT_ASSERT(m_Sampler.IsValid(), "Failed to create sampler");
+        _sampler              = GetDevice().CreateSampler(nearestDesc);
+        ARCBIT_ASSERT(_sampler.IsValid(), "Failed to create sampler");
 
         // Linear-repeat: floor tile blends smoothly when tiled and scaled.
         Arcbit::SamplerDesc linearDesc{};
@@ -100,16 +100,16 @@ protected:
         linearDesc.AddressU  = Arcbit::AddressMode::Repeat;
         linearDesc.AddressV  = Arcbit::AddressMode::Repeat;
         linearDesc.DebugName = "LinearRepeat";
-        m_FloorSampler       = GetDevice().CreateSampler(linearDesc);
-        ARCBIT_ASSERT(m_FloorSampler.IsValid(), "Failed to create floor sampler");
+        _floorSampler        = GetDevice().CreateSampler(linearDesc);
+        ARCBIT_ASSERT(_floorSampler.IsValid(), "Failed to create floor sampler");
 
         // --- Random lights — world-space pixels (scattered across ±900 x ±500) ---
         for (int i = 0; i < NumRandomLights; ++i)
         {
-            m_Lights[i].Position  = { static_cast<float>(rand() % 1800 - 900), static_cast<float>(rand() % 1000 - 500) };
-            m_Lights[i].Radius    = static_cast<float>(rand() % 300) + 100.0f; // 100–400 px
-            m_Lights[i].Intensity = static_cast<float>(rand() % 100) / 100.0f + 0.5f;
-            m_Lights[i].LightColor =
+            _lights[i].Position  = { static_cast<float>(rand() % 1800 - 900), static_cast<float>(rand() % 1000 - 500) };
+            _lights[i].Radius    = static_cast<float>(rand() % 300) + 100.0f; // 100–400 px
+            _lights[i].Intensity = static_cast<float>(rand() % 100) / 100.0f + 0.5f;
+            _lights[i].LightColor =
                 Arcbit::Color{ static_cast<float>(rand() % 100) / 100.0f, static_cast<float>(rand() % 100) / 100.0f,
                                static_cast<float>(rand() % 100) / 100.0f, 1.0f };
         }
@@ -122,29 +122,29 @@ protected:
     // -----------------------------------------------------------------------
     void OnUpdate(Arcbit::f32 dt) override
     {
-        m_Camera.Update(dt);
+        _camera.Update(dt);
 
         // WASD pans the camera at CameraPanSpeed world-pixels/second.
-        constexpr float CameraPanSpeed = 400.0f;
-        float sprintMultiplier = 1.0f;
-        
+        constexpr float CameraPanSpeed   = 400.0f;
+        float           sprintMultiplier = 1.0f;
+
         if (GetInput().IsPressed(ActionSprint))
             sprintMultiplier = 3.0f;
 
         const float camSpeed = CameraPanSpeed * sprintMultiplier;
-        
+
         if (GetInput().IsPressed(ActionMoveLeft))
-            m_Camera.Position.X -= camSpeed * dt;
+            _camera.Position.X -= camSpeed * dt;
         if (GetInput().IsPressed(ActionMoveRight))
-            m_Camera.Position.X += camSpeed * dt;
+            _camera.Position.X += camSpeed * dt;
         if (GetInput().IsPressed(ActionMoveUp))
-            m_Camera.Position.Y -= camSpeed * dt;
+            _camera.Position.Y -= camSpeed * dt;
         if (GetInput().IsPressed(ActionMoveDown))
-            m_Camera.Position.Y += camSpeed * dt;
+            _camera.Position.Y += camSpeed * dt;
 
         // Interact adds a burst of screen shake.
         if (GetInput().JustPressed(ActionInteract))
-            m_Camera.AddTrauma(0.6f);
+            _camera.AddTrauma(0.6f);
     }
 
     // -----------------------------------------------------------------------
@@ -166,8 +166,8 @@ protected:
     void OnRender(Arcbit::FramePacket& packet) override
     {
         packet.AmbientColor   = Arcbit::Color{ 0.1f, 0.1f, 0.15f, 1.0f };
-        packet.CameraPosition = m_Camera.GetEffectivePosition();
-        packet.CameraZoom     = m_Camera.Zoom;
+        packet.CameraPosition = _camera.GetEffectivePosition();
+        packet.CameraZoom     = _camera.Zoom;
 
         // --- Static world lights (world-space pixels) ---
         {
@@ -200,7 +200,7 @@ protected:
             Arcbit::i32 mouseX = 0, mouseY = 0;
             GetInput().GetMousePosition(mouseX, mouseY);
             const Arcbit::Vec2 mouseWorld =
-                m_Camera.ScreenToWorld({ static_cast<float>(mouseX), static_cast<float>(mouseY) }, { ViewportW, ViewportH });
+                _camera.ScreenToWorld({ static_cast<float>(mouseX), static_cast<float>(mouseY) }, { ViewportW, ViewportH });
 
             Arcbit::PointLight light{};
             light.Position   = mouseWorld;
@@ -211,10 +211,10 @@ protected:
         }
 
         for (int i = 0; i < NumRandomLights; ++i)
-            packet.Lights.push_back(m_Lights[i]);
+            packet.Lights.push_back(_lights[i]);
 
-        packet.Sprites.reserve(m_Sprites.size());
-        packet.Sprites.assign(m_Sprites.begin(), m_Sprites.end());
+        packet.Sprites.reserve(_sprites.size());
+        packet.Sprites.assign(_sprites.begin(), _sprites.end());
     }
 
     // -----------------------------------------------------------------------
@@ -224,8 +224,8 @@ protected:
     // -----------------------------------------------------------------------
     void OnShutdown() override
     {
-        GetDevice().DestroySampler(m_FloorSampler);
-        GetDevice().DestroySampler(m_Sampler);
+        GetDevice().DestroySampler(_floorSampler);
+        GetDevice().DestroySampler(_sampler);
     }
 
 private:
@@ -235,13 +235,13 @@ private:
         // --- Floor — full screen, layer -1 (1 sprite → 1 batch) ---
         {
             Arcbit::Sprite s{};
-            s.Texture  = m_FloorTex;
-            s.Sampler  = m_FloorSampler;
+            s.Texture  = _floorTex;
+            s.Sampler  = _floorSampler;
             s.Position = { 0.0f, 0.0f };
             s.Size     = { 1920.0f, 1080.0f };
             s.UV       = { 0.0f, 0.0f, 4.0f, 4.0f }; // tile 4× across screen
             s.Layer    = -1;
-            m_Sprites.push_back(s);
+            _sprites.push_back(s);
         }
 
         // --- Oak trees — 4 corners, layer 0 (4 sprites → 1 batch) ---
@@ -255,35 +255,35 @@ private:
         {
             constexpr float TreeSize = 192.0f;
             Arcbit::Sprite  s{};
-            s.Texture  = m_TreeTex;
-            s.Sampler  = m_Sampler;
+            s.Texture  = _treeTex;
+            s.Sampler  = _sampler;
             s.Position = pos;
             s.Size     = { TreeSize, TreeSize };
             s.Layer    = 0;
-            m_Sprites.push_back(s);
+            _sprites.push_back(s);
         }
 
         // --- Player tiles — 12 across the top row, layer 1 (12 sprites → 1 batch) ---
         // Uses GetTile(col, 0) to cycle through the spritesheet columns.
-        if (m_PlayerSheet.IsValid())
+        if (_playerSheet.IsValid())
         {
             constexpr float   TileSize  = 80.0f;
             constexpr int     TileCount = 12;
             constexpr float   startX    = -(TileCount - 1) * TileSize * 0.5f;
-            const Arcbit::u32 cols      = m_PlayerSheet.TileColumns();
+            const Arcbit::u32 cols      = _playerSheet.TileColumns();
 
             for (int i = 0; i < TileCount; ++i)
             {
                 Arcbit::Sprite s{};
-                s.Texture  = m_PlayerSheet.GetTexture();
-                s.Sampler  = m_Sampler;
+                s.Texture  = _playerSheet.GetTexture();
+                s.Sampler  = _sampler;
                 s.Position = { startX + static_cast<float>(i) * TileSize, -270.0f };
                 s.Size     = { TileSize, TileSize };
                 if (cols > 0)
-                    if (auto uv = m_PlayerSheet.GetTile(static_cast<Arcbit::u32>(i) % cols, 0))
+                    if (auto uv = _playerSheet.GetTile(static_cast<Arcbit::u32>(i) % cols, 0))
                         s.UV = *uv;
                 s.Layer = 1;
-                m_Sprites.push_back(s);
+                _sprites.push_back(s);
             }
         }
 
@@ -296,12 +296,12 @@ private:
             {
                 float          spriteSize = SpriteSize * 3;
                 Arcbit::Sprite s{};
-                s.Texture  = m_SkeletonTex;
-                s.Sampler  = m_Sampler;
+                s.Texture  = _skeletonTex;
+                s.Sampler  = _sampler;
                 s.Position = { startX + static_cast<float>(i) * spriteSize, -150.0f };
                 s.Size     = { spriteSize, spriteSize };
                 s.Layer    = 1;
-                m_Sprites.push_back(s);
+                _sprites.push_back(s);
             }
         }
 
@@ -312,12 +312,12 @@ private:
             {
                 float          spriteSize = SpriteSize * 3;
                 Arcbit::Sprite s{};
-                s.Texture  = m_SlimeTex;
-                s.Sampler  = m_Sampler;
+                s.Texture  = _slimeTex;
+                s.Sampler  = _sampler;
                 s.Position = { startX + static_cast<float>(i) * spriteSize, 0.0f };
                 s.Size     = { spriteSize, spriteSize };
                 s.Layer    = 5;
-                m_Sprites.push_back(s);
+                _sprites.push_back(s);
             }
         }
 
@@ -327,12 +327,12 @@ private:
             for (int i = 0; i < SpriteCount; ++i)
             {
                 Arcbit::Sprite s{};
-                s.Texture  = m_ChickenTex;
-                s.Sampler  = m_Sampler;
+                s.Texture  = _chickenTex;
+                s.Sampler  = _sampler;
                 s.Position = { startX + i * SpriteSize, 150.0f };
                 s.Size     = { SpriteSize, SpriteSize };
                 s.Layer    = 2;
-                m_Sprites.push_back(s);
+                _sprites.push_back(s);
             }
         }
 
@@ -342,16 +342,16 @@ private:
             for (int i = 0; i < SpriteCount; ++i)
             {
                 Arcbit::Sprite s{};
-                s.Texture  = m_PigTex;
-                s.Sampler  = m_Sampler;
+                s.Texture  = _pigTex;
+                s.Sampler  = _sampler;
                 s.Position = { startX + i * SpriteSize, 300.0f };
                 s.Size     = { SpriteSize, SpriteSize };
                 s.Layer    = 2;
-                m_Sprites.push_back(s);
+                _sprites.push_back(s);
             }
         }
 
-        LOG_DEBUG(Game, "Created {} sprites", m_Sprites.size());
+        LOG_DEBUG(Game, "Created {} sprites", _sprites.size());
     }
 
 private:
@@ -360,32 +360,32 @@ private:
     static constexpr Arcbit::ActionID ActionMoveUp    = Arcbit::MakeAction("Move_Up");
     static constexpr Arcbit::ActionID ActionMoveDown  = Arcbit::MakeAction("Move_Down");
     static constexpr Arcbit::ActionID ActionInteract  = Arcbit::MakeAction("Interact");
-    static constexpr Arcbit::ActionID ActionSprint  = Arcbit::MakeAction("Sprint");
+    static constexpr Arcbit::ActionID ActionSprint    = Arcbit::MakeAction("Sprint");
 
     // Must match the window dimensions set in the constructor.
     static constexpr float ViewportW = 1920.0f;
     static constexpr float ViewportH = 1080.0f;
 
-    Arcbit::Camera2D m_Camera;
+    Arcbit::Camera2D _camera;
 
     // Samplers — still game-owned (control filtering per sprite).
     // The sprite pipeline itself is owned by RenderThread.
-    Arcbit::SamplerHandle m_Sampler;
-    Arcbit::SamplerHandle m_FloorSampler;
+    Arcbit::SamplerHandle _sampler;
+    Arcbit::SamplerHandle _floorSampler;
 
     // Textures — owned by TextureManager, released automatically.
-    Arcbit::TextureHandle m_FloorTex;
-    Arcbit::TextureHandle m_SkeletonTex;
-    Arcbit::TextureHandle m_SlimeTex;
-    Arcbit::TextureHandle m_ChickenTex;
-    Arcbit::TextureHandle m_PigTex;
-    Arcbit::TextureHandle m_TreeTex;
-    Arcbit::SpriteSheet   m_PlayerSheet;
+    Arcbit::TextureHandle _floorTex;
+    Arcbit::TextureHandle _skeletonTex;
+    Arcbit::TextureHandle _slimeTex;
+    Arcbit::TextureHandle _chickenTex;
+    Arcbit::TextureHandle _pigTex;
+    Arcbit::TextureHandle _treeTex;
+    Arcbit::SpriteSheet   _playerSheet;
 
     static constexpr Arcbit::isize                  NumRandomLights = 10;
-    std::array<Arcbit::PointLight, NumRandomLights> m_Lights        = {};
+    std::array<Arcbit::PointLight, NumRandomLights> _lights         = {};
 
-    std::vector<Arcbit::Sprite> m_Sprites{};
+    std::vector<Arcbit::Sprite> _sprites{};
 };
 
 // ---------------------------------------------------------------------------

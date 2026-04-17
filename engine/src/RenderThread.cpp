@@ -92,10 +92,10 @@ void RenderThread::CreateDefaultNormalResources()
     normalDesc.Format    = Format::RGBA8_UNorm;
     normalDesc.Usage     = TextureUsage::Sampled | TextureUsage::Transfer;
     normalDesc.DebugName = "default_normal";
-    m_DefaultNormalTex   = m_Device->CreateTexture(normalDesc);
+    _defaultNormalTex   = _device->CreateTexture(normalDesc);
 
     const u8 flatNormal[4] = { 128, 128, 255, 255 };
-    m_Device->UploadTexture(m_DefaultNormalTex, flatNormal, sizeof(flatNormal));
+    _device->UploadTexture(_defaultNormalTex, flatNormal, sizeof(flatNormal));
 
     SamplerDesc sampDesc{};
     sampDesc.MinFilter     = Filter::Nearest;
@@ -103,7 +103,7 @@ void RenderThread::CreateDefaultNormalResources()
     sampDesc.AddressU      = AddressMode::ClampToEdge;
     sampDesc.AddressV      = AddressMode::ClampToEdge;
     sampDesc.DebugName     = "default_normal_sampler";
-    m_DefaultNormalSampler = m_Device->CreateSampler(sampDesc);
+    _defaultNormalSampler = _device->CreateSampler(sampDesc);
 }
 
 void RenderThread::CreateSpritePipeline(const Format swapchainFormat)
@@ -112,8 +112,8 @@ void RenderThread::CreateSpritePipeline(const Format swapchainFormat)
     auto fragSpv = LoadShaderFile("shaders/sprite.frag.spv");
 
     const ShaderHandle vert =
-        m_Device->CreateShader({ ShaderStage::Vertex, vertSpv.data(), static_cast<u32>(vertSpv.size()), "main", "sprite.vert" });
-    const ShaderHandle frag = m_Device->CreateShader(
+        _device->CreateShader({ ShaderStage::Vertex, vertSpv.data(), static_cast<u32>(vertSpv.size()), "main", "sprite.vert" });
+    const ShaderHandle frag = _device->CreateShader(
         { ShaderStage::Fragment, fragSpv.data(), static_cast<u32>(fragSpv.size()), "main", "sprite.frag" });
 
     // Three vec4 instance attributes — each 16 bytes, packed in one binding.
@@ -148,17 +148,17 @@ void RenderThread::CreateSpritePipeline(const Format swapchainFormat)
     desc.Blend.AlphaOp  = BlendOp::Add;
     desc.DebugName      = "SpritePipeline";
 
-    m_SpritePipeline = m_Device->CreatePipeline(desc);
-    ARCBIT_ASSERT(m_SpritePipeline.IsValid(), "RenderThread: failed to create sprite pipeline");
+    _spritePipeline = _device->CreatePipeline(desc);
+    ARCBIT_ASSERT(_spritePipeline.IsValid(), "RenderThread: failed to create sprite pipeline");
 
-    m_Device->DestroyShader(vert);
-    m_Device->DestroyShader(frag);
+    _device->DestroyShader(vert);
+    _device->DestroyShader(frag);
 }
 
 void RenderThread::CreateInstanceBuffers()
 {
     static constexpr u32 InitialCapacity = 256;
-    m_InstanceBufferCapacity             = InitialCapacity;
+    _instanceBufferCapacity             = InitialCapacity;
 
     BufferDesc desc{};
     desc.Size        = InitialCapacity * sizeof(SpriteInstance);
@@ -166,14 +166,14 @@ void RenderThread::CreateInstanceBuffers()
     desc.HostVisible = true;
     desc.DebugName   = "sprite_instances";
 
-    for (auto& buf : m_InstanceBuffers)
-        buf = m_Device->CreateBuffer(desc);
+    for (auto& buf : _instanceBuffers)
+        buf = _device->CreateBuffer(desc);
 }
 
 void RenderThread::CreateLightSSBOs()
 {
     static constexpr u32 InitialCapacity = 64;
-    m_LightSSBOCapacity                  = InitialCapacity;
+    _lightSSBOCapacity                  = InitialCapacity;
 
     BufferDesc desc{};
     desc.Size        = InitialCapacity * sizeof(GpuPointLight);
@@ -181,8 +181,8 @@ void RenderThread::CreateLightSSBOs()
     desc.HostVisible = true;
     desc.DebugName   = "light_ssbo";
 
-    for (auto& ssbo : m_LightSSBO)
-        ssbo = m_Device->CreateBuffer(desc);
+    for (auto& ssbo : _lightSSBO)
+        ssbo = _device->CreateBuffer(desc);
 }
 
 // ---------------------------------------------------------------------------
@@ -191,48 +191,48 @@ void RenderThread::CreateLightSSBOs()
 
 void RenderThread::Start(RenderDevice* device, const Format swapchainFormat)
 {
-    m_Device = device;
+    _device = device;
 
     CreateDefaultNormalResources();
     CreateSpritePipeline(swapchainFormat);
     CreateInstanceBuffers();
     CreateLightSSBOs();
 
-    m_Running = true;
-    m_Thread  = std::thread(&RenderThread::Run, this);
+    _running = true;
+    _thread  = std::thread(&RenderThread::Run, this);
     LOG_INFO(Render, "Render thread started");
 }
 
 void RenderThread::Stop()
 {
     {
-        std::lock_guard lock(m_Mutex);
-        m_Running = false;
+        std::lock_guard lock(_mutex);
+        _running = false;
     }
-    m_FrameReady.notify_one();
+    _frameReady.notify_one();
 
-    if (m_Thread.joinable())
-        m_Thread.join();
+    if (_thread.joinable())
+        _thread.join();
 
     // GPU must be idle before any resources are freed. WaitIdle() here (rather
     // than in Application::Run) keeps the GPU-sync responsibility with the
     // render thread that submitted the work.
-    m_Device->WaitIdle();
+    _device->WaitIdle();
 
-    for (auto& ssbo : m_LightSSBO)
+    for (auto& ssbo : _lightSSBO)
         if (ssbo.IsValid())
-            m_Device->DestroyBuffer(ssbo);
+            _device->DestroyBuffer(ssbo);
 
-    for (auto& buf : m_InstanceBuffers)
+    for (auto& buf : _instanceBuffers)
         if (buf.IsValid())
-            m_Device->DestroyBuffer(buf);
+            _device->DestroyBuffer(buf);
 
-    if (m_SpritePipeline.IsValid())
-        m_Device->DestroyPipeline(m_SpritePipeline);
-    if (m_DefaultNormalSampler.IsValid())
-        m_Device->DestroySampler(m_DefaultNormalSampler);
-    if (m_DefaultNormalTex.IsValid())
-        m_Device->DestroyTexture(m_DefaultNormalTex);
+    if (_spritePipeline.IsValid())
+        _device->DestroyPipeline(_spritePipeline);
+    if (_defaultNormalSampler.IsValid())
+        _device->DestroySampler(_defaultNormalSampler);
+    if (_defaultNormalTex.IsValid())
+        _device->DestroyTexture(_defaultNormalTex);
 
     LOG_INFO(Render, "Render thread stopped");
 }
@@ -244,24 +244,24 @@ void RenderThread::Stop()
 RenderStats RenderThread::GetStats() const
 {
     return {
-        m_StatSpritesSubmitted.load(std::memory_order_relaxed),
-        m_StatSpriteBatches.load(std::memory_order_relaxed),
-        m_StatDrawCalls.load(std::memory_order_relaxed),
-        m_StatLightsActive.load(std::memory_order_relaxed),
+        _statSpritesSubmitted.load(std::memory_order_relaxed),
+        _statSpriteBatches.load(std::memory_order_relaxed),
+        _statDrawCalls.load(std::memory_order_relaxed),
+        _statLightsActive.load(std::memory_order_relaxed),
     };
 }
 
 void RenderThread::SubmitFrame(FramePacket packet)
 {
-    std::unique_lock lock(m_Mutex);
-    m_FrameDone.wait(lock, [this] { return m_SlotFree; });
+    std::unique_lock lock(_mutex);
+    _frameDone.wait(lock, [this] { return _slotFree; });
 
-    m_Packet   = std::move(packet);
-    m_HasFrame = true;
-    m_SlotFree = false;
+    _packet   = std::move(packet);
+    _hasFrame = true;
+    _slotFree = false;
 
     lock.unlock();
-    m_FrameReady.notify_one();
+    _frameReady.notify_one();
 }
 
 // ---------------------------------------------------------------------------
@@ -274,21 +274,21 @@ void RenderThread::Run()
     {
         FramePacket packet;
         {
-            std::unique_lock lock(m_Mutex);
-            m_FrameReady.wait(lock, [this] { return m_HasFrame || !m_Running; });
-            if (!m_Running && !m_HasFrame)
+            std::unique_lock lock(_mutex);
+            _frameReady.wait(lock, [this] { return _hasFrame || !_running; });
+            if (!_running && !_hasFrame)
                 break;
-            packet     = std::move(m_Packet);
-            m_HasFrame = false;
+            packet     = std::move(_packet);
+            _hasFrame = false;
         }
 
         RenderFrame(packet);
 
         {
-            std::lock_guard lock(m_Mutex);
-            m_SlotFree = true;
+            std::lock_guard lock(_mutex);
+            _slotFree = true;
         }
-        m_FrameDone.notify_one();
+        _frameDone.notify_one();
     }
 }
 
@@ -299,16 +299,16 @@ void RenderThread::Run()
 TextureHandle RenderThread::AcquireBackbuffer(const FramePacket& packet) const
 {
     if (packet.NeedsResize)
-        m_Device->ResizeSwapchain(packet.Swapchain, packet.Width, packet.Height);
+        _device->ResizeSwapchain(packet.Swapchain, packet.Width, packet.Height);
 
-    TextureHandle backbuffer = m_Device->AcquireNextImage(packet.Swapchain);
+    TextureHandle backbuffer = _device->AcquireNextImage(packet.Swapchain);
     if (backbuffer.IsValid())
         return backbuffer;
 
     // Swapchain was out of date — recreate and retry once.
     LOG_WARN(Render, "Swapchain out of date at acquire — recreating");
-    m_Device->ResizeSwapchain(packet.Swapchain, packet.Width, packet.Height);
-    backbuffer = m_Device->AcquireNextImage(packet.Swapchain);
+    _device->ResizeSwapchain(packet.Swapchain, packet.Width, packet.Height);
+    backbuffer = _device->AcquireNextImage(packet.Swapchain);
 
     if (!backbuffer.IsValid())
         LOG_ERROR(Render, "Failed to acquire swapchain image after recreation — skipping frame");
@@ -320,13 +320,13 @@ u32 RenderThread::UploadLights(const FramePacket& packet, const u32 frameSlot)
 {
     const u32 lightCount = static_cast<u32>(packet.Lights.size());
 
-    if (lightCount > m_LightSSBOCapacity)
+    if (lightCount > _lightSSBOCapacity)
     {
-        m_Device->WaitIdle();
-        u32 newCapacity = m_LightSSBOCapacity;
+        _device->WaitIdle();
+        u32 newCapacity = _lightSSBOCapacity;
         while (newCapacity < lightCount)
             newCapacity *= 2;
-        m_LightSSBOCapacity = newCapacity;
+        _lightSSBOCapacity = newCapacity;
 
         BufferDesc desc{};
         desc.Size        = newCapacity * sizeof(GpuPointLight);
@@ -334,10 +334,10 @@ u32 RenderThread::UploadLights(const FramePacket& packet, const u32 frameSlot)
         desc.HostVisible = true;
         desc.DebugName   = "light_ssbo";
 
-        for (auto& ssbo : m_LightSSBO)
+        for (auto& ssbo : _lightSSBO)
         {
-            m_Device->DestroyBuffer(ssbo);
-            ssbo = m_Device->CreateBuffer(desc);
+            _device->DestroyBuffer(ssbo);
+            ssbo = _device->CreateBuffer(desc);
         }
         LOG_INFO(Render, "Light SSBO resized to {} entries", newCapacity);
     }
@@ -358,7 +358,7 @@ u32 RenderThread::UploadLights(const FramePacket& packet, const u32 frameSlot)
             g.ColorB         = LightColor.B;
             g.ColorA         = LightColor.A;
         }
-        m_Device->UpdateBuffer(m_LightSSBO[frameSlot], gpuLights.data(), lightCount * sizeof(GpuPointLight));
+        _device->UpdateBuffer(_lightSSBO[frameSlot], gpuLights.data(), lightCount * sizeof(GpuPointLight));
     }
 
     return lightCount;
@@ -388,13 +388,13 @@ void RenderThread::UploadInstances(const std::vector<const Sprite*>& sorted, con
     if (spriteCount == 0)
         return;
 
-    if (spriteCount > m_InstanceBufferCapacity)
+    if (spriteCount > _instanceBufferCapacity)
     {
-        m_Device->WaitIdle();
-        u32 newCapacity = m_InstanceBufferCapacity;
+        _device->WaitIdle();
+        u32 newCapacity = _instanceBufferCapacity;
         while (newCapacity < spriteCount)
             newCapacity *= 2;
-        m_InstanceBufferCapacity = newCapacity;
+        _instanceBufferCapacity = newCapacity;
 
         BufferDesc desc{};
         desc.Size        = newCapacity * sizeof(SpriteInstance);
@@ -402,10 +402,10 @@ void RenderThread::UploadInstances(const std::vector<const Sprite*>& sorted, con
         desc.HostVisible = true;
         desc.DebugName   = "sprite_instances";
 
-        for (auto& buf : m_InstanceBuffers)
+        for (auto& buf : _instanceBuffers)
         {
-            m_Device->DestroyBuffer(buf);
-            buf = m_Device->CreateBuffer(desc);
+            _device->DestroyBuffer(buf);
+            buf = _device->CreateBuffer(desc);
         }
         LOG_INFO(Render, "Instance buffer resized to {} sprites", newCapacity);
     }
@@ -428,7 +428,7 @@ void RenderThread::UploadInstances(const std::vector<const Sprite*>& sorted, con
         inst.TintB           = s->Tint.B;
         inst.TintA           = s->Tint.A;
     }
-    m_Device->UpdateBuffer(m_InstanceBuffers[frameSlot], instances.data(), spriteCount * sizeof(SpriteInstance));
+    _device->UpdateBuffer(_instanceBuffers[frameSlot], instances.data(), spriteCount * sizeof(SpriteInstance));
 }
 
 void RenderThread::BeginRenderPass(const CommandListHandle cmd, const TextureHandle backbuffer, const FramePacket& packet) const
@@ -442,7 +442,7 @@ void RenderThread::BeginRenderPass(const CommandListHandle cmd, const TextureHan
     std::array<Attachment, 1> attachments = { colorAttach };
     RenderingDesc             renderDesc{};
     renderDesc.ColorAttachments = attachments;
-    m_Device->BeginRendering(cmd, renderDesc);
+    _device->BeginRendering(cmd, renderDesc);
 }
 
 u32 RenderThread::DrawSpriteBatches(const CommandListHandle cmd, const std::vector<const Sprite*>& sorted, const u32 frameSlot,
@@ -455,10 +455,10 @@ u32 RenderThread::DrawSpriteBatches(const CommandListHandle cmd, const std::vect
     const f32 viewW = static_cast<f32>(packet.Width);
     const f32 viewH = static_cast<f32>(packet.Height);
 
-    m_Device->BindPipeline(cmd, m_SpritePipeline);
-    m_Device->SetViewport(cmd, 0.0f, 0.0f, viewW, viewH);
-    m_Device->SetScissor(cmd, 0, 0, packet.Width, packet.Height);
-    m_Device->BindStorageBuffer(cmd, m_LightSSBO[frameSlot], 2, 0);
+    _device->BindPipeline(cmd, _spritePipeline);
+    _device->SetViewport(cmd, 0.0f, 0.0f, viewW, viewH);
+    _device->SetScissor(cmd, 0, 0, packet.Width, packet.Height);
+    _device->BindStorageBuffer(cmd, _lightSSBO[frameSlot], 2, 0);
 
     SpritePushConstants pc{};
     pc.CamPosX    = packet.CameraPosition.X;
@@ -471,7 +471,7 @@ u32 RenderThread::DrawSpriteBatches(const CommandListHandle cmd, const std::vect
     pc.AmbientB   = packet.AmbientColor.B;
     pc.AmbientA   = packet.AmbientColor.A;
     pc.LightCount = lightCount;
-    m_Device->PushConstants(cmd, ShaderStage::Vertex | ShaderStage::Fragment, &pc, sizeof(pc));
+    _device->PushConstants(cmd, ShaderStage::Vertex | ShaderStage::Fragment, &pc, sizeof(pc));
 
     u32 batchCount = 0;
     u32 groupStart = 0;
@@ -490,18 +490,18 @@ u32 RenderThread::DrawSpriteBatches(const CommandListHandle cmd, const std::vect
         }
 
         // Albedo — set 0.
-        m_Device->BindTexture(cmd, first->Texture, first->Sampler, 0);
+        _device->BindTexture(cmd, first->Texture, first->Sampler, 0);
 
         // Normal map — set 1. Fall back to the flat-normal default.
         const bool    hasNormal     = first->NormalTexture.IsValid();
-        const TextureHandle normalTex     = hasNormal ? first->NormalTexture : m_DefaultNormalTex;
-        const SamplerHandle normalSampler = hasNormal ? first->Sampler : m_DefaultNormalSampler;
-        m_Device->BindTexture(cmd, normalTex, normalSampler, 1);
+        const TextureHandle normalTex     = hasNormal ? first->NormalTexture : _defaultNormalTex;
+        const SamplerHandle normalSampler = hasNormal ? first->Sampler : _defaultNormalSampler;
+        _device->BindTexture(cmd, normalTex, normalSampler, 1);
 
         // Offset into the instance buffer for this group's first sprite.
-        m_Device->BindVertexBuffer(cmd, m_InstanceBuffers[frameSlot], 0, static_cast<u64>(groupStart) * sizeof(SpriteInstance));
+        _device->BindVertexBuffer(cmd, _instanceBuffers[frameSlot], 0, static_cast<u64>(groupStart) * sizeof(SpriteInstance));
 
-        m_Device->Draw(cmd, 6, 0, groupEnd - groupStart, 0);
+        _device->Draw(cmd, 6, 0, groupEnd - groupStart, 0);
         ++batchCount;
         groupStart = groupEnd;
     }
@@ -517,18 +517,18 @@ void RenderThread::DrawLegacyCalls(const CommandListHandle cmd, const FramePacke
 
     for (const DrawCall& dc : packet.DrawCalls)
     {
-        m_Device->BindPipeline(cmd, dc.Pipeline);
-        m_Device->SetViewport(cmd, 0.0f, 0.0f, viewW, viewH);
-        m_Device->SetScissor(cmd, 0, 0, packet.Width, packet.Height);
-        m_Device->BindStorageBuffer(cmd, m_LightSSBO[frameSlot], 2, 0);
+        _device->BindPipeline(cmd, dc.Pipeline);
+        _device->SetViewport(cmd, 0.0f, 0.0f, viewW, viewH);
+        _device->SetScissor(cmd, 0, 0, packet.Width, packet.Height);
+        _device->BindStorageBuffer(cmd, _lightSSBO[frameSlot], 2, 0);
 
         if (dc.Texture.IsValid())
-            m_Device->BindTexture(cmd, dc.Texture, dc.Sampler, 0);
+            _device->BindTexture(cmd, dc.Texture, dc.Sampler, 0);
 
         const bool    hasNormal     = dc.NormalTexture.IsValid();
-        const TextureHandle normalTex     = hasNormal ? dc.NormalTexture : m_DefaultNormalTex;
-        const SamplerHandle normalSampler = hasNormal ? dc.Sampler : m_DefaultNormalSampler;
-        m_Device->BindTexture(cmd, normalTex, normalSampler, 1);
+        const TextureHandle normalTex     = hasNormal ? dc.NormalTexture : _defaultNormalTex;
+        const SamplerHandle normalSampler = hasNormal ? dc.Sampler : _defaultNormalSampler;
+        _device->BindTexture(cmd, normalTex, normalSampler, 1);
 
         ForwardPushConstants fpc{};
         fpc.PositionX  = dc.Position.X;
@@ -544,9 +544,9 @@ void RenderThread::DrawLegacyCalls(const CommandListHandle cmd, const FramePacke
         fpc.AmbientB   = packet.AmbientColor.B;
         fpc.AmbientA   = packet.AmbientColor.A;
         fpc.LightCount = lightCount;
-        m_Device->PushConstants(cmd, ShaderStage::Vertex | ShaderStage::Fragment, &fpc, sizeof(fpc));
+        _device->PushConstants(cmd, ShaderStage::Vertex | ShaderStage::Fragment, &fpc, sizeof(fpc));
 
-        m_Device->Draw(cmd, dc.VertexCount);
+        _device->Draw(cmd, dc.VertexCount);
     }
 }
 
@@ -560,28 +560,28 @@ void RenderThread::RenderFrame(const FramePacket& packet)
     if (!backbuffer.IsValid())
         return;
 
-    const u32 frameSlot  = m_Device->GetCurrentFrameIndex(packet.Swapchain);
+    const u32 frameSlot  = _device->GetCurrentFrameIndex(packet.Swapchain);
     const u32 lightCount = UploadLights(packet, frameSlot);
 
     const auto sorted = SortSprites(packet.Sprites);
     UploadInstances(sorted, frameSlot);
 
-    CommandListHandle cmd = m_Device->BeginCommandList();
+    CommandListHandle cmd = _device->BeginCommandList();
     BeginRenderPass(cmd, backbuffer, packet);
 
     const u32 batchCount = DrawSpriteBatches(cmd, sorted, frameSlot, packet, lightCount);
     DrawLegacyCalls(cmd, packet, frameSlot, lightCount);
 
-    m_Device->EndRendering(cmd);
+    _device->EndRendering(cmd);
 
-    m_StatSpritesSubmitted.store(static_cast<u32>(sorted.size()), std::memory_order_relaxed);
-    m_StatSpriteBatches.store(batchCount, std::memory_order_relaxed);
-    m_StatDrawCalls.store(static_cast<u32>(packet.DrawCalls.size()) + batchCount, std::memory_order_relaxed);
-    m_StatLightsActive.store(lightCount, std::memory_order_relaxed);
+    _statSpritesSubmitted.store(static_cast<u32>(sorted.size()), std::memory_order_relaxed);
+    _statSpriteBatches.store(batchCount, std::memory_order_relaxed);
+    _statDrawCalls.store(static_cast<u32>(packet.DrawCalls.size()) + batchCount, std::memory_order_relaxed);
+    _statLightsActive.store(lightCount, std::memory_order_relaxed);
 
-    m_Device->EndCommandList(cmd);
-    m_Device->Submit({ cmd });
-    m_Device->Present(packet.Swapchain);
+    _device->EndCommandList(cmd);
+    _device->Submit({ cmd });
+    _device->Present(packet.Swapchain);
 }
 
 } // namespace Arcbit
