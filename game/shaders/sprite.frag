@@ -22,12 +22,18 @@ layout(std430, set = 2, binding = 0) readonly buffer LightBuffer {
     PointLight lights[];
 };
 
+// Push constant layout must match SpritePushConstants on the CPU (44 bytes, tightly packed).
+// vec4 ambient is split into four floats to avoid the 16-byte alignment padding that vec4
+// would insert after rotSin, which would shift ambient to offset 32 instead of 24.
 layout(push_constant) uniform PC {
     vec2  camPos;
     vec2  viewportSize;
     float rotCos;
     float rotSin;
-    vec4  ambient;
+    float ambientR;
+    float ambientG;
+    float ambientB;
+    float ambientA;
     uint  lightCount;
 } pc;
 
@@ -53,7 +59,7 @@ void main()
     vec3 N = normalize(texture(u_Normal, inUV).rgb * 2.0 - 1.0);
 
     // Accumulate lighting: start with ambient, then add each point light.
-    vec3 lighting = pc.ambient.rgb;
+    vec3 lighting = vec3(pc.ambientR, pc.ambientG, pc.ambientB);
 
     for (uint i = 0u; i < pc.lightCount; ++i)
     {

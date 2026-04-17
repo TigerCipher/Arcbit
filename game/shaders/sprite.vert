@@ -25,12 +25,17 @@ layout(location = 0) in vec4 a_PosSize; // (centerX, centerY, halfW, halfH) in w
 layout(location = 1) in vec4 a_UV;      // (u0, v0, u1, v1) normalized texture sub-region
 layout(location = 2) in vec4 a_Tint;    // (r, g, b, a) linear tint color
 
+// Push constant layout must match SpritePushConstants on the CPU (44 bytes, tightly packed).
+// ambient is split into four floats — see sprite.frag for the alignment rationale.
 layout(push_constant) uniform PC {
     vec2  camPos;       // world-space position at screen center (pixels)
     vec2  viewportSize; // effective viewport in world units (window pixels / zoom)
     float rotCos;       // cos(cameraRotation) — precomputed on CPU
     float rotSin;       // sin(cameraRotation)
-    vec4  ambient;      // rgb ambient light + unused alpha
+    float ambientR;
+    float ambientG;
+    float ambientB;
+    float ambientA;
     uint  lightCount;   // active point lights in the SSBO
 } pc;
 
