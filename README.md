@@ -10,7 +10,7 @@ For a road map and current progress, see the [Blueprint](./BLUEPRINT.md).
 ## Development
 
 This project is designed with cmake and vcpkg in mind. Tested via CLion on windows only at this stage.
-Currently, the [CMakePresets] file has the path to my installed vcpkg hardcoded, as with the Vulkan SDK. Bare that in mind if you clone this repo.
+Currently, the [CMakePresets](./CMakePresets.json) file has the path to my installed vcpkg hardcoded, as with the Vulkan SDK. Bare that in mind if you clone this repo.
 
 ---
 
@@ -25,3 +25,7 @@ Nothing could be possible without the following.
 - spdlog
 - nlohmann-json
 - stb
+
+#### Documentation
+- Ahem, thanks to AI for helping write all the comments documenting code...
+- When this comment is removed, it will mean I have finished verifying accuracy of the comments/documentation.

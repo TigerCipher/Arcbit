@@ -179,6 +179,10 @@ Checkbox list of every major milestone. Check off items as they are completed.
 - [ ] Tilemap renderer (batched instanced quads via Phase 14 sprite batcher)
 - [ ] Camera / viewport culling (only submit visible chunks)
 - [ ] Multiple layers (ground, objects, overlay; each layer rendered in order)
+- [ ] **Two point light layers** — add `LightLayer` enum to `PointLight`: `World` (affected by tile occlusion) and `Overhead` (bypasses occlusion entirely); overhead lights are used for sunlight, moonlight, magical sky effects, and UI indicators
+- [ ] **Tile occlusion grid** — pack `light-blocking` flags for the visible map area into a GPU texture; updated incrementally when tiles change; uploaded to the sprite shader as a new descriptor binding
+- [ ] **Shadow casting** — for each `World`-layer light, the fragment shader ray-marches from the fragment position toward the light through the occlusion grid; hard shadow on occluder hit; `Overhead` lights skip the march entirely
+- [ ] Soft shadow quality option: configurable penumbra sample count in `project.arcbit` (default: hard shadows; higher counts add a blur fringe for performance/quality tradeoff)
 
 ---
 
@@ -199,7 +203,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 - [ ] HUD layer: health bars, minimap placeholder, action icons, status effects
 - [ ] Input rebinding UI (reuses Phase 9 runtime rebind API)
 - [ ] Splash screen system: ordered sequence of logo images shown at startup before the main menu; duration, fade-in/out, and skip-on-input configurable per entry in `project.arcbit`
-- [ ] Editor integration: GUI layouts designed and previewed in the AvaloniaUI editor (Phase 38)
+- [ ] Editor integration: GUI layouts designed and previewed in the AvaloniaUI editor (Phase 40)
 
 ---
 
@@ -218,52 +222,76 @@ Checkbox list of every major milestone. Check off items as they are completed.
 - [ ] Async streaming: load next scene in background while current scene is still running
 - [ ] Transition effects (fade-to-black, crossfade) using the GUI system (Phase 21)
 - [ ] Scene stack for overlays (e.g. pop up an inventory screen over the world without unloading it)
-- [ ] Entry-point scene configured in `project.arcbit` (Phase 35)
+- [ ] Entry-point scene configured in `project.arcbit` (Phase 37)
 
 ---
 
-## Phase 24: Save / Load System
+## Phase 24: Event Bus
+- [ ] Named pub/sub message bus: `EventBus::Subscribe(eventName, callback)` / `Unsubscribe` / `Publish(eventName, payload)`
+- [ ] Typed payload: `EventPayload` — flexible container for arbitrary per-event data (discriminated union or `std::any`)
+- [ ] Deferred dispatch mode: events queued during the update tick and flushed at the start of the next tick to prevent re-entrant callback issues
+- [ ] Predefined engine events:
+  - *Scene:* `Scene.Loaded`, `Scene.Unloaded`
+  - *Persistence:* `Game.Saved`, `Game.Loaded`
+  - *Entities:* `Entity.Spawned(entityId)`, `Entity.Destroyed(entityId)`
+  - *World:* `DayNight.Changed(normalizedTime)`, `Weather.Changed(type)`
+  - *Dialog:* `Dialog.Started(graphId)`, `Dialog.Ended(graphId, lastChoice)`
+  - *Combat:* `Combat.Started`, `Combat.Ended(result)`, `Player.Died`, `Player.Respawned`
+  - *Input:* `Input.DeviceChanged(deviceType)` — e.g. keyboard → gamepad, used to swap UI hint icons
+  - *Items:* `Item.PickedUp(itemId, entityId)`, `Item.Dropped(itemId, entityId)`
+  - *Progression:* `Quest.Started(questId)`, `Quest.Completed(questId)`, `Player.LeveledUp(newLevel)`, `Achievement.Unlocked(achievementId)`
+- [ ] User-definable events: any string key outside the reserved `engine.*` namespace is valid; game code and Lua scripts may publish and subscribe freely
+- [ ] Lua integration: `Event.Subscribe("name", handler)`, `Event.Unsubscribe`, `Event.Publish("name", payload)` — exposed in Phase 26 Lua scripting
+- [ ] Editor integration: live event monitor panel in the running game showing event name, payload, and source (Phase 40)
+
+---
+
+## Phase 25: Save / Load System
 - [ ] `SaveSlot` — versioned binary or JSON snapshot of game state (separate from settings)
 - [ ] Captured state: player position + scene, inventory, quest flags, NPC states, world mutations
 - [ ] Multiple save slots with metadata (timestamp, playtime, thumbnail screenshot)
 - [ ] Auto-save trigger API (on scene transition, on rest, on checkpoint)
 - [ ] Migration / version-upgrade path so old saves stay compatible after content updates
 - [ ] Lua API exposure so scripts can read and write custom save keys
+- [ ] Publishes `Game.Saved` and `Game.Loaded` via the Event Bus (Phase 24) on completion
 
 ---
 
-## Phase 25: Lua Scripting
+## Phase 26: Lua Scripting
 - [ ] Lua integration (sol2 via vcpkg)
 - [ ] Script component (path to `.lua` file, loaded via asset system)
 - [ ] Core lifecycle hooks: `OnStart`, `OnUpdate(dt)`, `OnDestroy`
-- [ ] Entity hooks: `OnInteract`, `OnTick`, `OnCombatStart`, `OnCombatEnd`
+- [ ] Entity hooks: `OnInteract`, `OnCombatStart`, `OnCombatEnd`
+- [ ] `OnEvent(eventName, payload)` — called when a subscribed event fires; scripts call `Event.Subscribe` in `OnStart` to opt in
 - [ ] Engine API surface: ECS queries, entity create/destroy, component read/write
 - [ ] Tilemap API: read/write tile properties, trigger map mutations
 - [ ] Scene API: load scene, change entry point, spawn entities
-- [ ] Save API: read/write custom save keys (Phase 24)
+- [ ] Save API: read/write custom save keys (Phase 25)
 - [ ] Input API: query action state from scripts
 - [ ] Audio API: play sound/music from scripts
+- [ ] Event API: `Event.Subscribe`, `Event.Unsubscribe`, `Event.Publish` (Phase 24)
 - [ ] Sandboxed execution: scripts cannot access filesystem or network directly
 
 ---
 
-## Phase 26: Dialog / Conversation System
+## Phase 27: Dialog / Conversation System
 *Default implementation — can be replaced by a Lua script if the game dev prefers a custom system.*
 
 - [ ] `DialogGraph` — node-based conversation tree (speak, choice, condition, branch, action)
 - [ ] Node types: `SpeakNode` (portrait, speaker name, text), `ChoiceNode` (up to N options), `ConditionNode` (check quest flag / inventory / stat), `ActionNode` (run Lua callback)
 - [ ] `DialogManager` — queue and advance dialogs; integrates with GUI system (Phase 21) for the dialog box UI
 - [ ] Interactable tile and NPC trigger: `OnInteract` starts a named dialog graph
-- [ ] All displayed text referenced by localization key (Phase 27); raw strings are never embedded
+- [ ] All displayed text referenced by localization key (Phase 28); raw strings are never embedded
 - [ ] Variable substitution in text (`{player_name}`, `{gold_count}`, etc.) resolved via Localization interpolation
 - [ ] Typewriter reveal effect with configurable speed; skip on confirm input
 - [ ] Portraits / speaker icons per node (optional; falls back to name-only if absent)
-- [ ] JSON authoring format; importable from editor (Phase 38)
+- [ ] JSON authoring format; importable from editor (Phase 40)
 - [ ] Lua hook: `OnDialogEnd(graphId, lastChoice)` for scripted reactions
+- [ ] Publishes `Dialog.Started` and `Dialog.Ended` events via the Event Bus (Phase 24)
 
 ---
 
-## Phase 27: Localization
+## Phase 28: Localization
 *English is required. All other languages are optional. The system is always active — it is the canonical way to define any player-visible text.*
 
 - [ ] String key convention: all player-visible text in dialog, GUI, items, and combat is authored as a key (e.g. `"npc.elder.greeting"`) rather than a raw string
@@ -275,12 +303,12 @@ Checkbox list of every major milestone. Check off items as they are completed.
 - [ ] String interpolation: `{player_name}`, `{count}`, `{item_name}` placeholders resolved at call site
 - [ ] **Export pipeline**: editor scans all dialog graphs, GUI layouts, item definitions, and combat text; emits a canonical `en.json` with every key and its English value; translator-ready
 - [ ] Language selection UI in settings screen (Phase 21); persisted in settings file (Phase 10)
-- [ ] Editor integration (Phase 38): inline key picker, missing-key warnings, locale coverage report (% of keys translated per locale)
+- [ ] Editor integration (Phase 40): inline key picker, missing-key warnings, locale coverage report (% of keys translated per locale)
 
 ---
 
-## Phase 28: Inventory & Items
-- [ ] Item definition (ID, name, description, icon, stat block, type flags: consumable / equipment / key); all player-visible strings use localization keys (Phase 27)
+## Phase 29: Inventory & Items
+- [ ] Item definition (ID, name, description, icon, stat block, type flags: consumable / equipment / key); all player-visible strings use localization keys (Phase 28)
 - [ ] `Inventory` component — item slots with quantities; max-stack configurable per item type
 - [ ] Pick-up / drop / equip / unequip logic; equip slots (weapon, armor, accessory, etc.)
 - [ ] **Grid view**: icon-based inventory panel (like classic RPGs); drag-and-drop reorder
@@ -288,12 +316,13 @@ Checkbox list of every major milestone. Check off items as they are completed.
 - [ ] Both views built on the GUI system (Phase 21) and switchable at runtime
 - [ ] Equipment stat application: `EquipmentSystem` aggregates equipped item bonuses onto a `Stats` component
 - [ ] Loot tables: weighted random drops defined in JSON
-- [ ] Save / load integration (Phase 24)
+- [ ] Save / load integration (Phase 25)
 - [ ] Lua API: add/remove/check items from scripts
+- [ ] Publishes `Item.PickedUp` and `Item.Dropped` events via the Event Bus (Phase 24)
 
 ---
 
-## Phase 29: AI & Pathfinding
+## Phase 30: AI & Pathfinding
 - [ ] `NavGrid` — walkability grid derived from tilemap solid flags; rebuilt on map mutation
 - [ ] A\* pathfinding with diagonal movement option; path smoothing (string-pulling)
 - [ ] Steering behaviors: `Follow` (track target), `Wander` (random walk), `Flee` (move away from threat)
@@ -302,60 +331,77 @@ Checkbox list of every major milestone. Check off items as they are completed.
 - [ ] Patrol paths: series of waypoints defined per NPC in the editor
 - [ ] Awareness states: `Idle → Alert → Chase → Combat` transitions
 - [ ] Turn-based AI: action selection (attack / use item / move) driven by heuristics or Lua script
-- [ ] Real-time AI: target acquisition, attack range check, cooldown management (used in Phase 31)
+- [ ] Real-time AI: target acquisition, attack range check, cooldown management (used in Phase 32)
 - [ ] Debug overlay: draw paths, awareness radius, LOS rays
 
 ---
 
-## Phase 30: Turn-Based Combat
+## Phase 31: Turn-Based Combat
 - [ ] Battle state machine (idle → select action → resolve → end check)
 - [ ] Action queue (Pokémon-style turn order by speed stat)
 - [ ] Move / stat system (HP, MP, ATK, DEF, SPD, type affinities)
 - [ ] Status effects (poison, stun, burn, etc.) applied and ticked per turn
-- [ ] Combat UI (health/MP bars, action menu, move list, enemy info panel); all text via localization keys (Phase 27)
+- [ ] Combat UI (health/MP bars, action menu, move list, enemy info panel); all text via localization keys (Phase 28)
 - [ ] Transition in/out of battle (trigger from overworld collision or script)
 - [ ] Basic combat animations (Phase 17 clip playback) for attack and hurt reactions
-- [ ] Rewards: XP, gold, item drops via loot tables (Phase 28)
+- [ ] Rewards: XP, gold, item drops via loot tables (Phase 29)
 - [ ] Lua hooks: `OnBattleStart`, `OnTurnStart`, `OnActionResolved`, `OnBattleEnd`
+- [ ] Publishes `Combat.Started` and `Combat.Ended` events via the Event Bus (Phase 24)
 
 ---
 
-## Phase 31: Live Combat
+## Phase 32: Live Combat
 *Alternative to turn-based — toggled per encounter or globally by the game dev.*
 
 - [ ] Real-time hitbox system: attack hitboxes active for specific animation frames (Phase 17 frame events)
 - [ ] Melee combat: swing arc collider, hit detection, knockback impulse
 - [ ] Ranged combat: projectile entity spawned at fire point, moves each tick, destroyed on hit or range
 - [ ] Dodge / dash: brief i-frame window, directional impulse
-- [ ] Enemy AI in real-time (Phase 29): target acquisition, attack wind-up telegraphing, retreat at low HP
+- [ ] Enemy AI in real-time (Phase 30): target acquisition, attack wind-up telegraphing, retreat at low HP
 - [ ] Combo system: input sequence maps to chained attacks (optional; data-driven per weapon type)
 - [ ] Screen effects: hit-stop (brief time-scale reduction), screen flash, camera shake (Phase 15)
 - [ ] Boss encounter flag: phase transitions at HP thresholds, scripted via Lua
+- [ ] Publishes `Combat.Started`, `Combat.Ended`, `Player.Died`, and `Player.Respawned` events via the Event Bus (Phase 24)
 
 ---
 
-## Phase 32: Particle System
+## Phase 33: Particle System
 - [ ] CPU-side particle pool: position, velocity, lifetime, color/alpha, scale — fixed-size ring buffer
 - [ ] Emitter component: shape (point, line, circle, cone), burst vs. continuous mode, rate
 - [ ] Per-particle modifiers: gravity, drag, color-over-lifetime, scale-over-lifetime
 - [ ] Render: batched into sprite batcher as textured quads; sorted by layer
 - [ ] Preset library: spark, smoke, blood splash, magic aura, footstep dust, rain, snow
 - [ ] Lua API: spawn named emitter at world position, stop/pause emitter
-- [ ] Editor integration: preview emitters in the editor canvas (Phase 38)
+- [ ] Editor integration: preview emitters in the editor canvas (Phase 40)
 
 ---
 
-## Phase 33: Cutscene & Event System
+## Phase 34: Visual Effects
+*Renderer changes required: offscreen render target, multi-pass `RenderFrame`, per-sprite shader variant selection, line renderer vertex path.*
+
+- [ ] **Post-processing pipeline**: scene rendered to an offscreen color target; fullscreen passes applied before presenting; each pass individually toggleable and configurable in `project.arcbit`
+- [ ] Built-in post-processing effects: bloom (bright pixel extraction + Gaussian blur + additive composite), vignette, chromatic aberration, color grading via a 1D LUT texture
+- [ ] **Light animation**: `LightAnimator` component — curve-driven intensity, color, and radius over time; built-in presets: flicker (fire / broken lamp), pulse (magic aura), candle, strobe; custom curves authored in the editor (Phase 40)
+- [ ] **Sprite material effects**: per-sprite `MaterialEffect` field on the `Sprite` struct; built-in variants:
+  - `Dissolve` — noise-based alpha cutoff controlled by a threshold parameter; used for death / spawn transitions
+  - `Outline` — renders a colored rim around the sprite boundary; used to show silhouettes of entities occluded behind walls
+  - `HitFlash` — RGBA tint pulse driven by a timer; wired to the combat hurt reaction
+- [ ] **Line renderer**: `DrawLine(start, end, width, color, style)` for lasers, lightning, and ropes; rendered as a screen-aligned quad with SDF-based anti-aliasing; style variants: solid, dashed, glow
+- [ ] **Weather overlay**: `WeatherSystem` drives a configurable overlay layer — rain (particle shower + screen-space streak pass), snow (particle drift), fog (animated Perlin noise fullscreen overlay with density and tint); weather type changes publish `Weather.Changed` via the Event Bus (Phase 24)
+
+---
+
+## Phase 35: Cutscene & Event Sequence System
 - [ ] `EventSequence` — ordered list of timed commands (timeline-style)
-- [ ] Command types: `MoveCameraTo`, `PanCamera`, `PlayAnimation`, `PlaySound`, `ShowDialog`, `FadeScreen`, `WaitSeconds`, `WaitForInput`, `SetFlag`, `RunLua`
+- [ ] Command types: `MoveCameraTo`, `PanCamera`, `PlayAnimation`, `PlaySound`, `ShowDialog`, `FadeScreen`, `WaitSeconds`, `WaitForInput`, `SetFlag`, `RunLua`, `PublishEvent`
 - [ ] `EventTrigger` tile/entity property — starts a named sequence when entered or interacted with
-- [ ] Sequence authoring in JSON; imported and previewed in editor (Phase 38)
-- [ ] Skippable flag per sequence (skip jumps to end, fires all `SetFlag` / `RunLua` commands immediately)
+- [ ] Sequence authoring in JSON; imported and previewed in editor (Phase 40)
+- [ ] Skippable flag per sequence (skip jumps to end, fires all `SetFlag` / `RunLua` / `PublishEvent` commands immediately)
 - [ ] Supports both in-engine cutscenes and background story events (no camera override needed)
 
 ---
 
-## Phase 34: Content Tools
+## Phase 36: Content Tools
 *A shared `arcbit-content` DLL consumed by both the engine and the AvaloniaUI editor, ensuring identical read/write logic for all binary asset formats.*
 
 - [ ] `.arcasset` binary container format: magic bytes, version, table of contents, compressed payload sections
@@ -376,60 +422,62 @@ Checkbox list of every major milestone. Check off items as they are completed.
 
 ---
 
-## Phase 35: Mod Support
+## Phase 37: Mod Support
 *Optional — enabled per project in `project.arcbit`.*
 
 - [ ] Mod discovery: scan a `mods/` folder for subdirectories, each containing a `mod.json` manifest
 - [ ] `mod.json`: mod ID, display name, version, load order, list of Lua entry scripts
 - [ ] Load order resolution: mods declare soft dependencies; engine topologically sorts them
-- [ ] Lua mod API extensions (on top of Phase 25): `Entity.Spawn`, `Tilemap.SetTile`, `ItemRegistry.Register`, `DialogRegistry.Register`, `Event.Subscribe`
+- [ ] Lua mod API extensions (on top of Phase 26): `Entity.Spawn`, `Tilemap.SetTile`, `ItemRegistry.Register`, `DialogRegistry.Register`, `Event.Subscribe`
 - [ ] Asset override: mod can shadow engine assets by placing an `.arcasset` at the same relative path; mod assets must be signed with the mod key (produced by the mod editor) — the engine rejects any file signed with the dev key that did not ship with the game
 - [ ] Conflict detection: warn when two mods override the same asset or define the same item ID
 - [ ] Mod can be disabled at runtime; save system tags which mods were active (warn on load if missing)
-- [ ] Steam Workshop integration: wires into mod discovery when `steam_workshop = true` in `project.arcbit` (requires Phase 37)
+- [ ] Steam Workshop integration: wires into mod discovery when `steam_workshop = true` in `project.arcbit` (requires Phase 39)
 
 ---
 
-## Phase 36: Data-Driven Runtime
+## Phase 38: Data-Driven Runtime
 - [ ] `project.arcbit` JSON project file format (title, resolution, entry scene, asset/script paths, mod support flag)
 - [ ] `runtime/` CMake project — generic, pre-compiled Application host with no game-specific code
 - [ ] Project file loader replaces hardcoded `ApplicationConfig` in the runtime path
-- [ ] Lua hook wiring: `OnStart` loads entry scene, `OnUpdate` dispatches to Lua `OnTick`, etc.
+- [ ] Lua hook wiring: `OnStart` loads entry scene, `OnUpdate(dt)` dispatches to Lua `OnUpdate`, etc.
 - [ ] Defined export folder layout (`runtime.exe`, `project.arcbit`, `assets/`, `scenes/`, `scripts/`, `shaders/`, `mods/`)
 - [ ] C++ subclass path (`game/`) remains fully supported alongside the data-driven path
 
 ---
 
-## Phase 37: Steam / Platform Integration
+## Phase 39: Steam / Platform Integration
 *Optional — enabled per project. Requires a Steamworks SDK license (free for Steam distribution).*
 
 - [ ] Steamworks SDK integration (dynamic DLL load; gracefully no-ops when Steam is not running)
 - [ ] Steam initialization: `SteamAPI_Init` on startup, `SteamAPI_RunCallbacks` each tick, `SteamAPI_Shutdown` on exit
-- [ ] Achievements: `AchievementManager` with named achievements defined in `project.arcbit`; unlock via `AchievementManager::Unlock("ACH_FIRST_BATTLE")`; synced to Steam backend
+- [ ] Achievements: `AchievementManager` with named achievements defined in `project.arcbit`; unlock via `AchievementManager::Unlock("ACH_FIRST_BATTLE")`; synced to Steam backend; publishes `Achievement.Unlocked` via Event Bus (Phase 24)
 - [ ] Stats: integer / float stats (playtime, enemies defeated, etc.) submitted to Steam leaderboards
-- [ ] Cloud saves: `SteamRemoteStorage` mirrors the save slot files from Phase 24; conflict resolution (newest wins or user prompt)
+- [ ] Cloud saves: `SteamRemoteStorage` mirrors the save slot files from Phase 25; conflict resolution (newest wins or user prompt)
 - [ ] Rich presence: set activity string shown in Steam friends list (e.g. "Exploring the Forest")
 - [ ] Steam overlay: ensure `SDL_Window` is correctly set up for the overlay to render (Vulkan surface compatible)
 - [ ] DLC flag system: `SteamApps::BIsDlcInstalled(appId)` gates content; checked at asset load time
-- [ ] Steam Workshop: full discovery + download pipeline (extends the stub in Phase 35)
+- [ ] Steam Workshop: full discovery + download pipeline (extends the stub in Phase 37)
 - [ ] Build pipeline: `steam_appid.txt` present in output directory; packaging script generates depot manifests
 
 ---
 
-## Phase 38: C# AvaloniaUI Editor
+## Phase 40: C# AvaloniaUI Editor
 - [ ] Separate solution / CMake-independent project
 - [ ] Tilemap canvas (render tiles, layer management)
 - [ ] Tile palette + placement / erase tools
 - [ ] Tile property editor panel (solid, light-blocking, interactable, custom properties)
 - [ ] NPC placement + script file assignment
-- [ ] Dialog graph editor (node canvas for Phase 26 conversation trees)
-- [ ] Event sequence editor (timeline view for Phase 33 cutscene commands)
+- [ ] Dialog graph editor (node canvas for Phase 27 conversation trees)
+- [ ] Event sequence editor (timeline view for Phase 35 cutscene commands)
 - [ ] GUI layout designer (drag-and-drop widget canvas for Phase 21 screens)
-- [ ] Particle emitter preview panel (live preview of Phase 32 emitter configs)
-- [ ] Localization tools: key picker, `en.json` export, per-locale coverage report (Phase 27)
+- [ ] Particle emitter preview panel (live preview of Phase 33 emitter configs)
+- [ ] Visual effects panel: light animator curve editor, weather overlay preview, material effect preview (Phase 34)
+- [ ] Localization tools: key picker, `en.json` export, per-locale coverage report (Phase 28)
 - [ ] **Run button**: builds the game and launches it in its own window; optionally opens directly to a selected scene (useful when iterating on a specific area)
 - [ ] **Scene launch selector**: choose any registered scene as the start point before hitting Run
 - [ ] **Engine log panel**: the running game pipes its spdlog output back to the editor over a named pipe or local socket; displayed in a filterable log panel in the editor
-- [ ] Content export to Phase 36 folder layout (`project.arcbit` + `.arcasset` files via Phase 34 content tools)
+- [ ] **Event monitor panel**: live stream of Event Bus events from the running game (Phase 24); filterable by event name; shows payload and source entity
+- [ ] Content export to Phase 38 folder layout (`project.arcbit` + `.arcasset` files via Phase 36 content tools)
 - [ ] Asset importer UI: drag source files in, editor calls `arcbit-pack` and shows result
 - [ ] **Editor mode detection**: on open, inspect the loaded `project.arcbit` to determine mode — full dev mode (dev key present) or restricted mod mode (mod key only, `mod_support = true`); mod mode disables save-over-original and shows a clear "Mod Editor" banner so end users know what they are working with
