@@ -54,21 +54,22 @@ protected:
         GetInput().BindGamepadAxis(ActionMoveUp, GamepadAxis::LeftY);
         GetInput().BindGamepadAxis(ActionMoveDown, GamepadAxis::LeftY);
 
-        // --- Textures ---
+        // --- Plain textures (no sprite structure) ---
         _floorTex = GetTextures().Load("assets/textures/floor.jpg");
         ARCBIT_ASSERT(_floorTex.IsValid(), "Failed to load floor texture");
 
-        _skeletonTex = GetTextures().Load("assets/textures/Cute_Fantasy_Free/Enemies/Skeleton.png");
-        _slimeTex    = GetTextures().Load("assets/textures/Cute_Fantasy_Free/Enemies/Slime_Green.png");
-        _chickenTex  = GetTextures().Load("assets/textures/Cute_Fantasy_Free/Animals/Chicken/Chicken.png");
-        _pigTex      = GetTextures().Load("assets/textures/Cute_Fantasy_Free/Animals/Pig/Pig.png");
-        _treeTex     = GetTextures().Load("assets/textures/Cute_Fantasy_Free/Outdoor decoration/Oak_Tree.png");
+        // --- Sprite assets (structured sprite sheets — will gain animations in Phase 17) ---
+        _skeletonSheet = SpriteSheet::Load("assets/textures/Cute_Fantasy_Free/Enemies/Skeleton.json",                GetTextures());
+        _slimeSheet    = SpriteSheet::Load("assets/textures/Cute_Fantasy_Free/Enemies/Slime_Green.json",             GetTextures());
+        _chickenSheet  = SpriteSheet::Load("assets/textures/Cute_Fantasy_Free/Animals/Chicken/Chicken.json",         GetTextures());
+        _pigSheet      = SpriteSheet::Load("assets/textures/Cute_Fantasy_Free/Animals/Pig/Pig.json",                 GetTextures());
+        _treeSheet     = SpriteSheet::Load("assets/textures/Cute_Fantasy_Free/Outdoor decoration/Oak_Tree.json",     GetTextures());
 
-        ARCBIT_ASSERT(_skeletonTex.IsValid(), "Failed to load skeleton texture");
-        ARCBIT_ASSERT(_slimeTex.IsValid(), "Failed to load slime texture");
-        ARCBIT_ASSERT(_chickenTex.IsValid(), "Failed to load chicken texture");
-        ARCBIT_ASSERT(_pigTex.IsValid(), "Failed to load pig texture");
-        ARCBIT_ASSERT(_treeTex.IsValid(), "Failed to load tree texture");
+        ARCBIT_ASSERT(_skeletonSheet.IsValid(), "Failed to load skeleton sprite");
+        ARCBIT_ASSERT(_slimeSheet.IsValid(),    "Failed to load slime sprite");
+        ARCBIT_ASSERT(_chickenSheet.IsValid(),  "Failed to load chicken sprite");
+        ARCBIT_ASSERT(_pigSheet.IsValid(),      "Failed to load pig sprite");
+        ARCBIT_ASSERT(_treeSheet.IsValid(),     "Failed to load tree sprite");
 
         // --- SpriteSheet ---
         _playerSheet = SpriteSheet::Load("assets/spritesheets/player.json", GetTextures());
@@ -279,7 +280,7 @@ private:
         {
             constexpr float TreeSize = 192.0f;
             Sprite  s{};
-            s.Texture  = _treeTex;
+            s.Texture  = _treeSheet.GetTexture();
             s.Sampler  = _sampler;
             s.Position = pos;
             s.Size     = { TreeSize, TreeSize };
@@ -320,7 +321,7 @@ private:
             {
                 float          spriteSize = SpriteSize * 3;
                 Sprite s{};
-                s.Texture  = _skeletonTex;
+                s.Texture  = _skeletonSheet.GetTexture();
                 s.Sampler  = _sampler;
                 s.Position = { startX + static_cast<float>(i) * spriteSize, -150.0f };
                 s.Size     = { spriteSize, spriteSize };
@@ -336,7 +337,7 @@ private:
             {
                 float          spriteSize = SpriteSize * 3;
                 Sprite s{};
-                s.Texture  = _slimeTex;
+                s.Texture  = _slimeSheet.GetTexture();
                 s.Sampler  = _sampler;
                 s.Position = { startX + static_cast<float>(i) * spriteSize, 0.0f };
                 s.Size     = { spriteSize, spriteSize };
@@ -351,7 +352,7 @@ private:
             for (int i = 0; i < SpriteCount; ++i)
             {
                 Sprite s{};
-                s.Texture  = _chickenTex;
+                s.Texture  = _chickenSheet.GetTexture();
                 s.Sampler  = _sampler;
                 s.Position = { startX + i * SpriteSize, 150.0f };
                 s.Size     = { SpriteSize, SpriteSize };
@@ -366,7 +367,7 @@ private:
             for (int i = 0; i < SpriteCount; ++i)
             {
                 Sprite s{};
-                s.Texture  = _pigTex;
+                s.Texture  = _pigSheet.GetTexture();
                 s.Sampler  = _sampler;
                 s.Position = { startX + i * SpriteSize, 300.0f };
                 s.Size     = { SpriteSize, SpriteSize };
@@ -399,14 +400,17 @@ private:
     SamplerHandle _sampler;
     SamplerHandle _floorSampler;
 
-    // Textures — owned by TextureManager, released automatically.
+    // Plain textures — no sprite structure, loaded directly via TextureManager.
     TextureHandle _floorTex;
-    TextureHandle _skeletonTex;
-    TextureHandle _slimeTex;
-    TextureHandle _chickenTex;
-    TextureHandle _pigTex;
-    TextureHandle _treeTex;
-    SpriteSheet   _playerSheet;
+
+    // Sprite assets — SpriteSheet wraps the texture and its JSON metadata.
+    // The underlying textures are owned by TextureManager and released automatically.
+    SpriteSheet _skeletonSheet;
+    SpriteSheet _slimeSheet;
+    SpriteSheet _chickenSheet;
+    SpriteSheet _pigSheet;
+    SpriteSheet _treeSheet;
+    SpriteSheet _playerSheet;
 
     static constexpr isize                  NumRandomLights = 10;
     std::array<PointLight, NumRandomLights> _lights         = {};

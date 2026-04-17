@@ -30,14 +30,24 @@ struct TextureInfo
 // Loads 2D textures from disk (PNG, JPG, BMP, TGA via stb_image) and
 // caches them by canonical file path so duplicate loads are free.
 //
+// Game code should NOT call Load() directly. Load textures through
+// SpriteSheet::Load() instead — this ensures every texture has associated
+// metadata (frames, animations, pivot points, pixels_per_unit) and keeps the
+// asset pipeline consistent. In Phase 36, SpriteSheet will dispatch to
+// .arcasset binary files in release builds while continuing to use JSON in dev.
+//
+// TextureManager::Load() remains public so SpriteSheet and other engine
+// systems can drive it internally. Unload() and CheckReloads() are valid to
+// call from game code for explicit cache management and hot-reload control.
+//
 // Typical usage
 // -------------
-//   // OnStart — load once, reuse the handle everywhere:
-//   m_WoodsTex = GetTextures().Load("assets/textures/woods.png");
+//   // OnStart — load via SpriteSheet, not directly:
+//   _floorSheet = SpriteSheet::Load("assets/textures/floor.json", GetTextures());
 //
 //   // OnShutdown — not required; Application calls Clear() automatically.
 //   // To release one texture explicitly:
-//   GetTextures().Unload(m_WoodsTex);
+//   GetTextures().Unload(handle);
 //
 // Hot-reload
 // ----------

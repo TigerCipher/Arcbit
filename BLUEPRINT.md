@@ -108,8 +108,9 @@ Checkbox list of every major milestone. Check off items as they are completed.
 ## Phase 12: Asset System
 - [x] `stb_image` integration (PNG / JPG decode to raw RGBA pixels)
 - [x] `TextureManager` — load texture from file, cache by path, return `TextureHandle`
-- [x] `SpriteSheet` — load atlas texture + JSON/binary metadata mapping sprite name/ID to UV rects
+- [x] `SpriteSheet` — load atlas texture + JSON metadata; supports named frames, uniform tile grids, and animation clips in one unified format (see `docs/sprite-format.md`)
 - [x] Asset hot-reload stub (watch file mtime, re-upload on change)
+- [ ] Carrot engine format import — explicit import only (right-click in editor or `arcbit-pack --import-carrot`); validates Carrot structure before converting, fails clearly if source does not conform
 
 ---
 
@@ -174,12 +175,11 @@ define *how* it gets there. Any controller pairs with any style.
 ---
 
 ## Phase 17: Animation System
-- [ ] `AnimationClip` — ordered list of sprite frames with per-frame duration
+- [ ] `AnimationClip` — ordered list of named frames with per-frame duration; defined in the sprite format JSON (`docs/sprite-format.md`) and loaded via `SpriteSheet`
 - [ ] `Animator` component — current clip, playback state (playing / paused / stopped), loop flag
 - [ ] State machine: named states, transitions triggered by conditions (e.g. `velocity > 0 → Walk`)
 - [ ] Blend between clips (cross-fade for smoother transitions)
 - [ ] Events on specific frames (e.g. `"FootStep"` on frame 2 — triggers audio / particle)
-- [ ] Clips defined in JSON / loaded via asset system (Phase 12)
 
 ---
 

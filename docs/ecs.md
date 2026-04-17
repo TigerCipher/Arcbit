@@ -1,0 +1,603 @@
+# Arcbit ECS — Design Document
+
+Phase 16 of the Arcbit blueprint. This document covers the architecture, API,
+component catalogue, system execution order, and integration strategy for the
+entity-component-system that all game objects will use from this phase forward.
+
+---
+
+## Why ECS, and why archetype-based?
+
+The two mainstream ECS layouts are **sparse-set** (entt-style) and **archetype**
+(Unity DOTS-style). Arcbit uses archetypes.
+
+For a 2D RPG with largely stable entity compositions — players, NPCs,
+decorations, terrain tiles — archetypes win on cache locality. All entities
+with the same component set live in tightly-packed contiguous arrays. Iterating
+"all entities with Transform2D + SpriteRenderer" walks a single hot array per
+archetype with no pointer chasing. Component addition/removal (moving an entity
+to a new archetype) is infrequent and happens at setup time, so the overhead
+there is acceptable.
+
+---
+
+## Core Data Model
+
+### Entity
+
+A generational index that prevents use-after-free bugs:
+
+```cpp
+struct Entity {
+    u32 Index;       // position in the entity table
+    u32 Generation;  // incremented on destroy; stale handles are rejected
+};
+```
+
+The entity table is a flat array mapping `Index → (Archetype*, slot, generation)`.
+When an entity is destroyed its generation is bumped; any handle still held by
+game code will fail the generation check and be rejected by the World.
+
+### Component type IDs
+
+Assigned once at program startup via a static counter template — no RTTI,
+no macros, no registration boilerplate:
+
+```cpp
+template<typename T>
+ComponentTypeID TypeOf() {
+    static const ComponentTypeID id = TypeRegistry::NextID();
+    return id;
+}
+```
+
+IDs are contiguous integers starting at 0. The first call for a given `T`
+assigns its ID; subsequent calls return the same value.
+
+### Component mask
+
+A `u64` bitmask where bit N is set when component `TypeID == N` is present.
+This caps the engine at **64 distinct component types**, which is ample for
+this project (approximately 20 are planned across all phases). Expanding to
+`std::bitset<128>` is a one-line change if needed later.
+
+### Archetype
+
+A bucket that owns all entities sharing an identical component set:
+
+```cpp
+struct Archetype {
+    ComponentMask                                      Mask;
+    std::unordered_map<ComponentTypeID, ComponentArray> Columns;
+    std::vector<Entity>                                 Entities;
+};
+```
+
+All column vectors are the same length — entry N across every column belongs
+to the same entity. Destroying an entity is a swap-and-pop on every column
+simultaneously, keeping each array dense.
+
+### World
+
+Owns all archetypes and the entity table. Archetypes are looked up in O(1) via
+an `unordered_map<ComponentMask, Archetype>`.
+
+---
+
+## Scene
+
+`Scene` is the top-level container for a running game world. It owns the ECS
+`World`, the active `Camera2D`, and the `WorldConfig` resource. This is the
+abstraction that Phase 23 (`SceneManager`) will load, unload, and transition
+between.
+
+```
+Scene
+├── World          — all entities, archetypes, and systems
+├── Camera2D       — active camera (driven by CameraFollowSystem)
+└── WorldConfig    — scene-wide constants (tile size, gravity, bounds)
+```
+
+`Application` holds a `std::unique_ptr<Scene>` and exposes `GetScene()`.
+Game code that previously accessed `Camera2D` directly now goes through
+`GetScene().GetCamera()`.
+
+### WorldConfig
+
+Scene-wide constants that systems read instead of hard-coding per-entity:
+
+```cpp
+struct WorldConfig {
+    f32  TileSize = 16.0f;           // world pixels per tile (used by tile movement systems)
+    Vec2 Gravity  = { 0.0f, 0.0f }; // pixels/s² (zero = top-down, no gravity)
+};
+```
+
+The game dev sets this once per scene. Movement style components never store
+tile size — they read it from here.
+
+---
+
+## Required Components
+
+Every entity **must** carry these two components. The World enforces this at
+`CreateEntity` time.
+
+| Component     | Purpose |
+|---------------|---------|
+| `Transform2D` | World position, scale, and rotation — the canonical spatial state for every entity |
+| `Tag`         | A single string classification used for filtering queries (`"Player"`, `"Enemy"`, `"Wall"`) |
+
+`Tag` defaults to `"Entity"` if not supplied. `Transform2D` defaults to origin
+with unit scale and zero rotation.
+
+### Why not Name?
+
+`Name` is intentionally **not** required. Terrain tiles, pooled enemies, and
+decorative props do not need stored names — requiring them would create thousands
+of unnecessary `std::string` allocations with no value.
+
+The editor derives a display label on the fly from Tag + the first four
+characters of the entity's scene-file UUID:
+
+```
+Wall   #3f25
+Player #a91c
+Chest  #77bd
+```
+
+`Name` is added explicitly for entities with game-design identity: the player,
+named NPCs, quest objects, anything referenced by name in a dialog graph or
+Lua script.
+
+---
+
+## Component Catalogue
+
+### Transform2D *(required)*
+
+```cpp
+struct Transform2D {
+    Vec2 Position = {};
+    Vec2 Scale    = { 1.0f, 1.0f };
+    f32  Rotation = 0.0f;            // radians, clockwise
+};
+```
+
+The single source of truth for where an entity is in the world. All render and
+movement systems read and write here.
+
+### Tag *(required)*
+
+```cpp
+struct Tag {
+    std::string Value = "Entity";
+};
+```
+
+Used as a coarse filter in queries (see `WithTag()` below). Choosing a tag is
+the game dev's responsibility; the engine has no reserved tag strings.
+
+### Name *(optional)*
+
+```cpp
+struct Name {
+    std::string Value;
+};
+```
+
+Add only when the entity needs a stable human-readable identity. The editor
+uses it in the entity list and dialog graph node pickers.
+
+### SpriteRenderer *(optional)*
+
+Visual representation without duplicating position (Transform2D owns that).
+
+```cpp
+struct SpriteRenderer {
+    TextureHandle Texture;
+    SamplerHandle Sampler;
+    UVRect        UV     = { 0.0f, 0.0f, 1.0f, 1.0f };
+    Color         Tint   = Color::White();
+    i32           Layer  = 0;
+};
+```
+
+`SpriteRenderSystem` reads `(Transform2D, SpriteRenderer)` and pushes a `Sprite`
+into `FramePacket.Sprites`. Frustum culling is applied at this point. If the
+entity also has a `Parallax` component the position is adjusted before submission
+(see `Parallax` below).
+
+UV rectangles come from `SpriteSheet`, which loads the unified Arcbit sprite
+format (see `docs/sprite-format.md`). The format covers named frames, tile grids,
+and animation clips in one file. The `Animator` component (Phase 17) will drive
+`UV` automatically from the active clip; until then it is set directly by game
+code via `SpriteSheet::GetTile` or `SpriteSheet::GetSprite`.
+
+### LightEmitter *(optional)*
+
+Light properties without position (Transform2D owns that).
+
+```cpp
+struct LightEmitter {
+    f32   Radius     = 200.0f;
+    f32   Intensity  = 1.0f;
+    Color LightColor = Color::NaturalLight();
+};
+```
+
+`LightRenderSystem` reads `(Transform2D, LightEmitter)`, applies frustum culling
+via `Camera2D::IsLightVisible`, and pushes a `PointLight` into
+`FramePacket.Lights`.
+
+### Parallax *(optional)*
+
+Scroll rate multiplier for background and foreground layers.
+
+```cpp
+struct Parallax {
+    Vec2 ScrollFactor = { 0.5f, 0.5f };
+    // 0.0 = fixed (sky, UI overlay)
+    // 1.0 = normal world layer (moves 1:1 with camera)
+    // 0.5 = mid-ground (moves at half camera speed)
+};
+```
+
+`SpriteRenderSystem` adds `cameraPos * (1 - scrollFactor)` to the entity's world
+position before submitting it to the packet. No Transform2D mutation; no extra
+draw batches.
+
+Derivation: the shader subtracts cameraPos from world position, so injecting
+`cameraPos * (1 - s)` into world position gives an effective camera offset of
+`cameraPos * s` — exactly the desired scroll rate.
+
+### CameraTarget *(optional)*
+
+Marks the entity the scene camera should follow. Only one entity should carry
+this at a time; if multiple carry it, `CameraFollowSystem` picks the first one
+found.
+
+```cpp
+struct CameraTarget {
+    f32 Lag = 0.1f;  // lerp factor per second; 0.0 = instant snap, 1.0 = no follow
+};
+```
+
+### Disabled *(optional)*
+
+Empty marker component. All built-in systems use `.Without<Disabled>()` so
+disabled entities are invisible to them. Useful for entity pooling, off-screen
+NPCs, and inactive triggers.
+
+```cpp
+struct Disabled {};
+```
+
+### Lifetime *(optional)*
+
+Auto-destroys the entity after a fixed duration. Intended for projectiles,
+particles, and temporary effects.
+
+```cpp
+struct Lifetime {
+    f32 Remaining;  // seconds until DestroyEntity is called
+};
+```
+
+---
+
+## Movement Components
+
+Movement uses a **mix-and-match** design: a controller component decides
+*where* the entity wants to go; a style component decides *how* it gets there.
+Any controller pairs with any style.
+
+### Controller components
+
+#### InputMovement
+
+```cpp
+struct InputMovement {
+    ActionID MoveLeft;
+    ActionID MoveRight;
+    ActionID MoveUp;
+    ActionID MoveDown;
+    f32      Speed = 100.0f;  // world pixels/s for FreeMovement; tiles/s for tile movement
+};
+```
+
+`InputMovementSystem` reads the InputManager state each tick and writes a
+movement request into whichever style component is present on the same entity.
+
+#### AIMovement
+
+```cpp
+struct AIMovement {
+    Vec2 TargetPosition;
+    f32  Speed     = 100.0f;
+    bool HasTarget = false;
+};
+```
+
+Driven externally by the pathfinding system (Phase 30). `AIMovementSystem`
+translates `TargetPosition` into the same movement request interface that
+`InputMovementSystem` uses, so the style layer is shared.
+
+### Style components
+
+#### FreeMovement
+
+Pixel-perfect velocity integration. Use for combat, platformer sections, or
+any entity that needs sub-tile positioning.
+
+```cpp
+struct FreeMovement {
+    Vec2 Velocity;
+    f32  Friction = 8.0f;   // velocity multiplied by exp(-Friction * dt) each tick
+    f32  MaxSpeed = 0.0f;   // clamp magnitude after integration; 0 = unlimited
+};
+```
+
+#### SmoothTileMovement
+
+Lerps from tile centre to tile centre. Input is queued during transit so the
+next direction is consumed the moment the entity lands.
+
+```cpp
+struct SmoothTileMovement {
+    f32  Speed     = 4.0f;    // tiles/second (tile size comes from WorldConfig)
+    Vec2 OriginWorld;
+    Vec2 TargetWorld;
+    f32  Progress  = 1.0f;   // 0→1 lerp progress; 1.0 means arrived
+    Vec2 QueuedDir;
+    bool HasQueued = false;
+};
+```
+
+#### SnapTileMovement
+
+Moves instantly to the adjacent tile. No interpolation — suitable for puzzle
+games and strict grid-based overworlds.
+
+```cpp
+struct SnapTileMovement {};  // tile size from WorldConfig; no per-entity state needed
+```
+
+### Pairing examples
+
+| Entity | Controller | Style |
+|--------|-----------|-------|
+| Overworld player | `InputMovement` | `SmoothTileMovement` |
+| Puzzle NPC | `AIMovement` | `SnapTileMovement` |
+| Combat enemy | `AIMovement` | `FreeMovement` |
+| Combat player | `InputMovement` | `FreeMovement` |
+
+---
+
+## System Registration
+
+Systems are registered as named `std::function` callbacks — no base class, no
+virtual dispatch. Each system may provide an update function, a render-collect
+function, or both.
+
+```cpp
+// Update system — runs every fixed tick
+scene.GetWorld().RegisterSystem("FreeMovement",
+    [](Scene& scene, f32 dt) {
+        scene.GetWorld().Query<Transform2D, FreeMovement>()
+            .Without<Disabled>()
+            .Each([dt](Transform2D& t, FreeMovement& fm) {
+                // integrate velocity, apply friction
+            });
+    });
+
+// Render system — runs every frame, fills FramePacket
+scene.GetWorld().RegisterRenderSystem("SpriteRender",
+    [](Scene& scene, FramePacket& packet) {
+        const Vec2 camPos = scene.GetCamera().GetEffectivePosition();
+        scene.GetWorld().Query<Transform2D, SpriteRenderer>()
+            .Without<Disabled>()
+            .Each([&](Entity e, Transform2D& t, SpriteRenderer& s) {
+                // parallax adjust, frustum cull, push to packet.Sprites
+            });
+    });
+```
+
+Systems execute in registration order. The engine registers all built-in
+systems first; game code registers its systems in `OnStart` and they run after.
+
+---
+
+## Built-in System Execution Order
+
+### Update phase (fixed timestep)
+
+| Order | System | Reads | Writes |
+|-------|--------|-------|--------|
+| 1 | `LifetimeSystem` | `Lifetime` | destroys entity at zero |
+| 2 | `InputMovementSystem` | `InputMovement`, InputManager | `FreeMovement.Velocity` or `SmoothTileMovement.QueuedDir` |
+| 3 | `AIMovementSystem` | `AIMovement` | same targets as above |
+| 4 | `FreeMovementSystem` | `FreeMovement` | `Transform2D.Position` |
+| 5 | `SmoothTileMoveSystem` | `SmoothTileMovement`, `WorldConfig.TileSize` | `Transform2D.Position` |
+| 6 | `SnapTileMoveSystem` | `SnapTileMovement`, `WorldConfig.TileSize` | `Transform2D.Position` |
+| 7 | `CameraFollowSystem` | `CameraTarget`, `Transform2D` | `Scene.Camera2D` |
+
+### Render-collect phase (variable rate, before SubmitFrame)
+
+| Order | System | Reads | Writes |
+|-------|--------|-------|--------|
+| 1 | `SpriteRenderSystem` | `Transform2D`, `SpriteRenderer`, `Parallax`? | `FramePacket.Sprites` |
+| 2 | `LightRenderSystem` | `Transform2D`, `LightEmitter` | `FramePacket.Lights` |
+
+---
+
+## Query API
+
+### Basic query
+
+Iterates all archetypes whose mask is a superset of the requested types. The
+query object is stack-allocated and performs no heap allocation.
+
+```cpp
+world.Query<Transform2D, SpriteRenderer>()
+     .Each([](Entity e, Transform2D& t, SpriteRenderer& s) { ... });
+```
+
+### Read-only access
+
+Passing `const T` in the template signals read-only intent; the implementation
+provides a `const T&` reference and may skip write-back in future SIMD paths.
+
+```cpp
+world.Query<const Transform2D, SpriteRenderer>()
+     .Each([](const Transform2D& t, SpriteRenderer& s) { ... });
+```
+
+### Exclusion filter
+
+```cpp
+world.Query<Transform2D, FreeMovement>()
+     .Without<Disabled>()
+     .Each(...);
+```
+
+### Tag filter
+
+A convenience wrapper that adds a `Tag.Value == tagString` predicate on top of
+the component query. This is a linear scan over the Tag column of each matching
+archetype; use it for low-frequency queries (setup, events) rather than
+per-frame inner loops.
+
+```cpp
+world.Query<Transform2D>()
+     .WithTag("Enemy")
+     .Each([](Entity e, Transform2D& t) { ... });
+```
+
+For high-frequency filtering (e.g. "all active enemies each tick"), prefer a
+dedicated marker component (`struct EnemyMarker {}`) over the string tag. Marker
+components create a distinct archetype that the query can match directly via
+bitmask with zero per-entity branching.
+
+---
+
+## Integration with Application
+
+`Application::Run()` drives two phases per loop iteration:
+
+```
+[fixed tick]
+  Scene::Update(dt)
+    → World runs all registered update systems in order
+
+[variable tick]
+  FramePacket packet = ...
+  Scene::CollectRenderData(packet)
+    → World runs all registered render systems in order
+  RenderThread::SubmitFrame(packet)
+```
+
+Game code retains `OnUpdate(dt)` and `OnRender(packet)` hooks. These run
+**before** Scene::Update and Scene::CollectRenderData respectively, so they can
+push manual sprites (debug overlays, UI, etc.) or manipulate entities before
+systems process them.
+
+---
+
+## Scene File Format and Merge Safety
+
+Scene files are JSON with one UUID-keyed object per entity. Each UUID is
+randomly generated at entity-creation time in the editor.
+
+```json
+{
+  "config": {
+    "TileSize": 16.0,
+    "Gravity": [0.0, 0.0]
+  },
+  "entities": {
+    "3f2504e0-4f89-11d3-9a0c-0305e82c3301": {
+      "Tag": "Player",
+      "Name": "Kael",
+      "Transform2D": { "Position": [0, 0], "Scale": [1, 1], "Rotation": 0 },
+      "SpriteRenderer": { "Texture": "assets/textures/player.png", "Layer": 1 },
+      "InputMovement": { "Speed": 4.0 },
+      "SmoothTileMovement": { "Speed": 4.0 }
+    },
+    "7c9e6679-7425-40de-944b-e07fc1f90ae7": {
+      "Tag": "Wall",
+      "Transform2D": { "Position": [48, 0] },
+      "SpriteRenderer": { "Texture": "assets/textures/wall.png", "Layer": 0 }
+    }
+  }
+}
+```
+
+**Merge safety:** two developers adding entities each produce new UUID keys in
+the file. Git sees two new non-overlapping lines — no conflict. Conflicts only
+arise when both developers edited the **same entity's component values**, which
+is a genuine semantic conflict and is correctly surfaced for manual resolution.
+
+**UUID is an editor and serialization concern only.** The runtime ECS uses
+fast generational integer indices. The scene loader creates runtime entities from
+the file and maintains a short-lived `map<UUID, Entity>` during loading to
+resolve cross-references (e.g. a `CameraTarget` pointing to another entity by
+UUID). That map is discarded after load.
+
+The editor displays unnamed entities as `{Tag} #{uuid[0..3]}` (e.g.
+`Wall #3f25`) — unique, human-parseable, zero storage overhead.
+
+---
+
+## File Layout
+
+```
+engine/include/arcbit/ecs/
+    World.h       — Entity, World, archetype internals, ComponentTypeID
+    Query.h       — Query<Ts...> template, WithTag(), Without<T>()
+    System.h      — SystemRegistry, RegisterSystem / RegisterRenderSystem
+    Components.h  — Transform2D, SpriteRenderer, LightEmitter, Parallax,
+                    CameraTarget, Disabled, Lifetime, Name, Tag
+    Movement.h    — InputMovement, AIMovement, FreeMovement,
+                    SmoothTileMovement, SnapTileMovement
+
+engine/include/arcbit/scene/
+    Scene.h       — Scene class (owns World, Camera2D, WorldConfig)
+    WorldConfig.h — WorldConfig struct
+
+engine/src/
+    World.cpp     — World implementation (archetype management, entity table)
+    Systems.cpp   — built-in system implementations (all systems listed above)
+    Scene.cpp     — Scene::Update, Scene::CollectRenderData
+```
+
+---
+
+## Migration: Current Demo → ECS
+
+The current `main.cpp` demo manually fills `_sprites` and `_lights` vectors and
+culls them by hand in `OnRender`. After this phase it migrates to:
+
+1. Create entities with `Transform2D + SpriteRenderer` for each sprite.
+2. Create entities with `Transform2D + LightEmitter` for each light source.
+3. Add `InputMovement + FreeMovement` to the camera-controlled entity (or keep
+   the WASD camera pan as manual `OnUpdate` code — either is valid during the
+   transition period).
+4. Delete `_sprites`, `_lights`, and the manual cull loops — `SpriteRenderSystem`
+   and `LightRenderSystem` handle everything.
+5. The `Camera2D` moves from being a game-owned member to `scene.GetCamera()`.
+
+The demo can migrate incrementally: manual sprites and ECS sprites both feed
+into `FramePacket.Sprites` and are rendered identically.
+
+---
+
+## Out of Scope for This Phase
+
+- Scene serialization / load / save (Phase 23)
+- SceneManager, scene transitions (Phase 23)
+- Lua scripting of entities (Phase 26)
+- Physics integration — `Rigidbody2D`, `Collider2D` (Phase 22)
+- Animation system — `Animator` component, clip playback (Phase 17)
+- `AudioSource` component (Phase 18)
+- Editor integration — entity inspector, UUID generation, scene file authoring (Phase 40)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <arcbit/assets/AssetTypes.h>
+#include <arcbit/core/Math.h>
 #include <arcbit/render/RenderHandle.h>
 
 #include <optional>
@@ -16,80 +17,104 @@ namespace Arcbit
 class TextureManager;
 
 // ---------------------------------------------------------------------------
+// SpriteFrame
+//
+// A single named frame from the sprite sheet: UV coordinates into the atlas
+// and a normalised pivot point used to position the sprite in world space.
+//
+// Common pivot values:
+//   { 0.5, 0.5 } — centre (default)
+//   { 0.5, 1.0 } — bottom-centre (standing characters)
+//   { 0.0, 0.0 } — top-left
+// ---------------------------------------------------------------------------
+struct SpriteFrame
+{
+    UVRect UV;
+    Vec2   Pivot = { 0.5f, 0.5f };
+};
+
+// ---------------------------------------------------------------------------
+// AnimationFrameRef / AnimationClip
+//
+// An AnimationClip is a named sequence of frames with per-frame durations,
+// loaded from the "animations" section of the sprite format JSON.
+// The Animator component (Phase 17) will drive SpriteRenderer.UV from these.
+// ---------------------------------------------------------------------------
+struct AnimationFrameRef
+{
+    std::string FrameName;
+    u32         DurationMs = 100;
+};
+
+struct AnimationClip
+{
+    std::string                    Name;
+    bool                           Loop = false;
+    std::vector<AnimationFrameRef> Frames;
+};
+
+// ---------------------------------------------------------------------------
 // SpriteSheet
 //
-// Associates a texture atlas with named or indexed UV rectangles.
-// Loaded from a JSON metadata file; the referenced texture is loaded
-// automatically via TextureManager.
+// Loads a sprite atlas from the Arcbit sprite format JSON (docs/sprite-format.md).
+// One file may define any combination of:
 //
-// Two layout modes are supported — a single JSON file may use either or both:
+//   frames     — named rectangular regions with optional pivot points.
+//   tile_grid  — uniform grid of equal-sized tiles indexed left-to-right,
+//                top-to-bottom starting at 0.
+//   animations — named sequences of frames with per-frame durations.
 //
-//   Named sprites (e.g. character animations):
-//   {
-//     "texture": "assets/textures/player.png",
-//     "sprites": [
-//       { "name": "idle_0", "x": 0, "y": 0, "w": 48, "h": 48 },
-//       { "name": "idle_1", "x": 48, "y": 0, "w": 48, "h": 48 }
-//     ]
-//   }
+// The "version" field is required; files without it are rejected so that
+// non-Arcbit files (e.g. Carrot format) are caught at load time rather than
+// silently misread. Use the explicit Carrot import path for those files.
 //
-//   Tile grid (tileset sheets where every cell is the same size):
-//   {
-//     "texture": "assets/textures/grass_tileset.png",
-//     "tile_width": 16,
-//     "tile_height": 16
-//   }
-//   Tiles are indexed left-to-right, top-to-bottom starting at 0.
-//
-// Pixel coordinates in the JSON are converted to normalized (0-1) UVs using
-// the loaded texture's dimensions, so the caller never needs raw pixel math.
+// Pixel coordinates are converted to normalised (0-1) UVs using the loaded
+// texture's dimensions — callers never need raw pixel math.
 // ---------------------------------------------------------------------------
 class SpriteSheet
 {
 public:
-    // Load a spritesheet from a JSON metadata file.
+    // Load a spritesheet from an Arcbit sprite format JSON file.
     // The texture path inside the JSON is resolved relative to metaPath's
-    // directory, so the texture and JSON can live alongside each other.
-    // Returns an invalid (empty) SpriteSheet on any error — check IsValid().
+    // directory. Returns an invalid SpriteSheet on any error — check IsValid().
     [[nodiscard]] static SpriteSheet Load(std::string_view metaPath, TextureManager& textures);
 
-    [[nodiscard]] bool          IsValid() const { return _texture.IsValid(); }
-    [[nodiscard]] TextureHandle GetTexture() const { return _texture; }
+    [[nodiscard]] bool          IsValid()       const { return _texture.IsValid(); }
+    [[nodiscard]] TextureHandle GetTexture()    const { return _texture; }
+    [[nodiscard]] f32           PixelsPerUnit() const { return _pixelsPerUnit; }
 
-    // Look up a named sprite. Returns std::nullopt if the name is not found.
-    [[nodiscard]] std::optional<UVRect> GetSprite(std::string_view name) const;
+    // Look up a named frame (from the "frames" section).
+    // Returns std::nullopt if the name is not found.
+    [[nodiscard]] std::optional<SpriteFrame> GetFrame(std::string_view name) const;
+
+    // Look up a named animation clip (from the "animations" section).
+    // Returns nullptr if the name is not found.
+    [[nodiscard]] const AnimationClip* GetAnimation(std::string_view name) const;
 
     // Look up a tile by grid index (0-based, left-to-right, top-to-bottom).
-    // Returns std::nullopt if the index is out of range or the sheet was
-    // defined with named sprites only (no tile_width / tile_height).
+    // Returns std::nullopt if the index is out of range or no tile_grid is defined.
     [[nodiscard]] std::optional<UVRect> GetTile(u32 index) const;
 
     // Look up a tile by 2D grid coordinates (column, row), both 0-based.
-    // Equivalent to GetTile(y * columns + x).
-    // Returns std::nullopt if the coordinates are out of range.
     [[nodiscard]] std::optional<UVRect> GetTile(u32 x, u32 y) const;
 
-    // Total number of tiles in the grid (0 if not a tile-grid sheet).
-    [[nodiscard]] u32 TileCount() const { return static_cast<u32>(_tiles.size()); }
-
-    // Number of columns in the tile grid (0 if not a tile-grid sheet).
+    [[nodiscard]] u32 TileCount()   const { return static_cast<u32>(_tiles.size()); }
     [[nodiscard]] u32 TileColumns() const { return _columns; }
-
-    // Number of rows in the tile grid (0 if not a tile-grid sheet).
-    [[nodiscard]] u32 TileRows() const { return _columns > 0 ? static_cast<u32>(_tiles.size()) / _columns : 0; }
+    [[nodiscard]] u32 TileRows()    const { return _columns > 0 ? static_cast<u32>(_tiles.size()) / _columns : 0; }
 
 private:
-    static void LoadNamedSpritesFromJson(std::string_view metaPath, const nlohmann::json& json, SpriteSheet& sheet, f32 invW,
-                                         f32 invH);
-
-    static void LoadFromTileGrid(std::string_view metaPath, const nlohmann::json& json, SpriteSheet& sheet, u32 width, u32 height,
-                                 f32 invW, f32 invH);
+    static void LoadFrames    (std::string_view path, const nlohmann::json& json, SpriteSheet& sheet, f32 invW, f32 invH);
+    static void LoadTileGrid  (std::string_view path, const nlohmann::json& json, SpriteSheet& sheet, u32 texW, u32 texH, f32 invW, f32 invH);
+    static void LoadAnimations(std::string_view path, const nlohmann::json& json, SpriteSheet& sheet);
 
 private:
-    TextureHandle                           _texture;
-    std::unordered_map<std::string, UVRect> _namedSprites;
-    std::vector<UVRect>                     _tiles;
-    u32                                     _columns = 0; // tile grid columns; 0 if not a tile-grid sheet
+    TextureHandle _texture;
+    f32           _pixelsPerUnit = 1.0f;
+
+    std::unordered_map<std::string, SpriteFrame>   _frames;
+    std::unordered_map<std::string, AnimationClip> _animations;
+    std::vector<UVRect>                             _tiles;
+    u32                                             _columns = 0;
 };
 
 } // namespace Arcbit
