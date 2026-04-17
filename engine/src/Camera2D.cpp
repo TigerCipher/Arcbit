@@ -85,4 +85,38 @@ Vec2 Camera2D::WorldToScreen(const Vec2 worldPos, const Vec2 viewportSize) const
     };
 }
 
+// Returns the axis-aligned half-extents of the rotated viewport in world space.
+// For a viewport with half-size (hw, hh) rotated by angle R:
+//   extX = |cosR|*hw + |sinR|*hh
+//   extY = |sinR|*hw + |cosR|*hh
+// This is the tightest AABB that fully contains the rotated viewport.
+static Vec2 ViewportExtents(const f32 halfW, const f32 halfH, const f32 rotation)
+{
+    const f32 cosA = std::abs(std::cos(rotation));
+    const f32 sinA = std::abs(std::sin(rotation));
+    return { cosA * halfW + sinA * halfH, sinA * halfW + cosA * halfH };
+}
+
+bool Camera2D::IsVisible(const Vec2 spritePos, const Vec2 spriteSize, const Vec2 viewportSize) const
+{
+    const Vec2 eff  = GetEffectivePosition();
+    const Vec2 ext  = ViewportExtents((viewportSize.X / Zoom) * 0.5f,
+                                      (viewportSize.Y / Zoom) * 0.5f, Rotation);
+
+    return std::abs(spritePos.X - eff.X) < ext.X + spriteSize.X * 0.5f &&
+           std::abs(spritePos.Y - eff.Y) < ext.Y + spriteSize.Y * 0.5f;
+}
+
+bool Camera2D::IsLightVisible(const Vec2 lightPos, const f32 lightRadius, const Vec2 viewportSize) const
+{
+    const Vec2 eff  = GetEffectivePosition();
+    const Vec2 ext  = ViewportExtents((viewportSize.X / Zoom) * 0.5f,
+                                      (viewportSize.Y / Zoom) * 0.5f, Rotation);
+
+    // Nearest point on the viewport AABB to the light center, then circle-vs-AABB test.
+    const f32 dx = std::max(0.0f, std::abs(lightPos.X - eff.X) - ext.X);
+    const f32 dy = std::max(0.0f, std::abs(lightPos.Y - eff.Y) - ext.Y);
+    return dx * dx + dy * dy < lightRadius * lightRadius;
+}
+
 } // namespace Arcbit

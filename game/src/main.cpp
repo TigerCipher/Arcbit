@@ -7,6 +7,8 @@
 #include <arcbit/render/RenderThread.h>
 #include <arcbit/render/RenderTypes.h>
 
+using namespace Arcbit;
+
 // ---------------------------------------------------------------------------
 // ArcbitGame — demo Application subclass
 //
@@ -14,7 +16,7 @@
 // Phase 15: Camera2D demo — WASD pan, scroll-wheel zoom, mouse-following point light.
 //           ScreenToWorld() converts mouse pixels → world position for the light.
 // ---------------------------------------------------------------------------
-class ArcbitGame : public Arcbit::Application
+class ArcbitGame : public Application
 {
 public:
     ArcbitGame() : Application({ .Title = "Arcbit", .Width = 1920, .Height = 1080 }) {}
@@ -33,24 +35,24 @@ protected:
         GetInput().RegisterAction(ActionInteract, "Interact");
         GetInput().RegisterAction(ActionSprint, "Sprint");
 
-        GetInput().BindKey(ActionMoveLeft, Arcbit::Key::A);
-        GetInput().BindKey(ActionMoveLeft, Arcbit::Key::Left);
-        GetInput().BindKey(ActionMoveRight, Arcbit::Key::D);
-        GetInput().BindKey(ActionMoveRight, Arcbit::Key::Right);
-        GetInput().BindKey(ActionMoveUp, Arcbit::Key::W);
-        GetInput().BindKey(ActionMoveUp, Arcbit::Key::Up);
-        GetInput().BindKey(ActionMoveDown, Arcbit::Key::S);
-        GetInput().BindKey(ActionMoveDown, Arcbit::Key::Down);
-        GetInput().BindKey(ActionInteract, Arcbit::Key::E);
-        GetInput().BindKey(ActionInteract, Arcbit::Key::Enter);
-        GetInput().BindKey(ActionSprint, Arcbit::Key::LeftShift);
+        GetInput().BindKey(ActionMoveLeft, Key::A);
+        GetInput().BindKey(ActionMoveLeft, Key::Left);
+        GetInput().BindKey(ActionMoveRight, Key::D);
+        GetInput().BindKey(ActionMoveRight, Key::Right);
+        GetInput().BindKey(ActionMoveUp, Key::W);
+        GetInput().BindKey(ActionMoveUp, Key::Up);
+        GetInput().BindKey(ActionMoveDown, Key::S);
+        GetInput().BindKey(ActionMoveDown, Key::Down);
+        GetInput().BindKey(ActionInteract, Key::E);
+        GetInput().BindKey(ActionInteract, Key::Enter);
+        GetInput().BindKey(ActionSprint, Key::LeftShift);
 
-        GetInput().BindGamepadButton(ActionInteract, Arcbit::GamepadButton::South);
-        GetInput().BindGamepadButton(ActionSprint, Arcbit::GamepadButton::RightShoulder);
-        GetInput().BindGamepadAxis(ActionMoveLeft, Arcbit::GamepadAxis::LeftX);
-        GetInput().BindGamepadAxis(ActionMoveRight, Arcbit::GamepadAxis::LeftX);
-        GetInput().BindGamepadAxis(ActionMoveUp, Arcbit::GamepadAxis::LeftY);
-        GetInput().BindGamepadAxis(ActionMoveDown, Arcbit::GamepadAxis::LeftY);
+        GetInput().BindGamepadButton(ActionInteract, GamepadButton::South);
+        GetInput().BindGamepadButton(ActionSprint, GamepadButton::RightShoulder);
+        GetInput().BindGamepadAxis(ActionMoveLeft, GamepadAxis::LeftX);
+        GetInput().BindGamepadAxis(ActionMoveRight, GamepadAxis::LeftX);
+        GetInput().BindGamepadAxis(ActionMoveUp, GamepadAxis::LeftY);
+        GetInput().BindGamepadAxis(ActionMoveDown, GamepadAxis::LeftY);
 
         // --- Textures ---
         _floorTex = GetTextures().Load("assets/textures/floor.jpg");
@@ -69,7 +71,7 @@ protected:
         ARCBIT_ASSERT(_treeTex.IsValid(), "Failed to load tree texture");
 
         // --- SpriteSheet ---
-        _playerSheet = Arcbit::SpriteSheet::Load("assets/spritesheets/player.json", GetTextures());
+        _playerSheet = SpriteSheet::Load("assets/spritesheets/player.json", GetTextures());
         if (_playerSheet.IsValid())
         {
             LOG_INFO(Game, "Player sheet loaded - {}x{} grid, {} tiles", _playerSheet.TileColumns(), _playerSheet.TileRows(),
@@ -84,21 +86,21 @@ protected:
 
         // --- Samplers ---
         // Nearest-repeat: pixel-art sprites stay crisp when scaled.
-        Arcbit::SamplerDesc nearestDesc{};
-        nearestDesc.MinFilter = Arcbit::Filter::Nearest;
-        nearestDesc.MagFilter = Arcbit::Filter::Nearest;
-        nearestDesc.AddressU  = Arcbit::AddressMode::Repeat;
-        nearestDesc.AddressV  = Arcbit::AddressMode::Repeat;
+        SamplerDesc nearestDesc{};
+        nearestDesc.MinFilter = Filter::Nearest;
+        nearestDesc.MagFilter = Filter::Nearest;
+        nearestDesc.AddressU  = AddressMode::Repeat;
+        nearestDesc.AddressV  = AddressMode::Repeat;
         nearestDesc.DebugName = "NearestRepeat";
         _sampler              = GetDevice().CreateSampler(nearestDesc);
         ARCBIT_ASSERT(_sampler.IsValid(), "Failed to create sampler");
 
         // Linear-repeat: floor tile blends smoothly when tiled and scaled.
-        Arcbit::SamplerDesc linearDesc{};
-        linearDesc.MinFilter = Arcbit::Filter::Linear;
-        linearDesc.MagFilter = Arcbit::Filter::Linear;
-        linearDesc.AddressU  = Arcbit::AddressMode::Repeat;
-        linearDesc.AddressV  = Arcbit::AddressMode::Repeat;
+        SamplerDesc linearDesc{};
+        linearDesc.MinFilter = Filter::Linear;
+        linearDesc.MagFilter = Filter::Linear;
+        linearDesc.AddressU  = AddressMode::Repeat;
+        linearDesc.AddressV  = AddressMode::Repeat;
         linearDesc.DebugName = "LinearRepeat";
         _floorSampler        = GetDevice().CreateSampler(linearDesc);
         ARCBIT_ASSERT(_floorSampler.IsValid(), "Failed to create floor sampler");
@@ -110,7 +112,7 @@ protected:
             _lights[i].Radius    = static_cast<float>(rand() % 300) + 100.0f; // 100–400 px
             _lights[i].Intensity = static_cast<float>(rand() % 100) / 100.0f + 0.5f;
             _lights[i].LightColor =
-                Arcbit::Color{ static_cast<float>(rand() % 100) / 100.0f, static_cast<float>(rand() % 100) / 100.0f,
+                Color{ static_cast<float>(rand() % 100) / 100.0f, static_cast<float>(rand() % 100) / 100.0f,
                                static_cast<float>(rand() % 100) / 100.0f, 1.0f };
         }
 
@@ -120,7 +122,7 @@ protected:
     // -----------------------------------------------------------------------
     // OnUpdate — camera pan, zoom, and shake demo.
     // -----------------------------------------------------------------------
-    void OnUpdate(Arcbit::f32 dt) override
+    void OnUpdate(f32 dt) override
     {
         _camera.Update(dt);
 
@@ -163,59 +165,80 @@ protected:
     //   Layer  5 : slimes        — 100 sprites → 1 batch
     //                              417 total   → 7 batches
     // -----------------------------------------------------------------------
-    void OnRender(Arcbit::FramePacket& packet) override
+    void OnRender(FramePacket& packet) override
     {
-        packet.AmbientColor   = Arcbit::Color{ 0.1f, 0.1f, 0.15f, 1.0f };
+        packet.AmbientColor   = Color{ 0.1f, 0.1f, 0.15f, 1.0f };
         packet.CameraPosition = _camera.GetEffectivePosition();
         packet.CameraZoom     = _camera.Zoom;
         packet.CameraRotation = _camera.Rotation;
+        packet.ReferenceSize  = { ViewportW, ViewportH };
+
+        constexpr Vec2 viewport = { ViewportW, ViewportH };
+
+        // Helper: push a light only if its circle overlaps the visible area.
+        auto SubmitLight = [&](const PointLight& light)
+        {
+            if (_camera.IsLightVisible(light.Position, light.Radius, viewport))
+                packet.Lights.push_back(light);
+        };
 
         // --- Static world lights (world-space pixels) ---
         {
-            Arcbit::PointLight light{};
+            PointLight light{};
             light.Position   = { 0.0f, 0.0f };
-            light.Radius     = 576.0f; // ≈ 60% of half-width
+            light.Radius     = 576.0f;
             light.Intensity  = 1.5f;
-            light.LightColor = Arcbit::Color::NaturalLight();
-            packet.Lights.push_back(light);
+            light.LightColor = Color::NaturalLight();
+            SubmitLight(light);
         }
         {
-            Arcbit::PointLight light{};
+            PointLight light{};
             light.Position   = { 864.0f, -162.0f };
             light.Radius     = 192.0f;
             light.Intensity  = 1.5f;
-            light.LightColor = Arcbit::Color::Green();
-            packet.Lights.push_back(light);
+            light.LightColor = Color::Green();
+            SubmitLight(light);
         }
         {
-            Arcbit::PointLight light{};
+            PointLight light{};
             light.Position   = { -864.0f, 324.0f };
             light.Radius     = 384.0f;
             light.Intensity  = 1.9f;
-            light.LightColor = Arcbit::Color::Red();
-            packet.Lights.push_back(light);
+            light.LightColor = Color::Red();
+            SubmitLight(light);
         }
 
-        // --- Mouse-following light — converts screen pixels → world-space ---
+        // --- Mouse-following light — always visible (cursor is on screen) ---
         {
-            Arcbit::i32 mouseX = 0, mouseY = 0;
+            i32 mouseX = 0, mouseY = 0;
             GetInput().GetMousePosition(mouseX, mouseY);
-            const Arcbit::Vec2 mouseWorld =
-                _camera.ScreenToWorld({ static_cast<float>(mouseX), static_cast<float>(mouseY) }, { ViewportW, ViewportH });
 
-            Arcbit::PointLight light{};
+            // Mouse is in actual window pixels. Scale to reference pixels first so
+            // ScreenToWorld maps correctly regardless of the current window size.
+            const f32 actualW = static_cast<f32>(GetWindowWidth());
+            const f32 actualH = static_cast<f32>(GetWindowHeight());
+            const Vec2 mouseRef = {
+                static_cast<f32>(mouseX) * ViewportW / actualW,
+                static_cast<f32>(mouseY) * ViewportH / actualH,
+            };
+            const Vec2 mouseWorld = _camera.ScreenToWorld(mouseRef, viewport);
+
+            PointLight light{};
             light.Position   = mouseWorld;
             light.Radius     = 300.0f;
             light.Intensity  = 2.0f;
-            light.LightColor = Arcbit::Color{ 0.9f, 0.85f, 0.6f, 1.0f }; // warm lantern
-            packet.Lights.push_back(light);
+            light.LightColor = Color{ 0.9f, 0.85f, 0.6f, 1.0f };
+            packet.Lights.push_back(light); // no cull — cursor is always on screen
         }
 
         for (int i = 0; i < NumRandomLights; ++i)
-            packet.Lights.push_back(_lights[i]);
+            SubmitLight(_lights[i]);
 
+        // Frustum cull sprites before handing off to the render thread.
         packet.Sprites.reserve(_sprites.size());
-        packet.Sprites.assign(_sprites.begin(), _sprites.end());
+        for (const auto& s : _sprites)
+            if (_camera.IsVisible(s.Position, s.Size, viewport))
+                packet.Sprites.push_back(s);
     }
 
     // -----------------------------------------------------------------------
@@ -235,7 +258,7 @@ private:
         LOG_DEBUG(Game, "Creating sprites...");
         // --- Floor — full screen, layer -1 (1 sprite → 1 batch) ---
         {
-            Arcbit::Sprite s{};
+            Sprite s{};
             s.Texture  = _floorTex;
             s.Sampler  = _floorSampler;
             s.Position = { 0.0f, 0.0f };
@@ -246,7 +269,7 @@ private:
         }
 
         // --- Oak trees — 4 corners, layer 0 (4 sprites → 1 batch) ---
-        constexpr Arcbit::Vec2 treePositions[4] = {
+        constexpr Vec2 treePositions[4] = {
             { -800.0f, -380.0f },
             {  800.0f, -380.0f },
             { -800.0f,  380.0f },
@@ -255,7 +278,7 @@ private:
         for (const auto& pos : treePositions)
         {
             constexpr float TreeSize = 192.0f;
-            Arcbit::Sprite  s{};
+            Sprite  s{};
             s.Texture  = _treeTex;
             s.Sampler  = _sampler;
             s.Position = pos;
@@ -271,17 +294,17 @@ private:
             constexpr float   TileSize  = 80.0f;
             constexpr int     TileCount = 12;
             constexpr float   startX    = -(TileCount - 1) * TileSize * 0.5f;
-            const Arcbit::u32 cols      = _playerSheet.TileColumns();
+            const u32 cols      = _playerSheet.TileColumns();
 
             for (int i = 0; i < TileCount; ++i)
             {
-                Arcbit::Sprite s{};
+                Sprite s{};
                 s.Texture  = _playerSheet.GetTexture();
                 s.Sampler  = _sampler;
                 s.Position = { startX + static_cast<float>(i) * TileSize, -270.0f };
                 s.Size     = { TileSize, TileSize };
                 if (cols > 0)
-                    if (auto uv = _playerSheet.GetTile(static_cast<Arcbit::u32>(i) % cols, 0))
+                    if (auto uv = _playerSheet.GetTile(static_cast<u32>(i) % cols, 0))
                         s.UV = *uv;
                 s.Layer = 1;
                 _sprites.push_back(s);
@@ -296,7 +319,7 @@ private:
             for (int i = 0; i < SpriteCount; ++i)
             {
                 float          spriteSize = SpriteSize * 3;
-                Arcbit::Sprite s{};
+                Sprite s{};
                 s.Texture  = _skeletonTex;
                 s.Sampler  = _sampler;
                 s.Position = { startX + static_cast<float>(i) * spriteSize, -150.0f };
@@ -312,7 +335,7 @@ private:
             for (int i = 0; i < SpriteCount; ++i)
             {
                 float          spriteSize = SpriteSize * 3;
-                Arcbit::Sprite s{};
+                Sprite s{};
                 s.Texture  = _slimeTex;
                 s.Sampler  = _sampler;
                 s.Position = { startX + static_cast<float>(i) * spriteSize, 0.0f };
@@ -327,7 +350,7 @@ private:
             constexpr float startX = -(SpriteCount - 1) * SpriteSize * 0.5f;
             for (int i = 0; i < SpriteCount; ++i)
             {
-                Arcbit::Sprite s{};
+                Sprite s{};
                 s.Texture  = _chickenTex;
                 s.Sampler  = _sampler;
                 s.Position = { startX + i * SpriteSize, 150.0f };
@@ -342,7 +365,7 @@ private:
             constexpr float startX = -(SpriteCount - 1) * SpriteSize * 0.5f;
             for (int i = 0; i < SpriteCount; ++i)
             {
-                Arcbit::Sprite s{};
+                Sprite s{};
                 s.Texture  = _pigTex;
                 s.Sampler  = _sampler;
                 s.Position = { startX + i * SpriteSize, 300.0f };
@@ -356,37 +379,39 @@ private:
     }
 
 private:
-    static constexpr Arcbit::ActionID ActionMoveLeft  = Arcbit::MakeAction("Move_Left");
-    static constexpr Arcbit::ActionID ActionMoveRight = Arcbit::MakeAction("Move_Right");
-    static constexpr Arcbit::ActionID ActionMoveUp    = Arcbit::MakeAction("Move_Up");
-    static constexpr Arcbit::ActionID ActionMoveDown  = Arcbit::MakeAction("Move_Down");
-    static constexpr Arcbit::ActionID ActionInteract  = Arcbit::MakeAction("Interact");
-    static constexpr Arcbit::ActionID ActionSprint    = Arcbit::MakeAction("Sprint");
+    static constexpr ActionID ActionMoveLeft  = MakeAction("Move_Left");
+    static constexpr ActionID ActionMoveRight = MakeAction("Move_Right");
+    static constexpr ActionID ActionMoveUp    = MakeAction("Move_Up");
+    static constexpr ActionID ActionMoveDown  = MakeAction("Move_Down");
+    static constexpr ActionID ActionInteract  = MakeAction("Interact");
+    static constexpr ActionID ActionSprint    = MakeAction("Sprint");
 
-    // Must match the window dimensions set in the constructor.
+    // Design (reference) resolution in world pixels. The renderer always exposes
+    // exactly this much of the world at zoom 1 — resizing the window scales the
+    // image without changing the visible world area.
     static constexpr float ViewportW = 1920.0f;
     static constexpr float ViewportH = 1080.0f;
 
-    Arcbit::Camera2D _camera;
+    Camera2D _camera;
 
     // Samplers — still game-owned (control filtering per sprite).
     // The sprite pipeline itself is owned by RenderThread.
-    Arcbit::SamplerHandle _sampler;
-    Arcbit::SamplerHandle _floorSampler;
+    SamplerHandle _sampler;
+    SamplerHandle _floorSampler;
 
     // Textures — owned by TextureManager, released automatically.
-    Arcbit::TextureHandle _floorTex;
-    Arcbit::TextureHandle _skeletonTex;
-    Arcbit::TextureHandle _slimeTex;
-    Arcbit::TextureHandle _chickenTex;
-    Arcbit::TextureHandle _pigTex;
-    Arcbit::TextureHandle _treeTex;
-    Arcbit::SpriteSheet   _playerSheet;
+    TextureHandle _floorTex;
+    TextureHandle _skeletonTex;
+    TextureHandle _slimeTex;
+    TextureHandle _chickenTex;
+    TextureHandle _pigTex;
+    TextureHandle _treeTex;
+    SpriteSheet   _playerSheet;
 
-    static constexpr Arcbit::isize                  NumRandomLights = 10;
-    std::array<Arcbit::PointLight, NumRandomLights> _lights         = {};
+    static constexpr isize                  NumRandomLights = 10;
+    std::array<PointLight, NumRandomLights> _lights         = {};
 
-    std::vector<Arcbit::Sprite> _sprites{};
+    std::vector<Sprite> _sprites{};
 };
 
 // ---------------------------------------------------------------------------

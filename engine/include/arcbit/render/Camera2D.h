@@ -52,6 +52,17 @@ public:
     // Convert world-space pixels to screen-space pixels (top-left origin).
     [[nodiscard]] Vec2 WorldToScreen(Vec2 worldPos, Vec2 viewportSize) const;
 
+    // Returns true if a world-space axis-aligned rect is at least partially
+    // inside the camera's visible area. Safe to call with any rotation — the
+    // test uses the axis-aligned bounding box of the rotated viewport, which
+    // never produces false negatives (visible sprites are never culled).
+    [[nodiscard]] bool IsVisible(Vec2 spritePos, Vec2 spriteSize, Vec2 viewportSize) const;
+
+    // Returns true if a point light's circle overlaps the camera's visible area.
+    // Uses a circle-vs-AABB test: a light is culled only if its nearest edge is
+    // farther from the viewport than the light's radius.
+    [[nodiscard]] bool IsLightVisible(Vec2 lightPos, f32 lightRadius, Vec2 viewportSize) const;
+
 private:
     f32  _trauma      = 0.0f;
     Vec2 _shakeOffset = {};

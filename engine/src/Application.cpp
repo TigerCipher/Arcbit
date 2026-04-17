@@ -73,8 +73,14 @@ RenderDevice& Application::GetDevice()
     return *_device;
 }
 
-Window& Application::GetWindow()
-{ return *_window; }
+u32 Application::GetWindowWidth()  const { return _window->GetWidth(); }
+u32 Application::GetWindowHeight() const { return _window->GetHeight(); }
+void Application::ToggleFullscreen()
+{
+    _window->ToggleFullscreen();
+    Settings::Graphics.Fullscreen = !Settings::Graphics.Fullscreen;
+    Settings::MarkDirty();
+}
 
 Format Application::GetSwapchainFormat() const
 { return _device->GetSwapchainColorFormat(_swapchain); }
@@ -85,6 +91,14 @@ Format Application::GetSwapchainFormat() const
 
 void Application::Run()
 {
+    // Register engine system actions with defaults before OnStart so that:
+    //   a) settings can rebind them (LoadInputBindings runs after OnStart), and
+    //   b) game code cannot accidentally stomp the same ActionID before they exist.
+    _input.RegisterAction(ActionEngineQuit,       "Engine_Quit");
+    _input.RegisterAction(ActionEngineFullscreen, "Engine_Fullscreen");
+    _input.BindKey(ActionEngineQuit,       Key::Escape);
+    _input.BindKey(ActionEngineFullscreen, Key::F11);
+
     // Give the game a chance to register actions, create GPU resources, etc.
     // Input bindings are loaded from settings AFTER OnStart so that default
     // bindings set up in OnStart are overwritten by any user-saved bindings.
@@ -95,15 +109,9 @@ void Application::Run()
     // driven by the SDL event queue rather than polling-based state comparison.
     // This prevents edge events from being missed when the fixed-timestep
     // accumulator fires zero update ticks in a given display frame.
-    _window->SetKeyEventCallback([this](i32 sc, bool down) {
-        _input.InjectKeyEvent(sc, down);
-    });
-    _window->SetMouseButtonCallback([this](i32 btn, bool down) {
-        _input.InjectMouseButton(btn, down);
-    });
-    _window->SetGamepadButtonCallback([this](u32 which, i32 btn, bool down) {
-        _input.InjectGamepadButton(which, btn, down);
-    });
+    _window->SetKeyEventCallback([this](i32 sc, bool down) { _input.InjectKeyEvent(sc, down); });
+    _window->SetMouseButtonCallback([this](i32 btn, bool down) { _input.InjectMouseButton(btn, down); });
+    _window->SetGamepadButtonCallback([this](u32 which, i32 btn, bool down) { _input.InjectGamepadButton(which, btn, down); });
 
     // High-resolution wall-clock timer for accurate delta time.
     using Clock    = std::chrono::steady_clock;
@@ -116,9 +124,13 @@ void Application::Run()
     auto fpsWindowStart = Clock::now();
     u32  fpsFrameCount  = 0;
 
+    // Restore fullscreen state persisted from a previous session.
+    if (Settings::Graphics.Fullscreen)
+        _window->ToggleFullscreen();
+
     LOG_INFO(Engine, "Entering game loop");
 
-    while (_window->PollEvents())
+    while (_window->PollEvents() && !_shouldQuit)
     {
         // Record the frame start time before any work so the FPS limiter can
         // measure the total cost of this frame (including SubmitFrame's back-
@@ -145,6 +157,8 @@ void Application::Run()
             // the pending sets until ProcessEdges() runs, so they survive frames
             // where the accumulator doesn't reach the threshold.
             _input.ProcessEdges();
+            if (_input.JustPressed(ActionEngineQuit))       _shouldQuit = true;
+            if (_input.JustPressed(ActionEngineFullscreen)) ToggleFullscreen();
             OnUpdate(_fixedTimestep);
             accumulator -= static_cast<f64>(_fixedTimestep);
         }

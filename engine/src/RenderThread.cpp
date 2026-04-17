@@ -298,24 +298,22 @@ void RenderThread::Run()
 // RenderFrame() helpers
 // ---------------------------------------------------------------------------
 
-TextureHandle RenderThread::AcquireBackbuffer(const FramePacket& packet) const
+TextureHandle RenderThread::AcquireBackBuffer(const FramePacket& packet) const
 {
     if (packet.NeedsResize)
         _device->ResizeSwapchain(packet.Swapchain, packet.Width, packet.Height);
 
-    TextureHandle backbuffer = _device->AcquireNextImage(packet.Swapchain);
-    if (backbuffer.IsValid())
-        return backbuffer;
+    TextureHandle backBuffer = _device->AcquireNextImage(packet.Swapchain);
+    if (backBuffer.IsValid())
+        return backBuffer;
 
-    // Swapchain was out of date — recreate and retry once.
-    LOG_WARN(Render, "Swapchain out of date at acquire — recreating");
-    _device->ResizeSwapchain(packet.Swapchain, packet.Width, packet.Height);
-    backbuffer = _device->AcquireNextImage(packet.Swapchain);
-
-    if (!backbuffer.IsValid())
-        LOG_ERROR(Render, "Failed to acquire swapchain image after recreation — skipping frame");
-
-    return backbuffer;
+    // Swapchain is out of date (e.g. during fullscreen exit) but the packet
+    // dimensions are stale — SDL fires the resize event a few ms later on the
+    // game thread, so calling ResizeSwapchain here would build a swapchain at
+    // the wrong size, trigger vkDeviceWaitIdle, and deadlock SubmitFrame.
+    // Skip the frame and let the NeedsResize packet fix it on the next frame.
+    LOG_WARN(Render, "Swapchain out of date at acquire - skipping frame, waiting for resize");
+    return {};
 }
 
 u32 RenderThread::UploadLights(const FramePacket& packet, const u32 frameSlot)
@@ -433,41 +431,81 @@ void RenderThread::UploadInstances(const std::vector<const Sprite*>& sorted, con
     _device->UpdateBuffer(_instanceBuffers[frameSlot], instances.data(), spriteCount * sizeof(SpriteInstance));
 }
 
-void RenderThread::BeginRenderPass(const CommandListHandle cmd, const TextureHandle backbuffer, const FramePacket& packet) const
+RenderThread::LetterboxRect RenderThread::ComputeLetterbox(const FramePacket& packet)
 {
+    const f32 actualW = static_cast<f32>(packet.Width);
+    const f32 actualH = static_cast<f32>(packet.Height);
+
+    if (packet.ReferenceSize.X <= 0.0f || packet.ReferenceSize.Y <= 0.0f || actualH == 0.0f)
+        return { 0.0f, 0.0f, actualW, actualH };
+
+    const f32 designAspect = packet.ReferenceSize.X / packet.ReferenceSize.Y;
+    const f32 actualAspect = actualW / actualH;
+
+    if (actualAspect > designAspect)
+    {
+        // Window is wider — pillarbox (bars on left and right).
+        const f32 w = actualH * designAspect;
+        return { std::round((actualW - w) * 0.5f), 0.0f, std::round(w), actualH };
+    }
+    else
+    {
+        // Window is taller — letterbox (bars on top and bottom).
+        const f32 h = actualW / designAspect;
+        return { 0.0f, std::round((actualH - h) * 0.5f), actualW, std::round(h) };
+    }
+}
+
+void RenderThread::BeginRenderPass(const CommandListHandle cmd, const TextureHandle backBuffer,
+                                   const FramePacket& packet, const LetterboxRect& lb) const
+{
+    // Clear the full framebuffer to LetterboxColor (fills bars and interior).
     Attachment colorAttach{};
-    colorAttach.Texture    = backbuffer;
+    colorAttach.Texture    = backBuffer;
     colorAttach.Load       = LoadOp::Clear;
     colorAttach.Store      = StoreOp::Store;
-    colorAttach.ClearColor = packet.ClearColor;
+    colorAttach.ClearColor = packet.LetterboxColor;
 
     std::array<Attachment, 1> attachments = { colorAttach };
     RenderingDesc             renderDesc{};
     renderDesc.ColorAttachments = attachments;
     _device->BeginRendering(cmd, renderDesc);
+
+    // If the game interior has a different clear color, fill the letterbox rect.
+    const bool hasBars = lb.X > 0.5f || lb.Y > 0.5f;
+    if (hasBars || packet.ClearColor != packet.LetterboxColor)
+    {
+        _device->ClearColorRect(cmd, packet.ClearColor,
+                                static_cast<i32>(lb.X), static_cast<i32>(lb.Y),
+                                static_cast<u32>(lb.W), static_cast<u32>(lb.H));
+    }
 }
 
-u32 RenderThread::DrawSpriteBatches(const CommandListHandle cmd, const std::vector<const Sprite*>& sorted, const u32 frameSlot,
-                                    const FramePacket& packet, const u32 lightCount) const
+u32 RenderThread::DrawSpriteBatches(const CommandListHandle cmd, const std::vector<const Sprite*>& sorted,
+                                    const u32 frameSlot, const FramePacket& packet,
+                                    const u32 lightCount, const LetterboxRect& lb) const
 {
     const u32 spriteCount = static_cast<u32>(sorted.size());
     if (spriteCount == 0)
         return 0;
 
-    const f32 viewW = static_cast<f32>(packet.Width);
-    const f32 viewH = static_cast<f32>(packet.Height);
-
     _device->BindPipeline(cmd, _spritePipeline);
-    _device->SetViewport(cmd, 0.0f, 0.0f, viewW, viewH);
-    _device->SetScissor(cmd, 0, 0, packet.Width, packet.Height);
+    _device->SetViewport(cmd, lb.X, lb.Y, lb.W, lb.H);
+    _device->SetScissor(cmd, static_cast<i32>(lb.X), static_cast<i32>(lb.Y),
+                        static_cast<u32>(lb.W), static_cast<u32>(lb.H));
     _device->BindStorageBuffer(cmd, _lightSSBO[frameSlot], 2, 0);
+
+    // Use the reference resolution for the NDC transform when set, so the same world
+    // area is always visible regardless of window size. Fall back to the letterbox
+    // rect dimensions (which equal the full window when no reference is set).
+    const f32 refW = (packet.ReferenceSize.X > 0.0f) ? packet.ReferenceSize.X : lb.W;
+    const f32 refH = (packet.ReferenceSize.Y > 0.0f) ? packet.ReferenceSize.Y : lb.H;
 
     SpritePushConstants pc{};
     pc.CamPosX    = packet.CameraPosition.X;
     pc.CamPosY    = packet.CameraPosition.Y;
-    // Dividing by zoom shrinks the effective viewport, making world pixels appear larger.
-    pc.ViewportW  = viewW / packet.CameraZoom;
-    pc.ViewportH  = viewH / packet.CameraZoom;
+    pc.ViewportW  = refW / packet.CameraZoom;
+    pc.ViewportH  = refH / packet.CameraZoom;
     pc.RotCos     = std::cos(packet.CameraRotation);
     pc.RotSin     = std::sin(packet.CameraRotation);
     pc.AmbientR   = packet.AmbientColor.R;
@@ -513,17 +551,16 @@ u32 RenderThread::DrawSpriteBatches(const CommandListHandle cmd, const std::vect
     return batchCount;
 }
 
-void RenderThread::DrawLegacyCalls(const CommandListHandle cmd, const FramePacket& packet, const u32 frameSlot,
-                                   const u32 lightCount) const
+void RenderThread::DrawLegacyCalls(const CommandListHandle cmd, const FramePacket& packet,
+                                   const u32 frameSlot, const u32 lightCount,
+                                   const LetterboxRect& lb) const
 {
-    const f32 viewW = static_cast<f32>(packet.Width);
-    const f32 viewH = static_cast<f32>(packet.Height);
-
     for (const DrawCall& dc : packet.DrawCalls)
     {
         _device->BindPipeline(cmd, dc.Pipeline);
-        _device->SetViewport(cmd, 0.0f, 0.0f, viewW, viewH);
-        _device->SetScissor(cmd, 0, 0, packet.Width, packet.Height);
+        _device->SetViewport(cmd, lb.X, lb.Y, lb.W, lb.H);
+        _device->SetScissor(cmd, static_cast<i32>(lb.X), static_cast<i32>(lb.Y),
+                            static_cast<u32>(lb.W), static_cast<u32>(lb.H));
         _device->BindStorageBuffer(cmd, _lightSSBO[frameSlot], 2, 0);
 
         if (dc.Texture.IsValid())
@@ -560,21 +597,35 @@ void RenderThread::DrawLegacyCalls(const CommandListHandle cmd, const FramePacke
 
 void RenderThread::RenderFrame(const FramePacket& packet)
 {
-    const TextureHandle backbuffer = AcquireBackbuffer(packet);
+    const TextureHandle backbuffer = AcquireBackBuffer(packet);
     if (!backbuffer.IsValid())
         return;
 
     const u32 frameSlot  = _device->GetCurrentFrameIndex(packet.Swapchain);
     const u32 lightCount = UploadLights(packet, frameSlot);
 
+    // Query the actual swapchain extent after any resize that AcquireBackbuffer
+    // may have triggered. packet.Width/Height can be stale by one frame (the SDL
+    // resize event races with the render thread), which would cause ClearColorRect
+    // to request a rect larger than the active render pass.
+    u32 actualW = packet.Width, actualH = packet.Height;
+    _device->GetSwapchainExtent(packet.Swapchain, actualW, actualH);
+
+    // Build a corrected packet view with the true dimensions for all rect math.
+    FramePacket corrected  = packet; // shallow copy — Sprites/Lights are ptrs in sorted/uploaded form
+    corrected.Width        = actualW;
+    corrected.Height       = actualH;
+
+    const LetterboxRect lb = ComputeLetterbox(corrected);
+
     const auto sorted = SortSprites(packet.Sprites);
     UploadInstances(sorted, frameSlot);
 
     CommandListHandle cmd = _device->BeginCommandList();
-    BeginRenderPass(cmd, backbuffer, packet);
+    BeginRenderPass(cmd, backbuffer, corrected, lb);
 
-    const u32 batchCount = DrawSpriteBatches(cmd, sorted, frameSlot, packet, lightCount);
-    DrawLegacyCalls(cmd, packet, frameSlot, lightCount);
+    const u32 batchCount = DrawSpriteBatches(cmd, sorted, frameSlot, corrected, lightCount, lb);
+    DrawLegacyCalls(cmd, corrected, frameSlot, lightCount, lb);
 
     _device->EndRendering(cmd);
 

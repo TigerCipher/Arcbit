@@ -19,8 +19,8 @@ Window::Window(const Desc& desc)
         flags |= SDL_WINDOW_RESIZABLE;
 
     SDL_Window* win = SDL_CreateWindow(desc.Title,
-        static_cast<int>(desc.Width),
-        static_cast<int>(desc.Height),
+        static_cast<i32>(desc.Width),
+        static_cast<i32>(desc.Height),
         flags);
 
     ARCBIT_ASSERT(win != nullptr, "SDL_CreateWindow failed");
@@ -56,8 +56,6 @@ bool Window::PollEvents()
                 return false;
 
             case SDL_EVENT_KEY_DOWN:
-                if (event.key.key == SDLK_ESCAPE)
-                    return false;
                 // Suppress repeat events — only forward physical press transitions.
                 if (!event.key.repeat && _keyEventFn)
                     _keyEventFn(static_cast<i32>(event.key.scancode), true);
@@ -108,6 +106,13 @@ bool Window::PollEvents()
 void* Window::GetNativeHandle() const
 {
     return _window;
+}
+
+void Window::ToggleFullscreen()
+{
+    _isFullscreen = !_isFullscreen;
+    SDL_SetWindowFullscreen(ToSDL(_window), _isFullscreen);
+    LOG_INFO(Platform, "Fullscreen: {}", _isFullscreen ? "on" : "off");
 }
 
 void Window::SetKeyEventCallback(std::function<void(i32, bool)> fn)

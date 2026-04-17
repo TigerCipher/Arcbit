@@ -68,6 +68,10 @@ public:
     [[nodiscard]] constexpr u32 GetWidth()  const { return _width; }
     [[nodiscard]] constexpr u32 GetHeight() const { return _height; }
 
+    // Toggle between windowed and borderless fullscreen. F11 also triggers this
+    // automatically inside PollEvents — no game code required.
+    void ToggleFullscreen();
+
     // True if a SDL_EVENT_WINDOW_RESIZED event was processed in the most recent
     // PollEvents call. Cleared at the start of every PollEvents call, so it is
     // only ever true for one frame — the frame the resize was detected.
@@ -104,6 +108,7 @@ private:
     u32   _width            = 0;
     u32   _height           = 0;
     bool  _resizedThisFrame = false;
+    bool  _isFullscreen     = false;
 
     std::function<void(i32, bool)>            _keyEventFn;
     std::function<void(i32, bool)>            _mouseButtonFn;

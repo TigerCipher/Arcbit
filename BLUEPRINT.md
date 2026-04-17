@@ -130,6 +130,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 - [x] Sort / group by texture to minimize descriptor switches
 - [x] Single instance buffer upload + one `Draw` call per texture group
 - [x] World-space coordinate system (pixels or tiles); push constant projects world → NDC
+- [x] Frustum culling — `Camera2D::IsVisible()` filters sprites before packet submission; uses AABB of rotated viewport so culling is correct at any camera rotation angle
 
 ---
 

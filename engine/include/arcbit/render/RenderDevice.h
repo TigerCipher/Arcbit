@@ -164,6 +164,11 @@ public:
     // actual swapchain format chosen by the driver.
     Format GetSwapchainColorFormat(SwapchainHandle handle);
 
+    // Returns the current pixel dimensions of the swapchain image.
+    // Always reflects the post-resize size — safe to call after AcquireNextImage
+    // to get the true extent even when a resize just occurred.
+    void GetSwapchainExtent(SwapchainHandle handle, u32& outWidth, u32& outHeight);
+
     // Create a swapchain tied to the given window.
     // The window handle (SDL_Window*) is passed as void* to keep SDL out of
     // this header. The surface created during device init is reused here.
@@ -277,6 +282,11 @@ public:
     // Set the scissor rectangle — fragments outside are discarded.
     // Typically matches the viewport unless rendering to a sub-region.
     void SetScissor(CommandListHandle cmd, i32 x, i32 y, u32 width, u32 height);
+
+    // Fill a pixel rectangle with a solid color inside an active render pass.
+    // Uses vkCmdClearAttachments — valid inside BeginRendering / EndRendering.
+    // Ignores the current scissor state; the rect is in framebuffer coordinates.
+    void ClearColorRect(CommandListHandle cmd, Color color, i32 x, i32 y, u32 width, u32 height);
 
     // Issue a non-indexed draw — reads vertices sequentially from the bound
     // vertex buffer(s). Use for simple geometry or when index buffers would

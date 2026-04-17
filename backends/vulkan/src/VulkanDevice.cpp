@@ -762,6 +762,17 @@ Format RenderDevice::GetSwapchainColorFormat(SwapchainHandle handle)
     return VkFormatToFormat(sc->Format);
 }
 
+// Returns the actual pixel extent of the swapchain after any resize.
+// The render thread calls this after AcquireNextImage to get the true
+// dimensions rather than relying on the potentially-stale packet values.
+void RenderDevice::GetSwapchainExtent(SwapchainHandle handle, u32& outWidth, u32& outHeight)
+{
+    VulkanSwapchain* sc = _context->Swapchains.Get(handle);
+    ARCBIT_ASSERT(sc != nullptr, "GetSwapchainExtent: invalid handle");
+    outWidth  = sc->Extent.width;
+    outHeight = sc->Extent.height;
+}
+
 // ---------------------------------------------------------------------------
 // Pipelines
 // ---------------------------------------------------------------------------
@@ -1165,9 +1176,7 @@ TextureHandle RenderDevice::AcquireNextImage(SwapchainHandle handle)
     ARCBIT_ASSERT(sc != nullptr, "AcquireNextImage: invalid handle");
 
     // Wait for the GPU to finish the previous use of this frame slot.
-    // After this, the frame's command buffer and sync objects are safe to reuse.
     vkWaitForFences(_context->Device, 1, &sc->InFlight[sc->CurrentFrame], VK_TRUE, UINT64_MAX);
-    vkResetFences  (_context->Device, 1, &sc->InFlight[sc->CurrentFrame]);
 
     u32 imageIndex = 0;
     const VkResult result = vkAcquireNextImageKHR(
@@ -1180,9 +1189,17 @@ TextureHandle RenderDevice::AcquireNextImage(SwapchainHandle handle)
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
-        LOG_WARN(Render, "AcquireNextImage: swapchain out of date — caller should resize");
+        // Do NOT reset the fence here — we skipped Submit, so the fence is still
+        // signaled from the previous frame. Leaving it signaled ensures the next
+        // AcquireNextImage call for this slot returns from vkWaitForFences
+        // immediately instead of hanging forever.
+        LOG_WARN(Render, "AcquireNextImage: swapchain out of date - caller should resize");
         return TextureHandle::Invalid();
     }
+
+    // Reset only after a successful acquire — vkQueueSubmit requires the fence
+    // to be unsignaled, and we're about to reuse this slot's command buffer.
+    vkResetFences(_context->Device, 1, &sc->InFlight[sc->CurrentFrame]);
 
     sc->CurrentImageIndex  = imageIndex;
     _context->ActiveSwapchain = handle; // Submit/Present pick this up
@@ -1479,6 +1496,30 @@ void RenderDevice::SetScissor(CommandListHandle cmd, i32 x, i32 y, u32 width, u3
     ARCBIT_ASSERT(cmdList, "SetScissor: invalid command list");
     VkRect2D scissor{ { x, y }, { width, height } };
     vkCmdSetScissor(cmdList->Buffer, 0, 1, &scissor);
+}
+
+void RenderDevice::ClearColorRect(CommandListHandle cmd, Color color,
+                                   i32 x, i32 y, u32 width, u32 height)
+{
+    // vkCmdClearAttachments writes directly into the active render pass without
+    // ending it — valid inside vkCmdBeginRendering (Vulkan 1.3 dynamic rendering).
+    VulkanCommandList* cmdList = _context->CommandLists.Get(cmd);
+    ARCBIT_ASSERT(cmdList, "ClearColorRect: invalid command list");
+
+    VkClearAttachment attach{};
+    attach.aspectMask                  = VK_IMAGE_ASPECT_COLOR_BIT;
+    attach.colorAttachment             = 0; // index into the color attachment array
+    attach.clearValue.color.float32[0] = color.R;
+    attach.clearValue.color.float32[1] = color.G;
+    attach.clearValue.color.float32[2] = color.B;
+    attach.clearValue.color.float32[3] = color.A;
+
+    VkClearRect rect{};
+    rect.rect           = { { x, y }, { width, height } };
+    rect.baseArrayLayer = 0;
+    rect.layerCount     = 1;
+
+    vkCmdClearAttachments(cmdList->Buffer, 1, &attach, 1, &rect);
 }
 
 void RenderDevice::Draw(CommandListHandle cmd, u32 vertexCount, u32 firstVertex,

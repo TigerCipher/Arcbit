@@ -2,6 +2,7 @@
 
 #include <arcbit/core/Types.h>
 #include <arcbit/core/Math.h>
+#include <arcbit/input/InputTypes.h>
 #include <arcbit/render/RenderThread.h>
 #include <arcbit/input/InputManager.h>
 #include <arcbit/assets/TextureManager.h>
@@ -86,8 +87,14 @@ public:
     // then query it in OnUpdate.
     [[nodiscard]] InputManager& GetInput() { return _input; }
 
-    // The window — use in OnStart / OnUpdate for size queries or title changes.
-    [[nodiscard]] Window& GetWindow();
+    // Current window dimensions in physical pixels. Updated each frame on resize.
+    // Use these when converting mouse coordinates or computing aspect ratios.
+    [[nodiscard]] u32 GetWindowWidth()  const;
+    [[nodiscard]] u32 GetWindowHeight() const;
+
+    // Toggle between windowed and borderless fullscreen. F11 triggers this
+    // automatically — only call explicitly for settings menus etc.
+    void ToggleFullscreen();
 
     // The texture manager — load textures from disk in OnStart; the manager
     // caches by path so repeated loads are free. Application clears it
@@ -146,6 +153,12 @@ private:
     //   _device       — raw pointer; destroyed explicitly in Run()
     //
     // So declaration order is the reverse of that (destructor fires bottom-up):
+    // Engine system actions — registered before OnStart so settings can rebind them.
+    static constexpr ActionID ActionEngineQuit       = MakeAction("Engine_Quit");
+    static constexpr ActionID ActionEngineFullscreen = MakeAction("Engine_Fullscreen");
+
+    bool _shouldQuit = false;
+
     RenderDevice*                   _device = nullptr;
     std::unique_ptr<TextureManager> _textures;
     SwapchainHandle                 _swapchain;

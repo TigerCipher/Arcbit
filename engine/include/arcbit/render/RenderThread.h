@@ -136,6 +136,22 @@ struct FramePacket
     // Additive ambient light applied to every pixel regardless of light proximity.
     Color AmbientColor = Color{ 0.1f, 0.1f, 0.1f, 1.0f };
 
+    // The game's logical design resolution in world pixels.
+    // When set, the NDC transform always exposes exactly this many world pixels
+    // regardless of the actual window size — resizing scales the rendered image
+    // rather than revealing more of the world. Leave as {0, 0} to use the
+    // actual window dimensions (shows more world on a larger window).
+    Vec2 ReferenceSize = {};
+
+    // Color used to fill the letterbox / pillarbox bars when the window aspect
+    // ratio differs from ReferenceSize. Black by default.
+    Color LetterboxColor = Color::Black();
+
+    // Optional texture drawn in the bar regions (e.g. decorative artwork).
+    // Leave invalid to use a solid LetterboxColor instead.
+    TextureHandle LetterboxTexture;
+    SamplerHandle LetterboxSampler;
+
     // If true, the render thread calls ResizeSwapchain(Width, Height) before
     // acquiring the next image. Set this when the window has been resized.
     // The flag is consumed once and does not persist across frames.
@@ -230,9 +246,17 @@ private:
 
     // ----- RenderFrame() helpers (called once per frame) ---------------------
 
+    // Pixel-space rect of the rendered game area within the actual framebuffer.
+    // When ReferenceSize is set and the window aspect differs from the design
+    // aspect, this rect is inset to preserve the design ratio (letterbox / pillarbox).
+    struct LetterboxRect { f32 X = 0, Y = 0, W = 0, H = 0; };
+
+    // Computes the LetterboxRect for the current packet.
+    [[nodiscard]] static LetterboxRect ComputeLetterbox(const FramePacket& packet);
+
     // Handles NeedsResize and AcquireNextImage with one automatic retry.
     // Returns an invalid handle if the frame should be skipped.
-    [[nodiscard]] TextureHandle AcquireBackbuffer(const FramePacket& packet) const;
+    [[nodiscard]] TextureHandle AcquireBackBuffer(const FramePacket& packet) const;
 
     // Grows the light SSBO if needed, uploads this frame's lights.
     // Returns the light count for use in push constants.
@@ -244,20 +268,21 @@ private:
     // Grows the instance buffer if needed, uploads sorted sprite data.
     void UploadInstances(const std::vector<const Sprite*>& sorted, u32 frameSlot);
 
-    // Records BeginRendering with a single cleared color attachment.
-    void BeginRenderPass(CommandListHandle cmd, TextureHandle backbuffer,
-                         const FramePacket& packet) const;
+    // Clears the full framebuffer to LetterboxColor, then clears the letterbox
+    // rect interior to ClearColor. Draws the LetterboxTexture if one is set.
+    void BeginRenderPass(CommandListHandle cmd, TextureHandle backBuffer,
+                         const FramePacket& packet, const LetterboxRect& lb) const;
 
     // Binds the sprite pipeline, uploads push constants, and issues one
     // instanced draw call per texture group. Returns the batch count.
     [[nodiscard]] u32 DrawSpriteBatches(CommandListHandle cmd,
                                         const std::vector<const Sprite*>& sorted,
                                         u32 frameSlot, const FramePacket& packet,
-                                        u32 lightCount) const;
+                                        u32 lightCount, const LetterboxRect& lb) const;
 
     // Issues legacy DrawCall entries in submission order, after all sprites.
     void DrawLegacyCalls(CommandListHandle cmd, const FramePacket& packet,
-                         u32 frameSlot, u32 lightCount) const;
+                         u32 frameSlot, u32 lightCount, const LetterboxRect& lb) const;
 
 private:
     
