@@ -2,6 +2,8 @@
 
 #include <arcbit/core/Types.h>
 
+#include <functional>
+
 namespace Arcbit {
 
 // ---------------------------------------------------------------------------
@@ -76,6 +78,24 @@ public:
     // RenderDevice and SwapchainDesc accept this as NativeWindowHandle.
     [[nodiscard]] void* GetNativeHandle() const;
 
+    // ---------------------------------------------------------------------------
+    // Input event routing
+    //
+    // PollEvents fires these callbacks for each raw input event it encounters
+    // while draining the SDL event queue. Parameters use opaque ints to keep
+    // SDL3/SDL.h out of this header — InputManager casts them back internally.
+    //
+    //   Key callback:     (SDL_Scancode as int, isDown)
+    //   Mouse callback:   (SDL button index as int, isDown)
+    //   Gamepad callback: (SDL_JoystickID as u32, SDL_GamepadButton as int, isDown)
+    //
+    // Key repeat events (held key auto-fire) are suppressed — only physical
+    // press/release transitions are forwarded.
+    // ---------------------------------------------------------------------------
+    void SetKeyEventCallback     (std::function<void(int scancode, bool down)>          fn);
+    void SetMouseButtonCallback  (std::function<void(int button,   bool down)>          fn);
+    void SetGamepadButtonCallback(std::function<void(u32 joystickId, int button, bool down)> fn);
+
 private:
     // SDL_Window* stored as void* to avoid including SDL3/SDL.h in this header.
     // Cast back to SDL_Window* in Window.cpp where SDL is included.
@@ -84,6 +104,10 @@ private:
     u32   m_Width            = 0;
     u32   m_Height           = 0;
     bool  m_ResizedThisFrame = false;
+
+    std::function<void(int, bool)>            m_KeyEventFn;
+    std::function<void(int, bool)>            m_MouseButtonFn;
+    std::function<void(u32, int, bool)>       m_GamepadButtonFn;
 };
 
 } // namespace Arcbit

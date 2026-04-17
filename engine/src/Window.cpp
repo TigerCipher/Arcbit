@@ -56,10 +56,38 @@ bool Window::PollEvents()
                 return false;
 
             case SDL_EVENT_KEY_DOWN:
-                // Escape is a universal "close" shortcut during development.
-                // Phase 9 (Input System) will handle proper key bindings.
                 if (event.key.key == SDLK_ESCAPE)
                     return false;
+                // Suppress repeat events — only forward physical press transitions.
+                if (!event.key.repeat && m_KeyEventFn)
+                    m_KeyEventFn(static_cast<int>(event.key.scancode), true);
+                break;
+
+            case SDL_EVENT_KEY_UP:
+                if (m_KeyEventFn)
+                    m_KeyEventFn(static_cast<int>(event.key.scancode), false);
+                break;
+
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+                if (m_MouseButtonFn)
+                    m_MouseButtonFn(static_cast<int>(event.button.button), true);
+                break;
+
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+                if (m_MouseButtonFn)
+                    m_MouseButtonFn(static_cast<int>(event.button.button), false);
+                break;
+
+            case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+                if (m_GamepadButtonFn)
+                    m_GamepadButtonFn(static_cast<u32>(event.gbutton.which),
+                                      static_cast<int>(event.gbutton.button), true);
+                break;
+
+            case SDL_EVENT_GAMEPAD_BUTTON_UP:
+                if (m_GamepadButtonFn)
+                    m_GamepadButtonFn(static_cast<u32>(event.gbutton.which),
+                                      static_cast<int>(event.gbutton.button), false);
                 break;
 
             case SDL_EVENT_WINDOW_RESIZED:
@@ -75,6 +103,21 @@ bool Window::PollEvents()
     }
 
     return true; // window is still open
+}
+
+void Window::SetKeyEventCallback(std::function<void(int, bool)> fn)
+{
+    m_KeyEventFn = std::move(fn);
+}
+
+void Window::SetMouseButtonCallback(std::function<void(int, bool)> fn)
+{
+    m_MouseButtonFn = std::move(fn);
+}
+
+void Window::SetGamepadButtonCallback(std::function<void(u32, int, bool)> fn)
+{
+    m_GamepadButtonFn = std::move(fn);
 }
 
 void* Window::GetNativeHandle() const

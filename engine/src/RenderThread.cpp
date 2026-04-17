@@ -463,8 +463,9 @@ u32 RenderThread::DrawSpriteBatches(const CommandListHandle cmd, const std::vect
     SpritePushConstants pc{};
     pc.CamPosX    = packet.CameraPosition.X;
     pc.CamPosY    = packet.CameraPosition.Y;
-    pc.ViewportW  = viewW;
-    pc.ViewportH  = viewH;
+    // Dividing by zoom shrinks the effective viewport, making world pixels appear larger.
+    pc.ViewportW  = viewW / packet.CameraZoom;
+    pc.ViewportH  = viewH / packet.CameraZoom;
     pc.AmbientR   = packet.AmbientColor.R;
     pc.AmbientG   = packet.AmbientColor.G;
     pc.AmbientB   = packet.AmbientColor.B;

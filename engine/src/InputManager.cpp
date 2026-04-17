@@ -247,7 +247,29 @@ void InputManager::ClearBindings(const ActionID action)
 }
 
 // ---------------------------------------------------------------------------
-// Update — called once per frame after Window::PollEvents
+// Input event injection — called by Application during Window::PollEvents
+// ---------------------------------------------------------------------------
+
+void InputManager::InjectKeyEvent(const int scancode, const bool down)
+{
+    if (down) m_PendingKeyDown.insert(scancode);
+    else       m_PendingKeyUp.insert(scancode);
+}
+
+void InputManager::InjectMouseButton(const int sdlButton, const bool down)
+{
+    if (down) m_PendingMouseDown.insert(sdlButton);
+    else       m_PendingMouseUp.insert(sdlButton);
+}
+
+void InputManager::InjectGamepadButton(const u32 joystickId, const int sdlButton, const bool down)
+{
+    if (down) m_PendingGamepadDown.push_back({ joystickId, sdlButton });
+    else       m_PendingGamepadUp.push_back({ joystickId, sdlButton });
+}
+
+// ---------------------------------------------------------------------------
+// Update — called once per display frame after Window::PollEvents
 // ---------------------------------------------------------------------------
 
 void InputManager::Update()
@@ -316,16 +338,13 @@ void InputManager::Update()
     }
 
     // --- Evaluate actions ---------------------------------------------------
-    // For each registered action, poll all its bindings and compute the
-    // composite pressed/axis state. JustPressed / JustReleased are derived
-    // by comparing the new pressed state with the previous frame's value.
-    for (auto &entry: m_Actions | std::views::values)
+    // Compute IsPressed and AxisValue from current SDL state.
+    // JustPressed / JustReleased are NOT set here — ProcessEdges() handles
+    // those from the accumulated event queue, called once per game tick.
+    for (auto& entry : m_Actions | std::views::values)
     {
-        const bool prevPressed = entry.Pressed;
-
-        // Start from zero; OR in contributions from each binding.
-        bool anyPressed   = false;
-        f32  bestAxisVal  = 0.0f; // binding with the largest absolute magnitude wins
+        bool anyPressed  = false;
+        f32  bestAxisVal = 0.0f;
 
         for (const Binding& b : entry.Bindings)
         {
@@ -336,10 +355,11 @@ void InputManager::Update()
                 anyPressed = true;
         }
 
-        entry.Pressed      = anyPressed;
-        entry.AxisValue    = bestAxisVal;
-        entry.JustPressed  = anyPressed && !prevPressed;
-        entry.JustReleased = !anyPressed && prevPressed;
+        entry.Pressed   = anyPressed;
+        entry.AxisValue = bestAxisVal;
+        // Reset edge flags — ProcessEdges() will set them correctly for each tick.
+        entry.JustPressed  = false;
+        entry.JustReleased = false;
     }
 }
 
@@ -369,6 +389,58 @@ f32 InputManager::AxisValue(const ActionID action) const
 {
     const auto it = m_Actions.find(action);
     return it != m_Actions.end() ? it->second.AxisValue : 0.0f;
+}
+
+void InputManager::ProcessEdges()
+{
+    for (auto& entry : m_Actions | std::views::values)
+    {
+        bool anyJustPressed  = false;
+        bool anyJustReleased = false;
+
+        for (const Binding& b : entry.Bindings)
+        {
+            switch (b.BindingType)
+            {
+                case Binding::Type::Key:
+                {
+                    const int sc = static_cast<int>(ToScancode(b.BoundKey));
+                    if (m_PendingKeyDown.contains(sc)) anyJustPressed  = true;
+                    if (m_PendingKeyUp.contains(sc))   anyJustReleased = true;
+                    break;
+                }
+                case Binding::Type::MouseButton:
+                {
+                    const int btn = ToSDLMouseButton(b.BoundMouse);
+                    if (m_PendingMouseDown.contains(btn)) anyJustPressed  = true;
+                    if (m_PendingMouseUp.contains(btn))   anyJustReleased = true;
+                    break;
+                }
+                case Binding::Type::GamepadButton:
+                {
+                    const int sdlBtn = static_cast<int>(ToSDLGamepadButton(b.BoundButton));
+                    for (const auto& [id, btn] : m_PendingGamepadDown)
+                        if (btn == sdlBtn) { anyJustPressed = true; break; }
+                    for (const auto& [id, btn] : m_PendingGamepadUp)
+                        if (btn == sdlBtn) { anyJustReleased = true; break; }
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+
+        // JustReleased is only meaningful when the action is no longer pressed.
+        entry.JustPressed  = anyJustPressed;
+        entry.JustReleased = anyJustReleased && !entry.Pressed;
+    }
+
+    m_PendingKeyDown.clear();
+    m_PendingKeyUp.clear();
+    m_PendingMouseDown.clear();
+    m_PendingMouseUp.clear();
+    m_PendingGamepadDown.clear();
+    m_PendingGamepadUp.clear();
 }
 
 void InputManager::GetMousePosition(i32& outX, i32& outY) const

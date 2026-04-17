@@ -12,8 +12,8 @@ layout(set = 0, binding = 0) uniform sampler2D u_Albedo;
 layout(set = 1, binding = 0) uniform sampler2D u_Normal;
 
 struct PointLight {
-    vec2  position;    // NDC light center
-    float radius;      // NDC radius — falls off to zero at this distance
+    vec2  position;    // world-space center in pixels, matching Sprite::Position
+    float radius;      // world-space radius in pixels — falls off to zero at this distance
     float intensity;   // multiplier applied to the color contribution
     vec4  color;       // rgba light color (.a reserved)
 };
@@ -30,7 +30,7 @@ layout(push_constant) uniform PC {
 } pc;
 
 layout(location = 0) in vec2 inUV;
-layout(location = 1) in vec2 inNDC;
+layout(location = 1) in vec2 inWorldPos;
 layout(location = 2) in vec4 inTint;
 
 layout(location = 0) out vec4 outColor;
@@ -57,7 +57,7 @@ void main()
     {
         PointLight light = lights[i];
 
-        vec2  delta = light.position - inNDC;
+        vec2  delta = light.position - inWorldPos;
         float dist  = length(delta);
 
         if (dist >= light.radius)
@@ -67,8 +67,12 @@ void main()
         float attenuation = 1.0 - (dist / light.radius);
         attenuation       = attenuation * attenuation;
 
-        // Lambertian diffuse — light direction points toward the viewer (z = 1).
-        vec3  L     = normalize(vec3(delta, 1.0));
+        // Lambertian diffuse. Normalize the 2D delta before adding the Z component
+        // so the elevation angle stays consistent regardless of world-space scale.
+        // Without this, large pixel distances would make the light nearly horizontal,
+        // collapsing NdotL to ~0 against a flat normal.
+        vec2  dir2d = (dist > 0.001) ? (delta / dist) : vec2(0.0, 0.0);
+        vec3  L     = normalize(vec3(dir2d, 1.0));
         float NdotL = max(dot(N, L), 0.0);
 
         lighting += light.color.rgb * light.intensity * attenuation * NdotL;

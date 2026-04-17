@@ -91,6 +91,20 @@ void Application::Run()
     OnStart();
     Settings::LoadInputBindings(m_Input);
 
+    // Route Window input events to InputManager so JustPressed/JustReleased are
+    // driven by the SDL event queue rather than polling-based state comparison.
+    // This prevents edge events from being missed when the fixed-timestep
+    // accumulator fires zero update ticks in a given display frame.
+    m_Window->SetKeyEventCallback([this](int sc, bool down) {
+        m_Input.InjectKeyEvent(sc, down);
+    });
+    m_Window->SetMouseButtonCallback([this](int btn, bool down) {
+        m_Input.InjectMouseButton(btn, down);
+    });
+    m_Window->SetGamepadButtonCallback([this](u32 which, int btn, bool down) {
+        m_Input.InjectGamepadButton(which, btn, down);
+    });
+
     // High-resolution wall-clock timer for accurate delta time.
     using Clock    = std::chrono::steady_clock;
     using Duration = std::chrono::duration<f64>;
@@ -126,6 +140,11 @@ void Application::Run()
         accumulator += dt;
         while (accumulator >= static_cast<f64>(_fixedTimestep))
         {
+            // ProcessEdges() consumes accumulated key/mouse/gamepad button events
+            // and sets JustPressed/JustReleased for this tick. Events are held in
+            // the pending sets until ProcessEdges() runs, so they survive frames
+            // where the accumulator doesn't reach the threshold.
+            m_Input.ProcessEdges();
             OnUpdate(_fixedTimestep);
             accumulator -= static_cast<f64>(_fixedTimestep);
         }

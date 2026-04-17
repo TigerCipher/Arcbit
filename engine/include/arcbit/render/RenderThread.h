@@ -23,12 +23,11 @@ namespace Arcbit {
 // ---------------------------------------------------------------------------
 struct PointLight
 {
-    // Center of the light in NDC space (-1 to 1 on each axis), matching the
-    // coordinate system used by DrawCall::Position.
+    // Center of the light in world-space pixels, matching Sprite::Position.
     Vec2 Position;
 
-    // Radius of the light in NDC units. 1.0 reaches the screen edges from center.
-    f32 Radius = 0.5f;
+    // Radius in world-space pixels. The light falls off to zero at this distance.
+    f32 Radius = 200.0f;
 
     // Multiplier applied to the light color. >1 is valid for HDR-style intensity.
     f32 Intensity = 1.0f;
@@ -118,6 +117,10 @@ struct FramePacket
     // World-space position that maps to the center of the screen.
     // Defaults to (0, 0) — a sprite at world (0, 0) renders at screen center.
     Vec2 CameraPosition = { 0.0f, 0.0f };
+
+    // Zoom multiplier. >1 zooms in (world pixels appear larger), <1 zooms out.
+    // Applied by dividing the effective viewport size before the NDC transform.
+    f32 CameraZoom = 1.0f;
 
     // Low-level draw calls rendered after all sprites, in submission order.
     // Requires the caller to own the pipeline and specify NDC coordinates.

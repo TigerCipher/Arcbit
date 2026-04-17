@@ -29,7 +29,7 @@ layout(push_constant) uniform PC {
 } pc;
 
 layout(location = 0) out vec2 outUV;
-layout(location = 1) out vec2 outNDC;   // NDC fragment position, forwarded for light distance math
+layout(location = 1) out vec2 outWorldPos;  // world-space fragment position, forwarded for light distance math
 layout(location = 2) out vec4 outTint;
 
 void main()
@@ -56,9 +56,9 @@ void main()
 
     // UV: bilinearly map the local corner to the atlas sub-region.
     // corner * 0.5 + 0.5 converts [-1,1] → [0,1]; mix selects between (u0,v0) and (u1,v1).
-    outUV  = mix(a_UV.xy, a_UV.zw, corner * 0.5 + 0.5);
-    outNDC = ndc;
-    outTint = a_Tint;
+    outUV      = mix(a_UV.xy, a_UV.zw, corner * 0.5 + 0.5);
+    outWorldPos = worldPos;
+    outTint    = a_Tint;
 
     gl_Position = vec4(ndc, 0.0, 1.0);
 }

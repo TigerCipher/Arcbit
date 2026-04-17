@@ -3,15 +3,16 @@
 #include <arcbit/core/Log.h>
 #include <arcbit/core/Assert.h>
 #include <arcbit/input/InputTypes.h>
+#include <arcbit/render/Camera2D.h>
 #include <arcbit/render/RenderThread.h>
 #include <arcbit/render/RenderTypes.h>
 
 // ---------------------------------------------------------------------------
 // ArcbitGame — demo Application subclass
 //
-// Exercises the Phase 14 sprite batcher: world-space sprites sorted by layer
-// and batched by texture. No pipeline management in game code — the
-// RenderThread owns the sprite pipeline.
+// Phase 14: sprite batcher demo — world-space sprites, multi-texture, multi-layer.
+// Phase 15: Camera2D demo — WASD pan, scroll-wheel zoom, mouse-following point light.
+//           ScreenToWorld() converts mouse pixels → world position for the light.
 // ---------------------------------------------------------------------------
 class ArcbitGame : public Arcbit::Application
 {
@@ -30,6 +31,7 @@ protected:
         GetInput().RegisterAction(ActionMoveUp, "Move_Up");
         GetInput().RegisterAction(ActionMoveDown, "Move_Down");
         GetInput().RegisterAction(ActionInteract, "Interact");
+        GetInput().RegisterAction(ActionSprint, "Sprint");
 
         GetInput().BindKey(ActionMoveLeft, Arcbit::Key::A);
         GetInput().BindKey(ActionMoveLeft, Arcbit::Key::Left);
@@ -41,8 +43,10 @@ protected:
         GetInput().BindKey(ActionMoveDown, Arcbit::Key::Down);
         GetInput().BindKey(ActionInteract, Arcbit::Key::E);
         GetInput().BindKey(ActionInteract, Arcbit::Key::Enter);
+        GetInput().BindKey(ActionSprint, Arcbit::Key::LeftShift);
 
         GetInput().BindGamepadButton(ActionInteract, Arcbit::GamepadButton::South);
+        GetInput().BindGamepadButton(ActionSprint, Arcbit::GamepadButton::RightShoulder);
         GetInput().BindGamepadAxis(ActionMoveLeft, Arcbit::GamepadAxis::LeftX);
         GetInput().BindGamepadAxis(ActionMoveRight, Arcbit::GamepadAxis::LeftX);
         GetInput().BindGamepadAxis(ActionMoveUp, Arcbit::GamepadAxis::LeftY);
@@ -99,36 +103,48 @@ protected:
         m_FloorSampler       = GetDevice().CreateSampler(linearDesc);
         ARCBIT_ASSERT(m_FloorSampler.IsValid(), "Failed to create floor sampler");
 
-        // --- Random lights (seeded at startup, animated each frame) ---
+        // --- Random lights — world-space pixels (scattered across ±900 x ±500) ---
         for (int i = 0; i < NumRandomLights; ++i)
         {
-            m_Lights[i].Position  = { static_cast<float>(rand() % 200 - 100) / 100.0f,
-                                      static_cast<float>(rand() % 200 - 100) / 100.0f };
-            m_Lights[i].Radius    = static_cast<float>(rand() % 100) / 100.0f * 0.5f + 0.1f;
+            m_Lights[i].Position  = { static_cast<float>(rand() % 1800 - 900), static_cast<float>(rand() % 1000 - 500) };
+            m_Lights[i].Radius    = static_cast<float>(rand() % 300) + 100.0f; // 100–400 px
             m_Lights[i].Intensity = static_cast<float>(rand() % 100) / 100.0f + 0.5f;
             m_Lights[i].LightColor =
                 Arcbit::Color{ static_cast<float>(rand() % 100) / 100.0f, static_cast<float>(rand() % 100) / 100.0f,
                                static_cast<float>(rand() % 100) / 100.0f, 1.0f };
         }
-        
+
         CreateSprites();
     }
 
     // -----------------------------------------------------------------------
-    // OnUpdate — fixed-timestep game logic.
+    // OnUpdate — camera pan, zoom, and shake demo.
     // -----------------------------------------------------------------------
-    void OnUpdate(Arcbit::f32 /*dt*/) override
+    void OnUpdate(Arcbit::f32 dt) override
     {
-        if (GetInput().JustPressed(ActionInteract))
-            LOG_DEBUG(Game, "Interact triggered");
+        m_Camera.Update(dt);
+
+        // WASD pans the camera at CameraPanSpeed world-pixels/second.
+        constexpr float CameraPanSpeed = 400.0f;
+        float sprintMultiplier = 1.0f;
+        
+        if (GetInput().IsPressed(ActionSprint))
+            sprintMultiplier = 3.0f;
+
+        const float camSpeed = CameraPanSpeed * sprintMultiplier;
+        
         if (GetInput().IsPressed(ActionMoveLeft))
-            LOG_DEBUG(Game, "Moving left  (axis={:.2f})", GetInput().AxisValue(ActionMoveLeft));
+            m_Camera.Position.X -= camSpeed * dt;
         if (GetInput().IsPressed(ActionMoveRight))
-            LOG_DEBUG(Game, "Moving right (axis={:.2f})", GetInput().AxisValue(ActionMoveRight));
+            m_Camera.Position.X += camSpeed * dt;
         if (GetInput().IsPressed(ActionMoveUp))
-            LOG_DEBUG(Game, "Moving up    (axis={:.2f})", GetInput().AxisValue(ActionMoveUp));
+            m_Camera.Position.Y -= camSpeed * dt;
         if (GetInput().IsPressed(ActionMoveDown))
-            LOG_DEBUG(Game, "Moving down  (axis={:.2f})", GetInput().AxisValue(ActionMoveDown));
+            m_Camera.Position.Y += camSpeed * dt;
+
+        // Interact adds a burst of screen shake.
+        if (GetInput().JustPressed(ActionInteract))
+            m_Camera.AddTrauma(0.6f);
     }
 
     // -----------------------------------------------------------------------
@@ -150,36 +166,53 @@ protected:
     void OnRender(Arcbit::FramePacket& packet) override
     {
         packet.AmbientColor   = Arcbit::Color{ 0.1f, 0.1f, 0.15f, 1.0f };
-        packet.CameraPosition = { 0.0f, 0.0f };
+        packet.CameraPosition = m_Camera.GetEffectivePosition();
+        packet.CameraZoom     = m_Camera.Zoom;
 
-        // --- Lights ---
+        // --- Static world lights (world-space pixels) ---
         {
             Arcbit::PointLight light{};
             light.Position   = { 0.0f, 0.0f };
-            light.Radius     = 0.6f;
+            light.Radius     = 576.0f; // ≈ 60% of half-width
             light.Intensity  = 1.5f;
             light.LightColor = Arcbit::Color::NaturalLight();
             packet.Lights.push_back(light);
         }
         {
             Arcbit::PointLight light{};
-            light.Position   = { 0.9f, -0.3f };
-            light.Radius     = 0.2f;
+            light.Position   = { 864.0f, -162.0f };
+            light.Radius     = 192.0f;
             light.Intensity  = 1.5f;
             light.LightColor = Arcbit::Color::Green();
             packet.Lights.push_back(light);
         }
         {
             Arcbit::PointLight light{};
-            light.Position   = { -0.9f, 0.6f };
-            light.Radius     = 0.4f;
+            light.Position   = { -864.0f, 324.0f };
+            light.Radius     = 384.0f;
             light.Intensity  = 1.9f;
             light.LightColor = Arcbit::Color::Red();
             packet.Lights.push_back(light);
         }
+
+        // --- Mouse-following light — converts screen pixels → world-space ---
+        {
+            Arcbit::i32 mouseX = 0, mouseY = 0;
+            GetInput().GetMousePosition(mouseX, mouseY);
+            const Arcbit::Vec2 mouseWorld =
+                m_Camera.ScreenToWorld({ static_cast<float>(mouseX), static_cast<float>(mouseY) }, { ViewportW, ViewportH });
+
+            Arcbit::PointLight light{};
+            light.Position   = mouseWorld;
+            light.Radius     = 300.0f;
+            light.Intensity  = 2.0f;
+            light.LightColor = Arcbit::Color{ 0.9f, 0.85f, 0.6f, 1.0f }; // warm lantern
+            packet.Lights.push_back(light);
+        }
+
         for (int i = 0; i < NumRandomLights; ++i)
             packet.Lights.push_back(m_Lights[i]);
-        
+
         packet.Sprites.reserve(m_Sprites.size());
         packet.Sprites.assign(m_Sprites.begin(), m_Sprites.end());
     }
@@ -317,7 +350,7 @@ private:
                 m_Sprites.push_back(s);
             }
         }
-        
+
         LOG_DEBUG(Game, "Created {} sprites", m_Sprites.size());
     }
 
@@ -327,6 +360,13 @@ private:
     static constexpr Arcbit::ActionID ActionMoveUp    = Arcbit::MakeAction("Move_Up");
     static constexpr Arcbit::ActionID ActionMoveDown  = Arcbit::MakeAction("Move_Down");
     static constexpr Arcbit::ActionID ActionInteract  = Arcbit::MakeAction("Interact");
+    static constexpr Arcbit::ActionID ActionSprint  = Arcbit::MakeAction("Sprint");
+
+    // Must match the window dimensions set in the constructor.
+    static constexpr float ViewportW = 1920.0f;
+    static constexpr float ViewportH = 1080.0f;
+
+    Arcbit::Camera2D m_Camera;
 
     // Samplers — still game-owned (control filtering per sprite).
     // The sprite pipeline itself is owned by RenderThread.

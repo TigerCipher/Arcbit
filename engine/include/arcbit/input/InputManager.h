@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace Arcbit {
@@ -89,19 +90,43 @@ public:
     void ClearBindings(ActionID action);
 
     // -----------------------------------------------------------------------
+    // Input event injection
+    //
+    // Called by Application to forward raw SDL events captured during
+    // Window::PollEvents(). Parameters are opaque ints matching the SDL types
+    // (SDL_Scancode, SDL button index, SDL_GamepadButton) without requiring
+    // SDL headers here.
+    //
+    // Events accumulate in pending sets between ProcessEdges() calls so they
+    // are never lost if the fixed-timestep loop fires zero times in a frame.
+    // -----------------------------------------------------------------------
+    void InjectKeyEvent     (int scancode,   bool down);
+    void InjectMouseButton  (int sdlButton,  bool down);
+    void InjectGamepadButton(u32 joystickId, int sdlButton, bool down);
+
+    // -----------------------------------------------------------------------
     // Per-frame update
     //
-    // Must be called once per frame, AFTER Window::PollEvents(), so that SDL's
-    // internal keyboard/mouse state reflects the events from this frame.
-    //
-    // Internally:
-    //   - Polls SDL keyboard state array (SDL_GetKeyboardState).
-    //   - Polls SDL mouse state (SDL_GetMouseState).
-    //   - Diffs gamepad list against the previous frame; opens/closes handles.
-    //   - For each action, OR's all its bindings to get the composite state.
-    //   - Computes JustPressed / JustReleased by comparing with previous frame.
+    // Must be called once per display frame, AFTER Window::PollEvents().
+    // Polls current keyboard/mouse/gamepad state for IsPressed and AxisValue.
+    // Does NOT set JustPressed/JustReleased — call ProcessEdges() for those.
     // -----------------------------------------------------------------------
     void Update();
+
+    // -----------------------------------------------------------------------
+    // Per-tick edge processing
+    //
+    // Call once per game tick (inside the fixed-timestep loop), after Update().
+    // Consumes accumulated key/mouse/gamepad button events and sets
+    // JustPressed / JustReleased for all actions, then clears the event queue.
+    //
+    // Why separate from Update()?
+    //   Update() runs every display frame; the fixed-timestep OnUpdate() may
+    //   run 0 or N times per display frame. Putting edge detection here ensures
+    //   events are held until a tick consumes them — no JustPressed is ever lost
+    //   because the accumulator was slightly short of the threshold.
+    // -----------------------------------------------------------------------
+    void ProcessEdges();
 
     // -----------------------------------------------------------------------
     // Action queries
@@ -189,6 +214,19 @@ private:
     // Returned by GetBindings when the action has no entry, so we never
     // return a dangling reference.
     static const std::vector<Binding> s_EmptyBindings;
+
+    // --- Pending input events (accumulated between ProcessEdges() calls) ----
+    // Populated by InjectKeyEvent / InjectMouseButton / InjectGamepadButton.
+    // ProcessEdges() reads these to set JustPressed/JustReleased, then clears them.
+
+    struct PendingGamepadEvent { u32 JoystickId; int Button; };
+
+    std::unordered_set<int>           m_PendingKeyDown;
+    std::unordered_set<int>           m_PendingKeyUp;
+    std::unordered_set<int>           m_PendingMouseDown;
+    std::unordered_set<int>           m_PendingMouseUp;
+    std::vector<PendingGamepadEvent>  m_PendingGamepadDown;
+    std::vector<PendingGamepadEvent>  m_PendingGamepadUp;
 };
 
 } // namespace Arcbit
