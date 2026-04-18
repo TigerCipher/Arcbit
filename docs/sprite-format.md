@@ -145,8 +145,22 @@ defined in the same file (animation frames reference frame names, not indices).
     "name": "walk_down",
     "loop": true,
     "frames": [
-      { "frame": "walk_down_0", "duration_ms": 120 },
-      { "frame": "walk_down_1", "duration_ms": 120 }
+      { "frame": "walk_down_0", "duration_ms": 100 },
+      { "frame": "walk_down_1", "duration_ms": 100, "events": ["FootStep"] },
+      { "frame": "walk_down_2", "duration_ms": 100 },
+      { "frame": "walk_down_3", "duration_ms": 100 },
+      { "frame": "walk_down_4", "duration_ms": 100, "events": ["FootStep"] },
+      { "frame": "walk_down_5", "duration_ms": 100 }
+    ]
+  },
+  {
+    "name": "attack_down",
+    "loop": false,
+    "frames": [
+      { "frame": "attack_down_0", "duration_ms": 80 },
+      { "frame": "attack_down_1", "duration_ms": 80 },
+      { "frame": "attack_down_2", "duration_ms": 80, "events": ["AttackHit"] },
+      { "frame": "attack_down_3", "duration_ms": 80 }
     ]
   }
 ]
@@ -158,9 +172,38 @@ defined in the same file (animation frames reference frame names, not indices).
 | `loop` | no | Whether the clip loops when it reaches the last frame. Default `false` |
 | `frames[].frame` | yes | Name of a frame defined in the top-level `frames` array |
 | `frames[].duration_ms` | yes | How long this frame is displayed, in milliseconds |
+| `frames[].events` | no | Array of event name strings fired when this frame becomes active |
 
 Animation frames reference frames **by name**, not by array index. This means
 reordering the `frames` array never silently breaks animations.
+
+#### Frame events
+
+The optional `events` array on each animation frame entry lists named strings
+that the engine fires the tick that frame becomes active. `AnimatorSystem` calls
+`Animator::OnEvent(eventName)` once per name, in array order.
+
+Event names are arbitrary strings — the engine does not interpret them. Game code
+registers a callback on the `Animator` component and responds however it likes:
+
+```cpp
+anim.OnEvent = [&](std::string_view ev)
+{
+    if (ev == "FootStep") audio.PlayOneShot("sfx/step_grass");
+    if (ev == "AttackHit") SpawnHitParticles(playerPos);
+};
+```
+
+Conventions used in `player.json`:
+
+| Event | Placement | Intended use |
+|-------|-----------|--------------|
+| `FootStep` | Walk frames 1 & 4 (each foot strike) | Footstep SFX, dust particle |
+| `AttackHit` | Attack frame 2 (impact frame) | Hit SFX, screen shake, hitbox active |
+| `Land` | Fall frame 3 (landing frame) | Land SFX, impact particle |
+
+Events fire only on frame **transitions** — not when the clip first starts at
+frame 0, and not on repeated ticks that stay on the same frame.
 
 ---
 

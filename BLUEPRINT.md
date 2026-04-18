@@ -178,9 +178,9 @@ define *how* it gets there. Any controller pairs with any style.
 - [x] `AnimationClip` — ordered list of named frames with per-frame duration; defined in the sprite format JSON (`docs/sprite-format.md`) and loaded via `SpriteSheet`
 - [x] `Animator` component — current clip, elapsed time, frame index, playing flag; `AnimatorSystem` advances frames and writes `SpriteRenderer.UV` + `SpriteRenderer.Pivot` each tick
 - [x] `SpriteRenderer.Pivot` applied by `SpriteRenderSystem` — offsets the rendered quad so the logical anchor aligns with `Transform2D.Position`
-- [ ] State machine: named states, transitions triggered by conditions (e.g. `velocity > 0 → Walk`)
-- [ ] Blend between clips (cross-fade for smoother transitions)
-- [ ] Events on specific frames (e.g. `"FootStep"` on frame 2 — triggers audio / particle)
+- [x] State machine: `AnimatorStateMachine` component — named states, float/bool/trigger parameters, per-transition condition lists, optional exit-time gate; `AnimatorStateMachineSystem` evaluates transitions and updates the paired `Animator` clip automatically
+- [ ] Blend between clips (cross-fade — not applicable to pixel-art sprite sheets; deferred indefinitely)
+- [x] Events on specific frames — `"events": ["FootStep"]` in sprite JSON; `Animator::OnEvent` callback fired by `AnimatorSystem` when the frame becomes active
 
 ---
 

@@ -114,10 +114,10 @@
             "loop": true,
             "frames": [
                 { "frame": "walk_down_0", "duration_ms": 100 },
-                { "frame": "walk_down_1", "duration_ms": 100 },
+                { "frame": "walk_down_1", "duration_ms": 100, "events": ["FootStep"] },
                 { "frame": "walk_down_2", "duration_ms": 100 },
                 { "frame": "walk_down_3", "duration_ms": 100 },
-                { "frame": "walk_down_4", "duration_ms": 100 },
+                { "frame": "walk_down_4", "duration_ms": 100, "events": ["FootStep"] },
                 { "frame": "walk_down_5", "duration_ms": 100 }
             ]
         },
@@ -126,10 +126,10 @@
             "loop": true,
             "frames": [
                 { "frame": "walk_right_0", "duration_ms": 100 },
-                { "frame": "walk_right_1", "duration_ms": 100 },
+                { "frame": "walk_right_1", "duration_ms": 100, "events": ["FootStep"] },
                 { "frame": "walk_right_2", "duration_ms": 100 },
                 { "frame": "walk_right_3", "duration_ms": 100 },
-                { "frame": "walk_right_4", "duration_ms": 100 },
+                { "frame": "walk_right_4", "duration_ms": 100, "events": ["FootStep"] },
                 { "frame": "walk_right_5", "duration_ms": 100 }
             ]
         },
@@ -138,10 +138,10 @@
             "loop": true,
             "frames": [
                 { "frame": "walk_up_0", "duration_ms": 100 },
-                { "frame": "walk_up_1", "duration_ms": 100 },
+                { "frame": "walk_up_1", "duration_ms": 100, "events": ["FootStep"] },
                 { "frame": "walk_up_2", "duration_ms": 100 },
                 { "frame": "walk_up_3", "duration_ms": 100 },
-                { "frame": "walk_up_4", "duration_ms": 100 },
+                { "frame": "walk_up_4", "duration_ms": 100, "events": ["FootStep"] },
                 { "frame": "walk_up_5", "duration_ms": 100 }
             ]
         },
@@ -151,7 +151,7 @@
             "frames": [
                 { "frame": "attack_down_0", "duration_ms": 80 },
                 { "frame": "attack_down_1", "duration_ms": 80 },
-                { "frame": "attack_down_2", "duration_ms": 80 },
+                { "frame": "attack_down_2", "duration_ms": 80, "events": ["AttackHit"] },
                 { "frame": "attack_down_3", "duration_ms": 80 }
             ]
         },
@@ -161,7 +161,7 @@
             "frames": [
                 { "frame": "attack_right_0", "duration_ms": 80 },
                 { "frame": "attack_right_1", "duration_ms": 80 },
-                { "frame": "attack_right_2", "duration_ms": 80 },
+                { "frame": "attack_right_2", "duration_ms": 80, "events": ["AttackHit"] },
                 { "frame": "attack_right_3", "duration_ms": 80 }
             ]
         },
@@ -171,7 +171,7 @@
             "frames": [
                 { "frame": "attack_up_0", "duration_ms": 80 },
                 { "frame": "attack_up_1", "duration_ms": 80 },
-                { "frame": "attack_up_2", "duration_ms": 80 },
+                { "frame": "attack_up_2", "duration_ms": 80, "events": ["AttackHit"] },
                 { "frame": "attack_up_3", "duration_ms": 80 }
             ]
         },
@@ -182,7 +182,7 @@
                 { "frame": "fall_0", "duration_ms": 120 },
                 { "frame": "fall_1", "duration_ms": 120 },
                 { "frame": "fall_2", "duration_ms": 120 },
-                { "frame": "fall_3", "duration_ms": 120 }
+                { "frame": "fall_3", "duration_ms": 120, "events": ["Land"] }
             ]
         }
     ]

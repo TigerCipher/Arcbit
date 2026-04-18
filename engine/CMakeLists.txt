@@ -16,6 +16,7 @@ add_library(arcbit-engine STATIC
     src/World.cpp
     src/Systems.cpp
     src/Scene.cpp
+    src/AnimatorStateMachine.cpp
 )
 
 target_include_directories(arcbit-engine

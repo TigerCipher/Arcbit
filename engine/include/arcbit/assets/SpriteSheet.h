@@ -42,8 +42,9 @@ struct SpriteFrame
 // ---------------------------------------------------------------------------
 struct AnimationFrameRef
 {
-    std::string FrameName;
-    u32         DurationMs = 100;
+    std::string              FrameName;
+    u32                      DurationMs = 100;
+    std::vector<std::string> Events;    // named events fired when this frame becomes active
 };
 
 struct AnimationClip

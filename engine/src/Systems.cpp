@@ -1,4 +1,5 @@
 #include <arcbit/ecs/World.h>
+#include <arcbit/ecs/AnimatorStateMachine.h>
 #include <arcbit/scene/Scene.h>
 #include <arcbit/assets/SpriteSheet.h>
 #include <arcbit/render/RenderThread.h>
@@ -128,6 +129,49 @@ namespace
         });
     }
 
+    void RegisterAnimatorStateMachineSystem(World& world)
+    {
+        world.RegisterSystem("AnimatorStateMachine", [](Scene& scene, const f32 /*dt*/) {
+        // clang-format off
+        scene.GetWorld()
+                .Query<AnimatorStateMachine, Animator>()
+                .Without<Disabled>()
+                .ForEach([](AnimatorStateMachine& sm, Animator& anim) {
+                    if (!sm.Sheet || sm.CurrentStateName().empty())
+                        return;
+
+                    const auto* state = sm.CurrentState();
+                    if (!state)
+                        return;
+
+                    // Compute clip progress fraction for exit-time checks.
+                    f32 progress = 0.0f;
+                    if (anim.Clip && !anim.Clip->Frames.empty())
+                    {
+                        const u32 count = static_cast<u32>(anim.Clip->Frames.size());
+                        progress = anim.Finished
+                                       ? 1.0f
+                                       : static_cast<f32>(anim.FrameIndex) / static_cast<f32>(count);
+                    }
+
+                    const std::string next = sm.EvaluateTransitions(progress);
+                    if (next.empty())
+                        return;
+
+                    sm.TransitionTo(next);
+                    const auto* newState = sm.CurrentState();
+                    if (!newState)
+                        return;
+
+                    anim.Clip       = sm.Sheet->GetAnimation(newState->ClipName);
+                    anim.FrameIndex = 0;
+                    anim.Elapsed    = 0.0f;
+                    anim.Finished   = false;
+                });
+            // clang-format on
+        });
+    }
+
     void RegisterAnimatorSystem(World& world)
     {
         world.RegisterSystem("Animator", [](Scene& scene, const f32 dt) {
@@ -145,10 +189,25 @@ namespace
                     if (anim.Elapsed >= frameSecs)
                     {
                         anim.Elapsed -= frameSecs;
-                        const u32 count = static_cast<u32>(anim.Clip->Frames.size());
+                        const u32 count    = static_cast<u32>(anim.Clip->Frames.size());
+                        const u32 prevFrame = anim.FrameIndex;
                         ++anim.FrameIndex;
+
                         if (anim.FrameIndex >= count)
-                            anim.FrameIndex = anim.Clip->Loop ? 0 : count - 1;
+                        {
+                            if (anim.Clip->Loop)
+                                anim.FrameIndex = 0;
+                            else
+                            {
+                                anim.FrameIndex = count - 1;
+                                anim.Finished   = true;
+                            }
+                        }
+
+                        // Fire frame events when the frame index actually changes.
+                        if (anim.FrameIndex != prevFrame && anim.OnEvent)
+                            for (const auto& ev : anim.Clip->Frames[anim.FrameIndex].Events)
+                                anim.OnEvent(ev);
                     }
 
                     const std::string& frameName = anim.Clip->Frames[anim.FrameIndex].FrameName;
@@ -205,7 +264,8 @@ void RegisterBuiltinSystems(World& world)
     RegisterLifetimeSystem(world);
     RegisterFreeMovementSystem(world);
     RegisterCameraFollowSystem(world);
-    RegisterAnimatorSystem(world);
+    RegisterAnimatorStateMachineSystem(world); // evaluates transitions, updates Animator clip
+    RegisterAnimatorSystem(world);             // advances frames, fires events, writes UV
 
     // Render-collect phase.
     RegisterSpriteRenderSystem(world);

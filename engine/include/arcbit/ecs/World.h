@@ -1,5 +1,6 @@
 #pragma once
 
+#include <arcbit/ecs/AnimatorStateMachine.h>
 #include <arcbit/ecs/Components.h>
 #include <arcbit/ecs/Movement.h>
 #include <arcbit/core/Assert.h>

@@ -184,6 +184,9 @@ void SpriteSheet::LoadAnimations(std::string_view path, const nlohmann::json& js
             AnimationFrameRef ref{};
             ref.FrameName  = f.at("frame").get<std::string>();
             ref.DurationMs = f.at("duration_ms").get<u32>();
+            if (f.contains("events"))
+                for (const auto& ev : f["events"])
+                    ref.Events.push_back(ev.get<std::string>());
             clip.Frames.push_back(std::move(ref));
         }
 

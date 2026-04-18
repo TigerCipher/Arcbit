@@ -5,7 +5,9 @@
 #include <arcbit/core/Types.h>
 #include <arcbit/render/RenderHandle.h>
 
+#include <functional>
 #include <string>
+#include <string_view>
 
 // Forward declarations — full types live in SpriteSheet.h.
 namespace Arcbit { struct AnimationClip; class SpriteSheet; }
@@ -106,9 +108,13 @@ struct Lifetime
 // Animation component
 // ---------------------------------------------------------------------------
 
+// Callback type for frame events. Set Animator::OnEvent to receive named events
+// defined in the sprite JSON ("events": ["FootStep"]) as frames become active.
+using AnimEventFn = std::function<void(std::string_view)>;
+
 // Drives SpriteRenderer.UV from an AnimationClip each update tick.
 // Set Clip and Sheet to a clip and its owning SpriteSheet; AnimatorSystem
-// handles frame advancement and UV writes automatically.
+// handles frame advancement, UV writes, and frame-event dispatch automatically.
 // Both pointers must outlive the component — SpriteSheet assets are long-lived,
 // so this is safe in normal usage.
 struct Animator
@@ -118,6 +124,8 @@ struct Animator
     u32                  FrameIndex = 0;
     f32                  Elapsed    = 0.0f;  // seconds into the current frame
     bool                 Playing    = true;
+    bool                 Finished   = false; // true when a non-looping clip reaches its last frame
+    AnimEventFn          OnEvent;            // optional; called for each event name on frame change
 };
 
 } // namespace Arcbit

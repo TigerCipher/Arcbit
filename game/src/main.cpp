@@ -268,6 +268,9 @@ private:
             .Clip    = _playerSheet.GetAnimation("idle_down"),
             .Sheet   = &_playerSheet,
             .Playing = true,
+            .OnEvent = [](const std::string_view ev) {
+                LOG_DEBUG(Game, "[Player] anim event: {}", ev);
+            },
         });
 
         world.AddComponent<CameraTarget>(_playerEntity, CameraTarget{ .Lag = 0.12f });
@@ -497,7 +500,7 @@ private:
     static constexpr float ViewportH   = 1080.0f;
     static constexpr float TileSize    = 64.0f;
     // Zoom so ~20 tiles wide are visible on screen (same as TileSize=96 at zoom=1).
-    static constexpr float InitialZoom = 1.0f;
+    static constexpr float InitialZoom = 2.0f;
     static constexpr float WalkSpeed   = 96.0f;  // 3 tiles/sec; sprint doubles it
 
     static constexpr int SpriteCount     = 10000;
