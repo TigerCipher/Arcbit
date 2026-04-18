@@ -7,6 +7,8 @@
 #include <arcbit/render/RenderThread.h>
 #include <arcbit/render/RenderTypes.h>
 
+#include <cmath>
+
 using namespace Arcbit;
 
 // ---------------------------------------------------------------------------
@@ -28,6 +30,9 @@ protected:
     void OnStart() override
     {
         // --- Input ---
+        GetInput().RegisterAction(ActionToggleGrid, "Debug_ToggleGrid");
+        GetInput().BindKey(ActionToggleGrid, Key::G);
+
         GetInput().RegisterAction(ActionMoveLeft, "Move_Left");
         GetInput().RegisterAction(ActionMoveRight, "Move_Right");
         GetInput().RegisterAction(ActionMoveUp, "Move_Up");
@@ -106,6 +111,28 @@ protected:
         _floorSampler        = GetDevice().CreateSampler(linearDesc);
         ARCBIT_ASSERT(_floorSampler.IsValid(), "Failed to create floor sampler");
 
+        // --- Debug grid texture — 1×1 white pixel for solid-colour sprite lines ---
+        {
+            TextureDesc desc{};
+            desc.Width     = 1;
+            desc.Height    = 1;
+            desc.Format    = Format::RGBA8_UNorm;
+            desc.Usage     = TextureUsage::Sampled | TextureUsage::Transfer;
+            desc.DebugName = "Debug_SolidWhite";
+            _gridTex = GetDevice().CreateTexture(desc);
+
+            constexpr u8 white[4] = { 255, 255, 255, 255 };
+            GetDevice().UploadTexture(_gridTex, white, sizeof(white));
+
+            SamplerDesc sd{};
+            sd.MinFilter = Filter::Nearest;
+            sd.MagFilter = Filter::Nearest;
+            sd.AddressU  = AddressMode::ClampToEdge;
+            sd.AddressV  = AddressMode::ClampToEdge;
+            sd.DebugName = "Debug_GridSampler";
+            _gridSampler = GetDevice().CreateSampler(sd);
+        }
+
         // --- Random lights — world-space pixels (scattered across ±900 x ±500) ---
         for (int i = 0; i < NumRandomLights; ++i)
         {
@@ -144,6 +171,9 @@ protected:
             _camera.Position.Y -= camSpeed * dt;
         if (GetInput().IsPressed(ActionMoveDown))
             _camera.Position.Y += camSpeed * dt;
+
+        if (GetInput().JustPressed(ActionToggleGrid))
+            _showGrid = !_showGrid;
 
         // Interact adds a burst of screen shake.
         if (GetInput().JustPressed(ActionInteract))
@@ -240,6 +270,9 @@ protected:
         for (const auto& s : _sprites)
             if (_camera.IsVisible(s.Position, s.Size, viewport))
                 packet.Sprites.push_back(s);
+
+        if (_showGrid)
+            SubmitDebugGrid(packet, viewport);
     }
 
     // -----------------------------------------------------------------------
@@ -249,61 +282,119 @@ protected:
     // -----------------------------------------------------------------------
     void OnShutdown() override
     {
+        GetDevice().DestroyTexture(_gridTex);
+        GetDevice().DestroySampler(_gridSampler);
         GetDevice().DestroySampler(_floorSampler);
         GetDevice().DestroySampler(_sampler);
     }
 
 private:
+    void SubmitDebugGrid(FramePacket& packet, Vec2 viewport) const
+    {
+        // Determine the visible world bounds from the camera.
+        const Vec2 camPos = _camera.GetEffectivePosition();
+        const f32  halfW  = (viewport.X / _camera.Zoom) * 0.5f;
+        const f32  halfH  = (viewport.Y / _camera.Zoom) * 0.5f;
+
+        // Snap to tile boundaries, adding one tile of margin so lines at the edges
+        // are always fully visible even after camera rotation.
+        const auto firstCol = static_cast<i32>(std::floor((camPos.X - halfW) / TileSize)) - 1;
+        const auto lastCol  = static_cast<i32>(std::ceil ((camPos.X + halfW) / TileSize)) + 1;
+        const auto firstRow = static_cast<i32>(std::floor((camPos.Y - halfH) / TileSize)) - 1;
+        const auto lastRow  = static_cast<i32>(std::ceil ((camPos.Y + halfH) / TileSize)) + 1;
+
+        const f32   totalH    = static_cast<f32>(lastRow  - firstRow) * TileSize;
+        const f32   totalW    = static_cast<f32>(lastCol  - firstCol) * TileSize;
+        const f32   originX   = static_cast<f32>(firstCol) * TileSize;
+        const f32   originY   = static_cast<f32>(firstRow) * TileSize;
+        const f32   thickness = std::max(1.0f, 1.0f / _camera.Zoom); // 1 screen px wide
+        constexpr Color GridColor = { 1.0f, 1.0f, 1.0f, 0.25f };
+        constexpr i32   GridLayer = 999;
+
+        for (i32 col = firstCol; col <= lastCol; ++col)
+        {
+            Sprite s{};
+            s.Texture  = _gridTex;
+            s.Sampler  = _gridSampler;
+            s.Position = { col * TileSize, originY + totalH * 0.5f };
+            s.Size     = { thickness, totalH };
+            s.Tint     = GridColor;
+            s.Layer    = GridLayer;
+            packet.Sprites.push_back(s);
+        }
+
+        for (i32 row = firstRow; row <= lastRow; ++row)
+        {
+            Sprite s{};
+            s.Texture  = _gridTex;
+            s.Sampler  = _gridSampler;
+            s.Position = { originX + totalW * 0.5f, row * TileSize };
+            s.Size     = { totalW, thickness };
+            s.Tint     = GridColor;
+            s.Layer    = GridLayer;
+            packet.Sprites.push_back(s);
+        }
+    }
+
+    // Returns the world-space size of a full texture driven by its ppu.
+    static Vec2 SheetWorldSize(const SpriteSheet& sheet, f32 worldTileSize)
+    {
+        const Vec2 px = sheet.TexturePixelSize();
+        return sheet.ToWorldSize(px.X, px.Y, worldTileSize);
+    }
+
     void CreateSprites()
     {
         LOG_DEBUG(Game, "Creating sprites...");
-        // --- Floor — full screen, layer -1 (1 sprite → 1 batch) ---
+
+        // --- Floor — explicit layout size; not a game sprite, no ppu ---
         {
             Sprite s{};
             s.Texture  = _floorTex;
             s.Sampler  = _floorSampler;
             s.Position = { 0.0f, 0.0f };
             s.Size     = { 1920.0f, 1080.0f };
-            s.UV       = { 0.0f, 0.0f, 4.0f, 4.0f }; // tile 4× across screen
+            s.UV       = { 0.0f, 0.0f, 4.0f, 4.0f };
             s.Layer    = -1;
             _sprites.push_back(s);
         }
 
-        // --- Oak trees — 4 corners, layer 0 (4 sprites → 1 batch) ---
-        constexpr Vec2 treePositions[4] = {
-            { -800.0f, -380.0f },
-            {  800.0f, -380.0f },
-            { -800.0f,  380.0f },
-            {  800.0f,  380.0f },
-        };
-        for (const auto& pos : treePositions)
+        // --- Oak trees — 4 corners, layer 0 ---
         {
-            constexpr float TreeSize = 192.0f;
-            Sprite  s{};
-            s.Texture  = _treeSheet.GetTexture();
-            s.Sampler  = _sampler;
-            s.Position = pos;
-            s.Size     = { TreeSize, TreeSize };
-            s.Layer    = 0;
-            _sprites.push_back(s);
+            const Vec2 treeSize = SheetWorldSize(_treeSheet, TileSize);
+            constexpr Vec2 positions[4] = {
+                { -800.0f, -380.0f }, {  800.0f, -380.0f },
+                { -800.0f,  380.0f }, {  800.0f,  380.0f },
+            };
+            for (const auto& pos : positions)
+            {
+                Sprite s{};
+                s.Texture  = _treeSheet.GetTexture();
+                s.Sampler  = _sampler;
+                s.Position = pos;
+                s.Size     = treeSize;
+                s.Layer    = 0;
+                _sprites.push_back(s);
+            }
         }
 
-        // --- Player tiles — 12 across the top row, layer 1 (12 sprites → 1 batch) ---
-        // Uses GetTile(col, 0) to cycle through the spritesheet columns.
+        // --- Player tiles — 12 across the top row, layer 1 ---
+        // Each tile is one grid cell; TileWorldSize drives the size via ppu.
         if (_playerSheet.IsValid())
         {
-            constexpr float   TileSize  = 80.0f;
-            constexpr int     TileCount = 12;
-            constexpr float   startX    = -(TileCount - 1) * TileSize * 0.5f;
-            const u32 cols      = _playerSheet.TileColumns();
+            const Vec2  tileSize = _playerSheet.TileWorldSize(TileSize);
+            const float step     = tileSize.X;
+            constexpr int TileCount = 12;
+            const float startX = -(TileCount - 1) * step * 0.5f;
+            const u32   cols   = _playerSheet.TileColumns();
 
             for (int i = 0; i < TileCount; ++i)
             {
                 Sprite s{};
                 s.Texture  = _playerSheet.GetTexture();
                 s.Sampler  = _sampler;
-                s.Position = { startX + static_cast<float>(i) * TileSize, -270.0f };
-                s.Size     = { TileSize, TileSize };
+                s.Position = { startX + static_cast<float>(i) * step, -270.0f };
+                s.Size     = tileSize;
                 if (cols > 0)
                     if (auto uv = _playerSheet.GetTile(static_cast<u32>(i) % cols, 0))
                         s.UV = *uv;
@@ -312,65 +403,71 @@ private:
             }
         }
 
-        constexpr float SpriteSize  = 180.0f;
-        constexpr int   SpriteCount = 10000;
-        // --- Skeletons — 100 across, layer 1 (100 sprites → 1 batch) ---
+        constexpr int SpriteCount = 10000;
+
+        // --- Skeletons — layer 1 ---
         {
-            constexpr float startX = -(SpriteCount - 1) * SpriteSize * 0.5f;
+            const Vec2  spriteSize = SheetWorldSize(_skeletonSheet, TileSize);
+            const float step       = spriteSize.X;
+            const float startX     = -static_cast<float>(SpriteCount / 2) * step + step * 0.5f;
             for (int i = 0; i < SpriteCount; ++i)
             {
-                float          spriteSize = SpriteSize * 3;
                 Sprite s{};
                 s.Texture  = _skeletonSheet.GetTexture();
                 s.Sampler  = _sampler;
-                s.Position = { startX + static_cast<float>(i) * spriteSize, -150.0f };
-                s.Size     = { spriteSize, spriteSize };
+                s.Position = { startX + static_cast<float>(i) * step, -144.0f };
+                s.Size     = spriteSize;
                 s.Layer    = 1;
                 _sprites.push_back(s);
             }
         }
 
-        // --- Slimes — 100 across, layer 5 (100 sprites → 1 batch) ---
+        // --- Slimes — layer 5 ---
         {
-            constexpr float startX = -(SpriteCount - 1) * SpriteSize * 0.5f;
+            const Vec2  spriteSize = SheetWorldSize(_slimeSheet, TileSize);
+            const float step       = spriteSize.X;
+            const float startX     = -static_cast<float>(SpriteCount / 2) * step + step * 0.5f;
             for (int i = 0; i < SpriteCount; ++i)
             {
-                float          spriteSize = SpriteSize * 3;
                 Sprite s{};
                 s.Texture  = _slimeSheet.GetTexture();
                 s.Sampler  = _sampler;
-                s.Position = { startX + static_cast<float>(i) * spriteSize, 0.0f };
-                s.Size     = { spriteSize, spriteSize };
+                s.Position = { startX + static_cast<float>(i) * step, 16.0f };
+                s.Size     = spriteSize;
                 s.Layer    = 5;
                 _sprites.push_back(s);
             }
         }
 
-        // --- Chickens — 100 across, layer 2 (100 sprites → 1 batch) ---
+        // --- Chickens — layer 2 ---
         {
-            constexpr float startX = -(SpriteCount - 1) * SpriteSize * 0.5f;
+            const Vec2  spriteSize = SheetWorldSize(_chickenSheet, TileSize);
+            const float step       = spriteSize.X;
+            const float startX     = -static_cast<float>(SpriteCount / 2) * step;
             for (int i = 0; i < SpriteCount; ++i)
             {
                 Sprite s{};
                 s.Texture  = _chickenSheet.GetTexture();
                 s.Sampler  = _sampler;
-                s.Position = { startX + i * SpriteSize, 150.0f };
-                s.Size     = { SpriteSize, SpriteSize };
+                s.Position = { startX + static_cast<float>(i) * step, 144.0f };
+                s.Size     = spriteSize;
                 s.Layer    = 2;
                 _sprites.push_back(s);
             }
         }
 
-        // --- Pigs — 100 across, layer 2 (100 sprites → 1 batch) ---
+        // --- Pigs — layer 2 ---
         {
-            constexpr float startX = -(SpriteCount - 1) * SpriteSize * 0.5f;
+            const Vec2  spriteSize = SheetWorldSize(_pigSheet, TileSize);
+            const float step       = spriteSize.X;
+            const float startX     = -static_cast<float>(SpriteCount / 2) * step + step * 0.5f;
             for (int i = 0; i < SpriteCount; ++i)
             {
                 Sprite s{};
                 s.Texture  = _pigSheet.GetTexture();
                 s.Sampler  = _sampler;
-                s.Position = { startX + i * SpriteSize, 300.0f };
-                s.Size     = { SpriteSize, SpriteSize };
+                s.Position = { startX + static_cast<float>(i) * step, 304.0f };
+                s.Size     = spriteSize;
                 s.Layer    = 2;
                 _sprites.push_back(s);
             }
@@ -380,6 +477,7 @@ private:
     }
 
 private:
+    static constexpr ActionID ActionToggleGrid = MakeAction("Debug_ToggleGrid");
     static constexpr ActionID ActionMoveLeft  = MakeAction("Move_Left");
     static constexpr ActionID ActionMoveRight = MakeAction("Move_Right");
     static constexpr ActionID ActionMoveUp    = MakeAction("Move_Up");
@@ -392,8 +490,14 @@ private:
     // image without changing the visible world area.
     static constexpr float ViewportW = 1920.0f;
     static constexpr float ViewportH = 1080.0f;
+    static constexpr float TileSize  = 92.0f;
 
     Camera2D _camera;
+
+    // Debug grid — 1×1 white texture rendered as thin tile-boundary lines.
+    bool          _showGrid   = false;
+    TextureHandle _gridTex;
+    SamplerHandle _gridSampler;
 
     // Samplers — still game-owned (control filtering per sprite).
     // The sprite pipeline itself is owned by RenderThread.

@@ -80,14 +80,23 @@ same folder.
 ### `pixels_per_unit` *(optional)*
 
 ```json
-"pixels_per_unit": 16
+"pixels_per_unit": 64
 ```
 
-How many texture pixels correspond to one world unit (tile). Used by the editor
-to show sprites at their natural in-game scale in the preview viewport, and by
-the engine to compute a default `Scale` when no explicit scale is set.
+How many texture pixels correspond to one world tile. Used by `SpriteSheet::ToWorldSize`
+to compute the natural world-space size of a sprite, and by the editor to preview
+sprites at their correct in-game scale.
 
-Omit if the project does not use a fixed pixels-per-unit convention.
+**If omitted, the world's tile size is used as the denominator** — so a sprite
+whose pixel dimensions equal the tile size renders as exactly one tile by default.
+Only specify this field when intentionally deviating from that default.
+
+| Scenario | pixels_per_unit | Result (worldTileSize = 32) |
+|----------|-----------------|----------------------------|
+| 32×32 sprite, standard resolution | omit | 32×32 world px — 1 tile |
+| 64×64 sprite, high-res but still 1 tile | 64 | 32×32 world px — 1 tile |
+| 64×64 sprite, intentional 2-tile size | omit or 32 | 64×64 world px — 2 tiles |
+| 16×16 sprite on a 32-px tile grid | 16 | 64×64 world px — 2 tiles (16-px art scaled up) |
 
 ---
 

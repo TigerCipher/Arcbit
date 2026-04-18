@@ -78,7 +78,9 @@ SpriteSheet SpriteSheet::Load(std::string_view metaPath, TextureManager& texture
         return {};
     }
 
-    sheet._pixelsPerUnit = json.value("pixels_per_unit", 1.0f);
+    // 0 means "absent — defer to WorldConfig.TileSize at render time".
+    sheet._pixelsPerUnit    = json.value("pixels_per_unit", 0.0f);
+    sheet._texturePixelSize = { static_cast<f32>(texW), static_cast<f32>(texH) };
 
     const f32 invW = 1.0f / static_cast<f32>(texW);
     const f32 invH = 1.0f / static_cast<f32>(texH);
@@ -144,7 +146,8 @@ void SpriteSheet::LoadTileGrid(std::string_view path, const nlohmann::json& json
         return;
     }
 
-    sheet._columns = cols;
+    sheet._columns       = cols;
+    sheet._tilePixelSize = { static_cast<f32>(tileW), static_cast<f32>(tileH) };
     sheet._tiles.reserve(cols * rows);
 
     for (u32 row = 0; row < rows; ++row)
@@ -194,6 +197,12 @@ void SpriteSheet::LoadAnimations(std::string_view path, const nlohmann::json& js
 // ---------------------------------------------------------------------------
 // Lookups
 // ---------------------------------------------------------------------------
+
+Vec2 SpriteSheet::ToWorldSize(const f32 pixelW, const f32 pixelH, const f32 worldTileSize) const
+{
+    const f32 ppu = _pixelsPerUnit > 0.0f ? _pixelsPerUnit : worldTileSize;
+    return { (pixelW / ppu) * worldTileSize, (pixelH / ppu) * worldTileSize };
+}
 
 std::optional<SpriteFrame> SpriteSheet::GetFrame(const std::string_view name) const
 {

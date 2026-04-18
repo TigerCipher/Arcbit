@@ -1,7 +1,7 @@
 {
     "version": "1.0",
     "texture": "../textures/Cute_Fantasy_Free/Player/Player.png",
-    "pixels_per_unit": 16,
+    "pixels_per_unit": 32,
 
     "tile_grid": {
         "tile_width": 32,

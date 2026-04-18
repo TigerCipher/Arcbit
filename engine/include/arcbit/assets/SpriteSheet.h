@@ -79,9 +79,25 @@ public:
     // directory. Returns an invalid SpriteSheet on any error — check IsValid().
     [[nodiscard]] static SpriteSheet Load(std::string_view metaPath, TextureManager& textures);
 
-    [[nodiscard]] bool          IsValid()       const { return _texture.IsValid(); }
-    [[nodiscard]] TextureHandle GetTexture()    const { return _texture; }
-    [[nodiscard]] f32           PixelsPerUnit() const { return _pixelsPerUnit; }
+    [[nodiscard]] bool          IsValid()          const { return _texture.IsValid(); }
+    [[nodiscard]] TextureHandle GetTexture()       const { return _texture; }
+    [[nodiscard]] Vec2          TexturePixelSize() const { return _texturePixelSize; }
+
+    // Raw pixels_per_unit value from the JSON (0 means "use world tile size").
+    [[nodiscard]] f32 PixelsPerUnit() const { return _pixelsPerUnit; }
+
+    // Convert a pixel size to world-space size using this sheet's pixels_per_unit.
+    // worldTileSize comes from WorldConfig.TileSize (or a hardcoded constant pre-ECS).
+    // If pixels_per_unit is absent from the JSON (stored as 0), worldTileSize is used
+    // as the denominator — a sprite whose pixel size equals the tile size renders as
+    // exactly 1 tile, which is the natural default.
+    //
+    // Examples with worldTileSize = 32:
+    //   32×32 sprite, pixels_per_unit = 0  → (32/32)*32 = 32  world px  (1 tile)
+    //   32×32 sprite, pixels_per_unit = 32 → (32/32)*32 = 32  world px  (1 tile, explicit)
+    //   64×64 sprite, pixels_per_unit = 64 → (64/64)*32 = 32  world px  (hi-res, still 1 tile)
+    //   64×64 sprite, pixels_per_unit = 32 → (64/32)*32 = 64  world px  (intentional 2-tile sprite)
+    [[nodiscard]] Vec2 ToWorldSize(f32 pixelW, f32 pixelH, f32 worldTileSize) const;
 
     // Look up a named frame (from the "frames" section).
     // Returns std::nullopt if the name is not found.
@@ -98,9 +114,16 @@ public:
     // Look up a tile by 2D grid coordinates (column, row), both 0-based.
     [[nodiscard]] std::optional<UVRect> GetTile(u32 x, u32 y) const;
 
-    [[nodiscard]] u32 TileCount()   const { return static_cast<u32>(_tiles.size()); }
-    [[nodiscard]] u32 TileColumns() const { return _columns; }
-    [[nodiscard]] u32 TileRows()    const { return _columns > 0 ? static_cast<u32>(_tiles.size()) / _columns : 0; }
+    [[nodiscard]] u32  TileCount()      const { return static_cast<u32>(_tiles.size()); }
+    [[nodiscard]] u32  TileColumns()    const { return _columns; }
+    [[nodiscard]] u32  TileRows()       const { return _columns > 0 ? static_cast<u32>(_tiles.size()) / _columns : 0; }
+    [[nodiscard]] Vec2 TilePixelSize()  const { return _tilePixelSize; }
+
+    // Convenience: world-space size of one tile using this sheet's pixels_per_unit.
+    [[nodiscard]] Vec2 TileWorldSize(f32 worldTileSize) const
+    {
+        return ToWorldSize(_tilePixelSize.X, _tilePixelSize.Y, worldTileSize);
+    }
 
 private:
     static void LoadFrames    (std::string_view path, const nlohmann::json& json, SpriteSheet& sheet, f32 invW, f32 invH);
@@ -109,7 +132,9 @@ private:
 
 private:
     TextureHandle _texture;
-    f32           _pixelsPerUnit = 1.0f;
+    f32           _pixelsPerUnit    = 1.0f;
+    Vec2          _texturePixelSize = { 0.0f, 0.0f };
+    Vec2          _tilePixelSize    = { 0.0f, 0.0f };
 
     std::unordered_map<std::string, SpriteFrame>   _frames;
     std::unordered_map<std::string, AnimationClip> _animations;
