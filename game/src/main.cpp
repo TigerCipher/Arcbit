@@ -1,5 +1,6 @@
 #include <arcbit/app/Application.h>
 #include <arcbit/assets/SpriteSheet.h>
+#include <arcbit/audio/AudioManager.h>
 #include <arcbit/core/Log.h>
 #include <arcbit/core/Assert.h>
 #include <arcbit/ecs/World.h>
@@ -50,6 +51,7 @@ protected:
         GetInput().RegisterAction(ActionMoveDown, "Move_Down");
         GetInput().RegisterAction(ActionInteract, "Interact");
         GetInput().RegisterAction(ActionSprint, "Sprint");
+        GetInput().RegisterAction(ActionAttack, "Player_Attack");
 
         GetInput().BindKey(ActionMoveLeft, Key::A);
         GetInput().BindKey(ActionMoveLeft, Key::Left);
@@ -62,6 +64,7 @@ protected:
         GetInput().BindKey(ActionInteract, Key::E);
         GetInput().BindKey(ActionInteract, Key::Enter);
         GetInput().BindKey(ActionSprint, Key::LeftShift);
+        GetInput().BindKey(ActionAttack, Key::Space);
 
         GetInput().BindGamepadButton(ActionInteract, GamepadButton::South);
         GetInput().BindGamepadButton(ActionSprint, GamepadButton::RightShoulder);
@@ -144,6 +147,8 @@ protected:
             _showGrid = !_showGrid;
         if (GetInput().JustPressed(ActionInteract))
             GetScene().GetCamera().AddTrauma(0.6f);
+        if (GetInput().JustPressed(ActionAttack) && !_isAttacking)
+            _isAttacking = true;
 
         UpdatePlayerMovement();
         UpdateMouseLight();
@@ -270,6 +275,8 @@ private:
             .Playing = true,
             .OnEvent = [](const std::string_view ev) {
                 LOG_DEBUG(Game, "[Player] anim event: {}", ev);
+                if (ev == "AttackHit")
+                    AudioManager::PlayOneShot("assets/sfx/sword_slashing.mp3");
             },
         });
 
@@ -278,6 +285,13 @@ private:
         world.AddComponent<FreeMovement>(_playerEntity, FreeMovement{
             .Friction = 15.0f,
             .MaxSpeed = WalkSpeed,
+        });
+
+        world.AddComponent<AudioSource>(_playerEntity, AudioSource{
+            .Path    = "assets/sfx/footsteps.mp3",
+            .Volume  = 0.6f,
+            .Loop    = true,
+            .Playing = false, // started and stopped by UpdatePlayerAnimation
         });
     }
 
@@ -389,10 +403,24 @@ private:
         if (!sr || !anim)
             return;
 
+        // Attack animation finishes on its own (non-looping) — clear the flag.
+        if (_isAttacking && anim->Finished)
+            _isAttacking = false;
+
         const char* clipName = nullptr;
         bool        flipX    = false;
 
-        if (moving)
+        if (_isAttacking)
+        {
+            switch (_playerFacing)
+            {
+                case Facing::Down:  clipName = "attack_down";  break;
+                case Facing::Right: clipName = "attack_right"; break;
+                case Facing::Left:  clipName = "attack_right"; flipX = true; break;
+                case Facing::Up:    clipName = "attack_up";    break;
+            }
+        }
+        else if (moving)
         {
             switch (_playerFacing)
             {
@@ -421,7 +449,11 @@ private:
             anim->Clip       = newClip;
             anim->FrameIndex = 0;
             anim->Elapsed    = 0.0f;
+            anim->Finished   = false;
         }
+
+        if (auto* audio = world.GetComponent<AudioSource>(_playerEntity))
+            audio->Playing = moving && !_isAttacking;
     }
 
     void UpdateMouseLight()
@@ -493,6 +525,7 @@ private:
     static constexpr ActionID ActionMoveDown   = MakeAction("Move_Down");
     static constexpr ActionID ActionInteract   = MakeAction("Interact");
     static constexpr ActionID ActionSprint     = MakeAction("Sprint");
+    static constexpr ActionID ActionAttack     = MakeAction("Player_Attack");
 
     // Design resolution — the renderer exposes exactly this much of the world
     // at zoom 1. Resizing scales without revealing more world.
@@ -507,6 +540,7 @@ private:
     static constexpr int NumRandomLights = 10;
 
     bool   _showGrid         = false;
+    bool   _isAttacking      = false;
     Facing _playerFacing     = Facing::Down;
     Entity _playerEntity     = Entity::Invalid();
     Entity _mouseLightEntity = Entity::Invalid();

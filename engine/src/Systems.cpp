@@ -2,10 +2,13 @@
 #include <arcbit/ecs/AnimatorStateMachine.h>
 #include <arcbit/scene/Scene.h>
 #include <arcbit/assets/SpriteSheet.h>
+#include <arcbit/audio/AudioManager.h>
 #include <arcbit/render/RenderThread.h>
 #include <arcbit/core/Log.h>
 
 #include <cmath>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace Arcbit
@@ -221,6 +224,60 @@ namespace
         });
     }
 
+    void RegisterAudioSystem(World& world)
+    {
+        // Key: packed entity (Generation << 32 | Index) → opaque ma_sound handle.
+        // The map is the only owner of destroyed entities' handles — once an entity
+        // is gone from the query, this map is the last reference to its sound.
+        using SoundMap = std::unordered_map<u64, void*>;
+
+        world.RegisterSystem("Audio", [sounds = SoundMap{}](Scene& scene, f32 /*dt*/) mutable {
+            // Move the listener with the camera so attenuation is camera-relative.
+            AudioManager::SetListenerPosition(scene.GetCamera().GetEffectivePosition());
+
+            std::unordered_set<u64> seen;
+
+            scene.GetWorld()
+                .Query<const Transform2D, AudioSource>()
+                .Without<Disabled>()
+                .ForEach([&](Entity e, const Transform2D& t, AudioSource& src) {
+                    const u64 key = (static_cast<u64>(e.Generation) << 32) | e.Index;
+                    seen.insert(key);
+
+                    // Start a new sound the first time we see a playing source.
+                    if (!src._handle && src.Playing)
+                    {
+                        src._handle = AudioManager::CreateSpatialSound(src.Path, src.Loop, src.Volume);
+                        sounds[key] = src._handle;
+                    }
+
+                    if (src._handle)
+                    {
+                        AudioManager::SetSpatialSoundPosition(src._handle, t.Position, src.Radius);
+
+                        // Playing set to false at runtime — stop and release.
+                        if (!src.Playing)
+                        {
+                            AudioManager::DestroySpatialSound(src._handle);
+                            src._handle = nullptr;
+                            sounds.erase(key);
+                        }
+                    }
+                });
+
+            // Destroy sounds for entities that were removed since last tick.
+            for (auto it = sounds.begin(); it != sounds.end(); )
+            {
+                if (!seen.count(it->first))
+                {
+                    AudioManager::DestroySpatialSound(it->second);
+                    it = sounds.erase(it);
+                }
+                else { ++it; }
+            }
+        });
+    }
+
     void RegisterLightRenderSystem(World& world)
     {
         world.RegisterRenderSystem("LightRender", [](Scene& scene, FramePacket& packet) {
@@ -266,6 +323,7 @@ void RegisterBuiltinSystems(World& world)
     RegisterCameraFollowSystem(world);
     RegisterAnimatorStateMachineSystem(world); // evaluates transitions, updates Animator clip
     RegisterAnimatorSystem(world);             // advances frames, fires events, writes UV
+    RegisterAudioSystem(world);                // spatial sound lifecycle + listener update
 
     // Render-collect phase.
     RegisterSpriteRenderSystem(world);

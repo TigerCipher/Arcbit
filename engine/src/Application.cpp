@@ -1,6 +1,7 @@
 #include <arcbit/app/Application.h>
 #include <arcbit/app/Window.h>
 #include <arcbit/assets/TextureManager.h>
+#include <arcbit/audio/AudioManager.h>
 #include <arcbit/scene/Scene.h>
 #include <arcbit/settings/Settings.h>
 #include <arcbit/core/Log.h>
@@ -26,6 +27,7 @@ Application::Application(const ApplicationConfig& config) : _config(config)
     Settings::Graphics.ResolutionWidth  = config.Width;
     Settings::Graphics.ResolutionHeight = config.Height;
     Settings::Init(config.SettingsPath);
+    AudioManager::Init();
 
     _window = std::make_unique<Window>(Window::Desc{
         .Title     = config.Title,
@@ -237,6 +239,7 @@ void Application::Run()
     _scene.reset();
 
     OnShutdown();
+    AudioManager::Shutdown();
 
     // Release all cached textures before the device is destroyed.
     _textures->Clear();

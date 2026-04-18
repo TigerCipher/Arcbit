@@ -1,5 +1,6 @@
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(Stb REQUIRED) # header-only; exposes ${Stb_INCLUDE_DIR}
+# miniaudio is header-only; vcpkg adds its include path automatically — no find_package needed.
 
 # arcbit-engine is a STATIC library that provides the engine's public API:
 # graphics abstraction, render thread, window, input, and (in later phases) ECS, audio, etc.
@@ -17,6 +18,7 @@ add_library(arcbit-engine STATIC
     src/Systems.cpp
     src/Scene.cpp
     src/AnimatorStateMachine.cpp
+    src/AudioManager.cpp
 )
 
 target_include_directories(arcbit-engine

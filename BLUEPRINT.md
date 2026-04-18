@@ -185,12 +185,12 @@ define *how* it gets there. Any controller pairs with any style.
 ---
 
 ## Phase 18: Audio
-- [ ] Audio library integration (miniaudio via vcpkg — single-header, no runtime deps)
-- [ ] `AudioManager` — initialize device, master volume control
-- [ ] Sound effect playback (fire-and-forget one-shots)
-- [ ] Music streaming (looping background track, crossfade)
-- [ ] `AudioSource` ECS component (spatial attenuation for point sounds)
-- [ ] Wire volume levels to Settings System (Phase 10)
+- [x] Audio library integration (miniaudio via vcpkg — single-header, no runtime deps)
+- [x] `AudioManager` — initialize device, master volume control
+- [x] Sound effect playback (fire-and-forget one-shots)
+- [x] Music streaming (looping background track, crossfade)
+- [x] `AudioSource` ECS component (spatial attenuation for point sounds)
+- [x] Wire volume levels to Settings System (Phase 10)
 
 ---
 

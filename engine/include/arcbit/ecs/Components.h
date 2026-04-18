@@ -128,4 +128,22 @@ struct Animator
     AnimEventFn          OnEvent;            // optional; called for each event name on frame change
 };
 
+// ---------------------------------------------------------------------------
+// Audio component
+// ---------------------------------------------------------------------------
+
+// Attaches a looping or one-shot sound to an entity with distance attenuation.
+// AudioSystem initialises and spatialises the underlying sound automatically.
+// Set Playing = false to stop and release the sound at runtime.
+struct AudioSource
+{
+    std::string Path;              // path to audio file, relative to working directory
+    f32         Volume  = 1.0f;   // [0, 1] local volume multiplier
+    f32         Radius  = 500.0f; // max hearing distance in world units
+    bool        Loop    = true;
+    bool        Playing = true;
+    // Internal handle managed by AudioSystem — do not set from game code.
+    void*       _handle = nullptr;
+};
+
 } // namespace Arcbit
