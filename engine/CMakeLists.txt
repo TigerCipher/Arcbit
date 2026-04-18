@@ -13,6 +13,9 @@ add_library(arcbit-engine STATIC
     src/Settings.cpp
     src/TextureManager.cpp
     src/SpriteSheet.cpp
+    src/World.cpp
+    src/Systems.cpp
+    src/Scene.cpp
 )
 
 target_include_directories(arcbit-engine

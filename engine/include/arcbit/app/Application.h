@@ -13,6 +13,7 @@ namespace Arcbit
 {
 
 class Window; // full type only needed in Application.cpp
+class Scene;  // full type only needed in Application.cpp
 
 // ---------------------------------------------------------------------------
 // ApplicationConfig
@@ -101,6 +102,9 @@ public:
     // automatically during shutdown, but you can also Unload() explicitly.
     [[nodiscard]] TextureManager& GetTextures() { return *_textures; }
 
+    // The active scene — access the ECS world, camera, and world config from OnStart onwards.
+    [[nodiscard]] Scene& GetScene();
+
     // Color format of the swapchain — pass to PipelineDesc::ColorFormat so
     // pipelines match the actual surface format chosen by the driver.
     [[nodiscard]] Format GetSwapchainFormat() const;
@@ -159,6 +163,7 @@ private:
 
     bool _shouldQuit = false;
 
+    std::unique_ptr<Scene>          _scene;
     RenderDevice*                   _device = nullptr;
     std::unique_ptr<TextureManager> _textures;
     SwapchainHandle                 _swapchain;

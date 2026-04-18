@@ -1,6 +1,7 @@
 #include <arcbit/app/Application.h>
 #include <arcbit/app/Window.h>
 #include <arcbit/assets/TextureManager.h>
+#include <arcbit/scene/Scene.h>
 #include <arcbit/settings/Settings.h>
 #include <arcbit/core/Log.h>
 #include <arcbit/core/Assert.h>
@@ -75,6 +76,12 @@ RenderDevice& Application::GetDevice()
 
 u32 Application::GetWindowWidth()  const { return _window->GetWidth(); }
 u32 Application::GetWindowHeight() const { return _window->GetHeight(); }
+Scene& Application::GetScene()
+{
+    ARCBIT_ASSERT(_scene != nullptr, "GetScene() called before Run()");
+    return *_scene;
+}
+
 void Application::ToggleFullscreen()
 {
     _window->ToggleFullscreen();
@@ -98,6 +105,9 @@ void Application::Run()
     _input.RegisterAction(ActionEngineFullscreen, "Engine_Fullscreen");
     _input.BindKey(ActionEngineQuit,       Key::Escape);
     _input.BindKey(ActionEngineFullscreen, Key::F11);
+
+    // Create the scene before OnStart so game code can use GetScene() immediately.
+    _scene = std::make_unique<Scene>();
 
     // Give the game a chance to register actions, create GPU resources, etc.
     // Input bindings are loaded from settings AFTER OnStart so that default
@@ -160,6 +170,7 @@ void Application::Run()
             if (_input.JustPressed(ActionEngineQuit))       _shouldQuit = true;
             if (_input.JustPressed(ActionEngineFullscreen)) ToggleFullscreen();
             OnUpdate(_fixedTimestep);
+            if (_scene) _scene->Update(_fixedTimestep);
             accumulator -= static_cast<f64>(_fixedTimestep);
         }
 
@@ -172,6 +183,7 @@ void Application::Run()
         packet.NeedsResize = _window->WasResizedThisFrame();
 
         OnRender(packet);
+        if (_scene) _scene->CollectRenderData(packet);
 
         _renderThread.SubmitFrame(std::move(packet));
 
@@ -220,6 +232,9 @@ void Application::Run()
     // Only then is it safe for OnShutdown to destroy pipelines, textures, etc.
     _renderThread.Stop();
     _device->WaitIdle();
+
+    // Destroy scene entities before shutting down GPU resources.
+    _scene.reset();
 
     OnShutdown();
 
