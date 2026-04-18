@@ -7,6 +7,9 @@
 
 #include <string>
 
+// Forward declarations — full types live in SpriteSheet.h.
+namespace Arcbit { struct AnimationClip; class SpriteSheet; }
+
 namespace Arcbit {
 
 // ---------------------------------------------------------------------------
@@ -47,13 +50,17 @@ struct Name
 
 // Visual representation. SpriteRenderSystem reads (Transform2D, SpriteRenderer)
 // and pushes a Sprite into FramePacket. Transform2D.Scale is the world-space size.
+// FlipX mirrors the UV horizontally — used for left-facing sprites that share a
+// right-facing animation row.
 struct SpriteRenderer
 {
     TextureHandle Texture;
     SamplerHandle Sampler;
     UVRect        UV    = { 0.0f, 0.0f, 1.0f, 1.0f };
+    Vec2          Pivot = { 0.5f, 0.5f }; // normalised origin; AnimatorSystem writes this from frame data
     Color         Tint  = Color::White();
     i32           Layer = 0;
+    bool          FlipX = false;
 };
 
 // Light properties. LightRenderSystem reads (Transform2D, LightEmitter)
@@ -93,6 +100,24 @@ struct Disabled {};
 struct Lifetime
 {
     f32 Remaining = 0.0f;
+};
+
+// ---------------------------------------------------------------------------
+// Animation component
+// ---------------------------------------------------------------------------
+
+// Drives SpriteRenderer.UV from an AnimationClip each update tick.
+// Set Clip and Sheet to a clip and its owning SpriteSheet; AnimatorSystem
+// handles frame advancement and UV writes automatically.
+// Both pointers must outlive the component — SpriteSheet assets are long-lived,
+// so this is safe in normal usage.
+struct Animator
+{
+    const AnimationClip* Clip       = nullptr;
+    const SpriteSheet*   Sheet      = nullptr;
+    u32                  FrameIndex = 0;
+    f32                  Elapsed    = 0.0f;  // seconds into the current frame
+    bool                 Playing    = true;
 };
 
 } // namespace Arcbit

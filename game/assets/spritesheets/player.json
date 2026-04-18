@@ -6,5 +6,184 @@
     "tile_grid": {
         "tile_width": 32,
         "tile_height": 32
-    }
+    },
+
+    "frames": [
+        { "name": "idle_down_0", "rect": { "x":   0, "y":   0, "w": 32, "h": 32 }, "pivot": { "x": 0.5, "y": 1.0 }  },
+        { "name": "idle_down_1", "rect": { "x":  32, "y":   0, "w": 32, "h": 32 }, "pivot": { "x": 0.5, "y": 1.0 } },
+        { "name": "idle_down_2", "rect": { "x":  64, "y":   0, "w": 32, "h": 32 }, "pivot": { "x": 0.5, "y": 1.0 } },
+        { "name": "idle_down_3", "rect": { "x":  96, "y":   0, "w": 32, "h": 32 } },
+        { "name": "idle_down_4", "rect": { "x": 128, "y":   0, "w": 32, "h": 32 } },
+        { "name": "idle_down_5", "rect": { "x": 160, "y":   0, "w": 32, "h": 32 } },
+
+        { "name": "idle_right_0", "rect": { "x":   0, "y":  32, "w": 32, "h": 32 } },
+        { "name": "idle_right_1", "rect": { "x":  32, "y":  32, "w": 32, "h": 32 } },
+        { "name": "idle_right_2", "rect": { "x":  64, "y":  32, "w": 32, "h": 32 } },
+        { "name": "idle_right_3", "rect": { "x":  96, "y":  32, "w": 32, "h": 32 } },
+        { "name": "idle_right_4", "rect": { "x": 128, "y":  32, "w": 32, "h": 32 } },
+        { "name": "idle_right_5", "rect": { "x": 160, "y":  32, "w": 32, "h": 32 } },
+
+        { "name": "idle_up_0", "rect": { "x":   0, "y":  64, "w": 32, "h": 32 } },
+        { "name": "idle_up_1", "rect": { "x":  32, "y":  64, "w": 32, "h": 32 } },
+        { "name": "idle_up_2", "rect": { "x":  64, "y":  64, "w": 32, "h": 32 } },
+        { "name": "idle_up_3", "rect": { "x":  96, "y":  64, "w": 32, "h": 32 } },
+        { "name": "idle_up_4", "rect": { "x": 128, "y":  64, "w": 32, "h": 32 } },
+        { "name": "idle_up_5", "rect": { "x": 160, "y":  64, "w": 32, "h": 32 } },
+
+        { "name": "walk_down_0", "rect": { "x":   0, "y":  96, "w": 32, "h": 32 } },
+        { "name": "walk_down_1", "rect": { "x":  32, "y":  96, "w": 32, "h": 32 } },
+        { "name": "walk_down_2", "rect": { "x":  64, "y":  96, "w": 32, "h": 32 } },
+        { "name": "walk_down_3", "rect": { "x":  96, "y":  96, "w": 32, "h": 32 } },
+        { "name": "walk_down_4", "rect": { "x": 128, "y":  96, "w": 32, "h": 32 } },
+        { "name": "walk_down_5", "rect": { "x": 160, "y":  96, "w": 32, "h": 32 } },
+
+        { "name": "walk_right_0", "rect": { "x":   0, "y": 128, "w": 32, "h": 32 } },
+        { "name": "walk_right_1", "rect": { "x":  32, "y": 128, "w": 32, "h": 32 } },
+        { "name": "walk_right_2", "rect": { "x":  64, "y": 128, "w": 32, "h": 32 } },
+        { "name": "walk_right_3", "rect": { "x":  96, "y": 128, "w": 32, "h": 32 } },
+        { "name": "walk_right_4", "rect": { "x": 128, "y": 128, "w": 32, "h": 32 } },
+        { "name": "walk_right_5", "rect": { "x": 160, "y": 128, "w": 32, "h": 32 } },
+
+        { "name": "walk_up_0", "rect": { "x":   0, "y": 160, "w": 32, "h": 32 } },
+        { "name": "walk_up_1", "rect": { "x":  32, "y": 160, "w": 32, "h": 32 } },
+        { "name": "walk_up_2", "rect": { "x":  64, "y": 160, "w": 32, "h": 32 } },
+        { "name": "walk_up_3", "rect": { "x":  96, "y": 160, "w": 32, "h": 32 } },
+        { "name": "walk_up_4", "rect": { "x": 128, "y": 160, "w": 32, "h": 32 } },
+        { "name": "walk_up_5", "rect": { "x": 160, "y": 160, "w": 32, "h": 32 } },
+
+        { "name": "attack_down_0", "rect": { "x":  0, "y": 192, "w": 32, "h": 32 } },
+        { "name": "attack_down_1", "rect": { "x": 32, "y": 192, "w": 32, "h": 32 } },
+        { "name": "attack_down_2", "rect": { "x": 64, "y": 192, "w": 32, "h": 32 } },
+        { "name": "attack_down_3", "rect": { "x": 96, "y": 192, "w": 32, "h": 32 } },
+
+        { "name": "attack_right_0", "rect": { "x":  0, "y": 224, "w": 32, "h": 32 } },
+        { "name": "attack_right_1", "rect": { "x": 32, "y": 224, "w": 32, "h": 32 } },
+        { "name": "attack_right_2", "rect": { "x": 64, "y": 224, "w": 32, "h": 32 } },
+        { "name": "attack_right_3", "rect": { "x": 96, "y": 224, "w": 32, "h": 32 } },
+
+        { "name": "attack_up_0", "rect": { "x":  0, "y": 256, "w": 32, "h": 32 } },
+        { "name": "attack_up_1", "rect": { "x": 32, "y": 256, "w": 32, "h": 32 } },
+        { "name": "attack_up_2", "rect": { "x": 64, "y": 256, "w": 32, "h": 32 } },
+        { "name": "attack_up_3", "rect": { "x": 96, "y": 256, "w": 32, "h": 32 } },
+
+        { "name": "fall_0", "rect": { "x":  0, "y": 288, "w": 32, "h": 32 } },
+        { "name": "fall_1", "rect": { "x": 32, "y": 288, "w": 32, "h": 32 } },
+        { "name": "fall_2", "rect": { "x": 64, "y": 288, "w": 32, "h": 32 } },
+        { "name": "fall_3", "rect": { "x": 96, "y": 288, "w": 32, "h": 32 } }
+    ],
+
+    "animations": [
+        {
+            "name": "idle_down",
+            "loop": true,
+            "frames": [
+                { "frame": "idle_down_0", "duration_ms": 150 },
+                { "frame": "idle_down_1", "duration_ms": 150 },
+                { "frame": "idle_down_2", "duration_ms": 150 },
+                { "frame": "idle_down_3", "duration_ms": 150 },
+                { "frame": "idle_down_4", "duration_ms": 150 },
+                { "frame": "idle_down_5", "duration_ms": 150 }
+            ]
+        },
+        {
+            "name": "idle_right",
+            "loop": true,
+            "frames": [
+                { "frame": "idle_right_0", "duration_ms": 150 },
+                { "frame": "idle_right_1", "duration_ms": 150 },
+                { "frame": "idle_right_2", "duration_ms": 150 },
+                { "frame": "idle_right_3", "duration_ms": 150 },
+                { "frame": "idle_right_4", "duration_ms": 150 },
+                { "frame": "idle_right_5", "duration_ms": 150 }
+            ]
+        },
+        {
+            "name": "idle_up",
+            "loop": true,
+            "frames": [
+                { "frame": "idle_up_0", "duration_ms": 150 },
+                { "frame": "idle_up_1", "duration_ms": 150 },
+                { "frame": "idle_up_2", "duration_ms": 150 },
+                { "frame": "idle_up_3", "duration_ms": 150 },
+                { "frame": "idle_up_4", "duration_ms": 150 },
+                { "frame": "idle_up_5", "duration_ms": 150 }
+            ]
+        },
+        {
+            "name": "walk_down",
+            "loop": true,
+            "frames": [
+                { "frame": "walk_down_0", "duration_ms": 100 },
+                { "frame": "walk_down_1", "duration_ms": 100 },
+                { "frame": "walk_down_2", "duration_ms": 100 },
+                { "frame": "walk_down_3", "duration_ms": 100 },
+                { "frame": "walk_down_4", "duration_ms": 100 },
+                { "frame": "walk_down_5", "duration_ms": 100 }
+            ]
+        },
+        {
+            "name": "walk_right",
+            "loop": true,
+            "frames": [
+                { "frame": "walk_right_0", "duration_ms": 100 },
+                { "frame": "walk_right_1", "duration_ms": 100 },
+                { "frame": "walk_right_2", "duration_ms": 100 },
+                { "frame": "walk_right_3", "duration_ms": 100 },
+                { "frame": "walk_right_4", "duration_ms": 100 },
+                { "frame": "walk_right_5", "duration_ms": 100 }
+            ]
+        },
+        {
+            "name": "walk_up",
+            "loop": true,
+            "frames": [
+                { "frame": "walk_up_0", "duration_ms": 100 },
+                { "frame": "walk_up_1", "duration_ms": 100 },
+                { "frame": "walk_up_2", "duration_ms": 100 },
+                { "frame": "walk_up_3", "duration_ms": 100 },
+                { "frame": "walk_up_4", "duration_ms": 100 },
+                { "frame": "walk_up_5", "duration_ms": 100 }
+            ]
+        },
+        {
+            "name": "attack_down",
+            "loop": false,
+            "frames": [
+                { "frame": "attack_down_0", "duration_ms": 80 },
+                { "frame": "attack_down_1", "duration_ms": 80 },
+                { "frame": "attack_down_2", "duration_ms": 80 },
+                { "frame": "attack_down_3", "duration_ms": 80 }
+            ]
+        },
+        {
+            "name": "attack_right",
+            "loop": false,
+            "frames": [
+                { "frame": "attack_right_0", "duration_ms": 80 },
+                { "frame": "attack_right_1", "duration_ms": 80 },
+                { "frame": "attack_right_2", "duration_ms": 80 },
+                { "frame": "attack_right_3", "duration_ms": 80 }
+            ]
+        },
+        {
+            "name": "attack_up",
+            "loop": false,
+            "frames": [
+                { "frame": "attack_up_0", "duration_ms": 80 },
+                { "frame": "attack_up_1", "duration_ms": 80 },
+                { "frame": "attack_up_2", "duration_ms": 80 },
+                { "frame": "attack_up_3", "duration_ms": 80 }
+            ]
+        },
+        {
+            "name": "fall",
+            "loop": false,
+            "frames": [
+                { "frame": "fall_0", "duration_ms": 120 },
+                { "frame": "fall_1", "duration_ms": 120 },
+                { "frame": "fall_2", "duration_ms": 120 },
+                { "frame": "fall_3", "duration_ms": 120 }
+            ]
+        }
+    ]
 }

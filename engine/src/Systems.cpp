@@ -1,5 +1,6 @@
 #include <arcbit/ecs/World.h>
 #include <arcbit/scene/Scene.h>
+#include <arcbit/assets/SpriteSheet.h>
 #include <arcbit/render/RenderThread.h>
 #include <arcbit/core/Log.h>
 
@@ -103,6 +104,11 @@ namespace
                             pos.X += camPos.X * (1.0f - p->ScrollFactor.X);
                             pos.Y += camPos.Y * (1.0f - p->ScrollFactor.Y);
                         }
+                        // Pivot offset: shifts the rendered quad so the sprite's
+                        // logical anchor aligns with Transform2D.Position.
+                        // Pivot {0.5,0.5} = centre (no offset); {0.5,1.0} = bottom-centre.
+                        pos.X += (0.5f - sr.Pivot.X) * t.Scale.X;
+                        pos.Y += (0.5f - sr.Pivot.Y) * t.Scale.Y;
                         if (!cam.IsVisible(pos, t.Scale, ref))
                             return;
 
@@ -111,11 +117,47 @@ namespace
                         s.Sampler  = sr.Sampler;
                         s.Position = pos;
                         s.Size     = t.Scale;
-                        s.UV       = sr.UV;
+                        s.UV       = sr.FlipX
+                                         ? UVRect{ sr.UV.U1, sr.UV.V0, sr.UV.U0, sr.UV.V1 }
+                                         : sr.UV;
                         s.Tint     = sr.Tint;
                         s.Layer    = sr.Layer;
                         packet.Sprites.push_back(s);
                     });
+            // clang-format on
+        });
+    }
+
+    void RegisterAnimatorSystem(World& world)
+    {
+        world.RegisterSystem("Animator", [](Scene& scene, const f32 dt) {
+        // clang-format off
+        scene.GetWorld()
+                .Query<Animator, SpriteRenderer>()
+                .Without<Disabled>()
+                .ForEach([dt](Animator& anim, SpriteRenderer& sr) {
+                    if (!anim.Playing || !anim.Clip || !anim.Sheet || anim.Clip->Frames.empty())
+                        return;
+
+                    anim.Elapsed += dt;
+
+                    const f32 frameSecs = anim.Clip->Frames[anim.FrameIndex].DurationMs / 1000.0f;
+                    if (anim.Elapsed >= frameSecs)
+                    {
+                        anim.Elapsed -= frameSecs;
+                        const u32 count = static_cast<u32>(anim.Clip->Frames.size());
+                        ++anim.FrameIndex;
+                        if (anim.FrameIndex >= count)
+                            anim.FrameIndex = anim.Clip->Loop ? 0 : count - 1;
+                    }
+
+                    const std::string& frameName = anim.Clip->Frames[anim.FrameIndex].FrameName;
+                    if (const auto frame = anim.Sheet->GetFrame(frameName))
+                    {
+                        sr.UV    = frame->UV;
+                        sr.Pivot = frame->Pivot;
+                    }
+                });
             // clang-format on
         });
     }
@@ -163,6 +205,7 @@ void RegisterBuiltinSystems(World& world)
     RegisterLifetimeSystem(world);
     RegisterFreeMovementSystem(world);
     RegisterCameraFollowSystem(world);
+    RegisterAnimatorSystem(world);
 
     // Render-collect phase.
     RegisterSpriteRenderSystem(world);

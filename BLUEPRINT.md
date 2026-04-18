@@ -147,24 +147,24 @@ Checkbox list of every major milestone. Check off items as they are completed.
 ---
 
 ## Phase 16: Custom ECS
-- [ ] Archetype storage (component pools grouped by component set)
-- [ ] Entity create / destroy
-- [ ] Query API (iterate entities matching a component mask)
-- [ ] System registration + execution order
-- [ ] Starter components: `Transform2D`, `Sprite`, `PointLight`
+- [x] Archetype storage (component pools grouped by component set)
+- [x] Entity create / destroy
+- [x] Query API (iterate entities matching a component mask)
+- [x] System registration + execution order
+- [x] Starter components: `Transform2D`, `SpriteRenderer`, `LightEmitter`, `Parallax`, `CameraTarget`, `Disabled`, `Lifetime`, `Tag`, `Name`
 
 ### Movement Components (mix-and-match design)
 Controller components drive *where* an entity wants to move; style components
 define *how* it gets there. Any controller pairs with any style.
 
 **Controller components** (who decides the destination):
-- [ ] `InputMovement` — reads input bindings each tick; converts pressed directions into movement requests
-- [ ] `AIMovement` — driven by pathfinding / behavior system; pushes movement requests programmatically
+- [ ] `InputMovement` — reads input bindings each tick; converts pressed directions into movement requests (deferred — WASD drives FreeMovement directly from game code for now)
+- [ ] `AIMovement` — driven by pathfinding / behavior system; pushes movement requests programmatically (Phase 30)
 
 **Style components** (how the entity actually moves):
 - [ ] `SmoothTileMovement` — lerps from tile center to tile center; plays a walk animation mid-transit; next input queued but not consumed until landing
 - [ ] `SnapTileMovement` — jumps instantly to the destination tile; no interpolation; useful for puzzle / grid games
-- [ ] `FreeMovement` — pixel-perfect world-space velocity; not tile-aligned; intended for live-combat sections where precise sub-tile positioning matters
+- [x] `FreeMovement` — pixel-perfect world-space velocity; not tile-aligned; intended for live-combat sections where precise sub-tile positioning matters
 
 **Usage examples:**
 - Overworld player → `InputMovement` + `SmoothTileMovement`
@@ -175,8 +175,9 @@ define *how* it gets there. Any controller pairs with any style.
 ---
 
 ## Phase 17: Animation System
-- [ ] `AnimationClip` — ordered list of named frames with per-frame duration; defined in the sprite format JSON (`docs/sprite-format.md`) and loaded via `SpriteSheet`
-- [ ] `Animator` component — current clip, playback state (playing / paused / stopped), loop flag
+- [x] `AnimationClip` — ordered list of named frames with per-frame duration; defined in the sprite format JSON (`docs/sprite-format.md`) and loaded via `SpriteSheet`
+- [x] `Animator` component — current clip, elapsed time, frame index, playing flag; `AnimatorSystem` advances frames and writes `SpriteRenderer.UV` + `SpriteRenderer.Pivot` each tick
+- [x] `SpriteRenderer.Pivot` applied by `SpriteRenderSystem` — offsets the rendered quad so the logical anchor aligns with `Transform2D.Position`
 - [ ] State machine: named states, transitions triggered by conditions (e.g. `velocity > 0 → Walk`)
 - [ ] Blend between clips (cross-fade for smoother transitions)
 - [ ] Events on specific frames (e.g. `"FootStep"` on frame 2 — triggers audio / particle)

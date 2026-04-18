@@ -412,22 +412,23 @@ systems first; game code registers its systems in `OnStart` and they run after.
 
 ### Update phase (fixed timestep)
 
-| Order | System | Reads | Writes |
-|-------|--------|-------|--------|
-| 1 | `LifetimeSystem` | `Lifetime` | destroys entity at zero |
-| 2 | `InputMovementSystem` | `InputMovement`, InputManager | `FreeMovement.Velocity` or `SmoothTileMovement.QueuedDir` |
-| 3 | `AIMovementSystem` | `AIMovement` | same targets as above |
-| 4 | `FreeMovementSystem` | `FreeMovement` | `Transform2D.Position` |
-| 5 | `SmoothTileMoveSystem` | `SmoothTileMovement`, `WorldConfig.TileSize` | `Transform2D.Position` |
-| 6 | `SnapTileMoveSystem` | `SnapTileMovement`, `WorldConfig.TileSize` | `Transform2D.Position` |
-| 7 | `CameraFollowSystem` | `CameraTarget`, `Transform2D` | `Scene.Camera2D` |
+| Order | System | Reads | Writes | Status |
+|-------|--------|-------|--------|--------|
+| 1 | `LifetimeSystem` | `Lifetime` | destroys entity at zero | ✓ Done |
+| 2 | `InputMovementSystem` | `InputMovement`, InputManager | `FreeMovement.Velocity` or `SmoothTileMovement.QueuedDir` | Deferred |
+| 3 | `AIMovementSystem` | `AIMovement` | same targets as above | Deferred (Phase 30) |
+| 4 | `FreeMovementSystem` | `FreeMovement` | `Transform2D.Position` | ✓ Done |
+| 5 | `SmoothTileMoveSystem` | `SmoothTileMovement`, `WorldConfig.TileSize` | `Transform2D.Position` | Deferred |
+| 6 | `SnapTileMoveSystem` | `SnapTileMovement`, `WorldConfig.TileSize` | `Transform2D.Position` | Deferred |
+| 7 | `CameraFollowSystem` | `CameraTarget`, `Transform2D` | `Scene.Camera2D` | ✓ Done |
+| 8 | `AnimatorSystem` | `Animator`, `SpriteSheet` | `SpriteRenderer.UV` | ✓ Done (Phase 17) |
 
 ### Render-collect phase (variable rate, before SubmitFrame)
 
-| Order | System | Reads | Writes |
-|-------|--------|-------|--------|
-| 1 | `SpriteRenderSystem` | `Transform2D`, `SpriteRenderer`, `Parallax`? | `FramePacket.Sprites` |
-| 2 | `LightRenderSystem` | `Transform2D`, `LightEmitter` | `FramePacket.Lights` |
+| Order | System | Reads | Writes | Status |
+|-------|--------|-------|--------|--------|
+| 1 | `SpriteRenderSystem` | `Transform2D`, `SpriteRenderer`, `Parallax`? | `FramePacket.Sprites` | ✓ Done |
+| 2 | `LightRenderSystem` | `Transform2D`, `LightEmitter` | `FramePacket.Lights` | ✓ Done |
 
 ---
 
@@ -578,14 +579,12 @@ engine/src/
 The current `main.cpp` demo manually fills `_sprites` and `_lights` vectors and
 culls them by hand in `OnRender`. After this phase it migrates to:
 
-1. Create entities with `Transform2D + SpriteRenderer` for each sprite.
-2. Create entities with `Transform2D + LightEmitter` for each light source.
-3. Add `InputMovement + FreeMovement` to the camera-controlled entity (or keep
-   the WASD camera pan as manual `OnUpdate` code — either is valid during the
-   transition period).
-4. Delete `_sprites`, `_lights`, and the manual cull loops — `SpriteRenderSystem`
+1. ✓ Create entities with `Transform2D + SpriteRenderer` for each sprite.
+2. ✓ Create entities with `Transform2D + LightEmitter` for each light source.
+3. WASD camera pan kept as manual `OnUpdate` code for now (deferred until InputMovementSystem).
+4. ✓ Delete `_sprites`, `_lights`, and the manual cull loops — `SpriteRenderSystem`
    and `LightRenderSystem` handle everything.
-5. The `Camera2D` moves from being a game-owned member to `scene.GetCamera()`.
+5. ✓ The `Camera2D` moves from being a game-owned member to `scene.GetCamera()`.
 
 The demo can migrate incrementally: manual sprites and ECS sprites both feed
 into `FramePacket.Sprites` and are rendered identically.
