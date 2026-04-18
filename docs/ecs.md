@@ -591,6 +591,132 @@ into `FramePacket.Sprites` and are rendered identically.
 
 ---
 
+## Entity Templates
+
+An **Entity Template** (also called a Component Group in editor parlance) is a
+named, serialized description of an entity's initial component set and default
+values. It is the ECS equivalent of a prefab — a reusable starting point for
+creating entities with a known configuration.
+
+### Why "Entity Template" not "Component Group"
+
+"Component group" risks confusion with ECS query filters (`.Query<A, B, C>()` is
+already a kind of component group). "Entity Template" is unambiguous: it is a
+template for an entity, not a filter over components.
+
+### Two uses
+
+**Editor** — the "New Entity" workflow shows a template picker. Selecting
+`"Guard NPC"` creates an entity pre-populated with `SpriteRenderer`, `Animator`,
+`AIBehavior`, and `ScriptComponent(guard.lua)` rather than requiring the designer
+to add and configure each component manually.
+
+**Runtime** — `World::SpawnFromTemplate(name, position)` lets game code spawn
+entities without hard-coding component setup inline. Enemy wave spawners,
+projectile factories, and loot drops all benefit from this.
+
+### What a template is not
+
+Applying a template is a **one-time stamp** — there is no live link back to the
+template definition afterward. Changing the template does not retroactively
+update existing entities. This is simpler than Unity's prefab override system and
+is the right tradeoff for Phase 19: the editor can batch-update entities by query
+if needed, and a live-link system can be added later without breaking the format.
+
+### Definition format
+
+Templates are stored in a `templates.json` file in the project directory
+(referenced by `project.arcbit`). Each template lists component types and their
+serialized initial values:
+
+```json
+{
+    "version": "1.0",
+    "templates": [
+        {
+            "name": "Guard NPC",
+            "tag": "NPC",
+            "components": [
+                {
+                    "type": "SpriteRenderer",
+                    "texture": "assets/textures/guard.png",
+                    "layer": 0
+                },
+                {
+                    "type": "Animator",
+                    "sheet": "assets/spritesheets/guard.json",
+                    "default_clip": "idle_down"
+                },
+                {
+                    "type": "AIBehavior",
+                    "behavior": "patrol",
+                    "alert_radius": 128.0
+                },
+                {
+                    "type": "ScriptComponent",
+                    "script": "scripts/guard.lua"
+                }
+            ]
+        },
+        {
+            "name": "Chest",
+            "tag": "Interactive",
+            "components": [
+                {
+                    "type": "SpriteRenderer",
+                    "texture": "assets/textures/chest.png",
+                    "layer": 0
+                },
+                {
+                    "type": "Interactable",
+                    "on_interact": "scripts/open_chest.lua"
+                }
+            ]
+        }
+    ]
+}
+```
+
+### Runtime API
+
+```cpp
+// Spawn an entity from a template at the given world position.
+// Returns Entity::Invalid() if the template name is not found.
+Entity World::SpawnFromTemplate(std::string_view templateName, Vec2 position);
+
+// Register templates at startup (called by Application after OnStart).
+void World::LoadTemplates(std::string_view path);
+```
+
+`SpawnFromTemplate` creates the entity, sets `Transform2D.Position`, and applies
+each component listed in the template with its default values. Game code then
+modifies the entity normally — the template has no further influence.
+
+```cpp
+// Spawn a guard at a patrol waypoint:
+Entity guard = world.SpawnFromTemplate("Guard NPC", waypointPos);
+world.GetComponent<AIBehavior>(guard)->PatrolPath = myPath;
+```
+
+### Editor workflow
+
+1. Open **Templates** panel — lists all templates in `templates.json`.
+2. Drag a template onto the scene viewport — snaps to tile grid, creates entity
+   at that position with all listed components.
+3. Select an existing entity — "Save as Template" button extracts its current
+   component set into a new template entry (useful for capturing a configured NPC
+   you want to reuse).
+4. Edit a template's default values — changes affect new spawns only (no
+   retroactive update, by design).
+
+### Template inheritance (deferred)
+
+A future extension can add `"extends": "Base NPC"` so templates compose rather
+than copy. Deferred until Phase 26+ when the scripting layer makes cross-template
+component sharing practical.
+
+---
+
 ## Out of Scope for This Phase
 
 - Scene serialization / load / save (Phase 23)
