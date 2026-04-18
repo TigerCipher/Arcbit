@@ -135,7 +135,7 @@ protected:
     // -----------------------------------------------------------------------
     // OnUpdate — camera WASD pan, zoom, shake demo.
     // -----------------------------------------------------------------------
-    void OnUpdate(f32 dt) override
+    void OnUpdate(const f32 dt) override
     {
         // Scene::Update (called after this) handles camera.Update(dt).
         Camera2D& cam = GetScene().GetCamera();
@@ -193,29 +193,32 @@ private:
     // -----------------------------------------------------------------------
 
     // Helper: create one sprite entity with the given attributes.
-    Entity MakeSpriteEntity(Vec2 pos, Vec2 size, TextureHandle tex, SamplerHandle samp, i32 layer, UVRect uv = {})
+    Entity MakeSpriteEntity(const Vec2 pos, const Vec2 size, const TextureHandle tex, const SamplerHandle samp, const i32 layer,
+                            const UVRect uv = {})
     {
-        auto&  world = GetScene().GetWorld();
-        Entity e     = world.CreateEntity();
-        auto*  t     = world.GetComponent<Transform2D>(e);
-        t->Position  = pos;
-        t->Scale     = size;
+        auto&        world = GetScene().GetWorld();
+        const Entity e     = world.CreateEntity();
+        auto*        t     = world.GetComponent<Transform2D>(e);
+        t->Position        = pos;
+        t->Scale           = size;
         world.AddComponent<SpriteRenderer>(e, SpriteRenderer{
                                                   .Texture = tex,
                                                   .Sampler = samp,
                                                   .UV      = uv,
                                                   .Layer   = layer,
                                               });
+        
         return e;
     }
 
-    Entity MakeDyingSpriteEntity(Vec2 pos, Vec2 size, TextureHandle tex, SamplerHandle samp, i32 layer, UVRect uv = {})
+    Entity MakeDyingSpriteEntity(const Vec2 pos, const Vec2 size, const TextureHandle tex, const SamplerHandle samp,
+                                 const i32 layer, const UVRect uv = {})
     {
-        auto&  world = GetScene().GetWorld();
-        Entity e     = world.CreateEntity();
-        auto*  t     = world.GetComponent<Transform2D>(e);
-        t->Position  = pos;
-        t->Scale     = size;
+        auto&        world = GetScene().GetWorld();
+        const Entity e     = world.CreateEntity();
+        auto*        t     = world.GetComponent<Transform2D>(e);
+        t->Position        = pos;
+        t->Scale           = size;
         world.AddComponent<SpriteRenderer>(e, SpriteRenderer{
                                                   .Texture = tex,
                                                   .Sampler = samp,
@@ -231,10 +234,10 @@ private:
     }
 
     // Helper: create one light entity.
-    Entity MakeLightEntity(Vec2 pos, f32 radius, f32 intensity, Color color)
+    Entity MakeLightEntity(const Vec2 pos, const f32 radius, const f32 intensity, const Color color)
     {
-        auto&  world                                 = GetScene().GetWorld();
-        Entity e                                     = world.CreateEntity();
+        auto&        world                           = GetScene().GetWorld();
+        const Entity e                               = world.CreateEntity();
         world.GetComponent<Transform2D>(e)->Position = pos;
         world.AddComponent<LightEmitter>(e, LightEmitter{
                                                 .Radius     = radius,
@@ -283,8 +286,8 @@ private:
 
         for (int i = 0; i < TileCount; ++i)
         {
-            const Vec2 pos = { startX + static_cast<float>(i) * step, -270.0f };
-            Entity     e   = MakeSpriteEntity(pos, tileSize, _playerSheet.GetTexture(), _sampler, 1);
+            const Vec2   pos = { startX + static_cast<float>(i) * step, -270.0f };
+            const Entity e   = MakeSpriteEntity(pos, tileSize, _playerSheet.GetTexture(), _sampler, 1);
 
             if (cols > 0)
                 if (auto uv = _playerSheet.GetTile(static_cast<u32>(i) % cols, 0))
@@ -292,7 +295,7 @@ private:
         }
     }
 
-    void CreateSpriteBand(const SpriteSheet& sheet, float yPos, i32 layer, int count)
+    void CreateSpriteBand(const SpriteSheet& sheet, const float yPos, const i32 layer, const int count)
     {
         const Vec2  spriteSize = SheetWorldSize(sheet);
         const float step       = spriteSize.X;
@@ -305,7 +308,7 @@ private:
         }
     }
 
-    void CreateDyingSpriteBand(const SpriteSheet& sheet, float yPos, i32 layer, int count)
+    void CreateDyingSpriteBand(const SpriteSheet& sheet, const float yPos, const i32 layer, const int count)
     {
         const Vec2  spriteSize = SheetWorldSize(sheet);
         const float step       = spriteSize.X;
@@ -373,7 +376,7 @@ private:
         GetScene().GetWorld().GetComponent<Transform2D>(_mouseLightEntity)->Position = mouseWorld;
     }
 
-    void SubmitDebugGrid(FramePacket& packet, Vec2 viewport) const
+    void SubmitDebugGrid(FramePacket& packet, const Vec2 viewport) const
     {
         const Camera2D& cam    = const_cast<ArcbitGame*>(this)->GetScene().GetCamera();
         const Vec2      camPos = cam.GetEffectivePosition();

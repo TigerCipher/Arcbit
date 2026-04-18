@@ -8,46 +8,45 @@
 
 namespace Arcbit
 {
-
 namespace
 {
-// ---------------------------------------------------------------------------
-// Built-in system helpers
-// ---------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------
+    // Built-in system helpers
+    // ---------------------------------------------------------------------------
 
-Vec2 GetRefSize(const FramePacket& packet)
-{
-    return packet.ReferenceSize.X > 0.0f ? packet.ReferenceSize
-                                         : Vec2{ static_cast<f32>(packet.Width), static_cast<f32>(packet.Height) };
-}
+    Vec2 GetRefSize(const FramePacket& packet)
+    {
+        return packet.ReferenceSize.X > 0.0f
+               ? packet.ReferenceSize
+               : Vec2{static_cast<f32>(packet.Width), static_cast<f32>(packet.Height)};
+    }
 
-// ---------------------------------------------------------------------------
-// Built-in system implementations
-// ---------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------
+    // Built-in system implementations
+    // ---------------------------------------------------------------------------
 
-void RegisterLifetimeSystem(World& world)
-{
-    world.RegisterSystem("Lifetime", [](Scene& scene, const f32 dt) {
-        std::vector<Entity> toDestroy;
-        // clang-format off
-        scene.GetWorld()
-                .Query<Lifetime>()
-                .Without<Disabled>()
-                .ForEach([&](const Entity e, Lifetime& lt) {
-                    lt.Remaining -= dt;
-                    if (lt.Remaining <= 0.0f)
-                        toDestroy.push_back(e);
-                });
-        // clang-format on
+    void RegisterLifetimeSystem(World& world)
+    {
+        world.RegisterSystem("Lifetime", [](Scene& scene, const f32 dt) {
+            std::vector<Entity> toDestroy;
 
-        for (const Entity e : toDestroy)
-            scene.GetWorld().DestroyEntity(e);
-    });
-}
+            scene.GetWorld()
+                 .Query<Lifetime>()
+                 .Without<Disabled>()
+                 .ForEach([&](const Entity e, Lifetime& lt) {
+                     lt.Remaining -= dt;
+                     if (lt.Remaining <= 0.0f)
+                         toDestroy.push_back(e);
+                 });
 
-void RegisterFreeMovementSystem(World& world)
-{
-    world.RegisterSystem("FreeMovement", [](Scene& scene, f32 dt) {
+            for (const Entity e : toDestroy)
+                scene.GetWorld().DestroyEntity(e);
+        });
+    }
+
+    void RegisterFreeMovementSystem(World& world)
+    {
+        world.RegisterSystem("FreeMovement", [](Scene& scene, f32 dt) {
         // clang-format off
         scene.GetWorld()
                 .Query<Transform2D, FreeMovement>()
@@ -65,14 +64,13 @@ void RegisterFreeMovementSystem(World& world)
                     t.Position  = t.Position + fm.Velocity * dt;
                     fm.Velocity = fm.Velocity * std::exp(-fm.Friction * dt);
                 });
-        // clang-format on
+            // clang-format on
+        });
+    }
 
-    });
-}
-
-void RegisterCameraFollowSystem(World& world)
-{
-    world.RegisterSystem("CameraFollow", [](Scene& scene, const f32 dt) {
+    void RegisterCameraFollowSystem(World& world)
+    {
+        world.RegisterSystem("CameraFollow", [](Scene& scene, const f32 dt) {
         // clang-format off
         scene.GetWorld()
                 .Query<const Transform2D, const CameraTarget>()
@@ -82,16 +80,16 @@ void RegisterCameraFollowSystem(World& world)
                         const f32 smoothing = ct.Lag < 1.0f ? 10.0f * (1.0f - ct.Lag) : 0.001f;
                         scene.GetCamera().Follow(t.Position, smoothing, dt);
                     });
-        // clang-format on
-    });
-}
+            // clang-format on
+        });
+    }
 
-void RegisterSpriteRenderSystem(World& world)
-{
-    world.RegisterRenderSystem("SpriteRender", [](Scene& scene, FramePacket& packet) {
-        const Camera2D& cam    = scene.GetCamera();
-        const Vec2      camPos = cam.GetEffectivePosition();
-        const Vec2      ref    = GetRefSize(packet);
+    void RegisterSpriteRenderSystem(World& world)
+    {
+        world.RegisterRenderSystem("SpriteRender", [](Scene& scene, FramePacket& packet) {
+            const Camera2D& cam    = scene.GetCamera();
+            const Vec2      camPos = cam.GetEffectivePosition();
+            const Vec2      ref    = GetRefSize(packet);
 
         // clang-format off
         scene.GetWorld()
@@ -118,15 +116,15 @@ void RegisterSpriteRenderSystem(World& world)
                         s.Layer    = sr.Layer;
                         packet.Sprites.push_back(s);
                     });
-        // clang-format on
-    });
-}
+            // clang-format on
+        });
+    }
 
-void RegisterLightRenderSystem(World& world)
-{
-    world.RegisterRenderSystem("LightRender", [](Scene& scene, FramePacket& packet) {
-        const Camera2D& cam = scene.GetCamera();
-        const Vec2      ref = GetRefSize(packet);
+    void RegisterLightRenderSystem(World& world)
+    {
+        world.RegisterRenderSystem("LightRender", [](Scene& scene, FramePacket& packet) {
+            const Camera2D& cam = scene.GetCamera();
+            const Vec2      ref = GetRefSize(packet);
 
         // clang-format off
         scene.GetWorld()
@@ -144,9 +142,9 @@ void RegisterLightRenderSystem(World& world)
                         pl.LightColor = le.LightColor;
                         packet.Lights.push_back(pl);
                     });
-        // clang-format on
-    });
-}
+            // clang-format on
+        });
+    }
 } // anonymous namespace
 
 
@@ -170,5 +168,4 @@ void RegisterBuiltinSystems(World& world)
     RegisterSpriteRenderSystem(world);
     RegisterLightRenderSystem(world);
 }
-
 } // namespace Arcbit
