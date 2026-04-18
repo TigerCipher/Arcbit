@@ -19,6 +19,8 @@ add_library(arcbit-engine STATIC
     src/Scene.cpp
     src/AnimatorStateMachine.cpp
     src/AudioManager.cpp
+    src/TileAtlas.cpp
+    src/TileMap.cpp
 )
 
 target_include_directories(arcbit-engine

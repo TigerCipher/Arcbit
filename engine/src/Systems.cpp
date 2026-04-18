@@ -4,8 +4,10 @@
 #include <arcbit/assets/SpriteSheet.h>
 #include <arcbit/audio/AudioManager.h>
 #include <arcbit/render/RenderThread.h>
+#include <arcbit/tilemap/TileMap.h>
 #include <arcbit/core/Log.h>
 
+#include <chrono>
 #include <cmath>
 #include <unordered_map>
 #include <unordered_set>
@@ -86,6 +88,129 @@ namespace
                         scene.GetCamera().Follow(t.Position, smoothing, dt);
                     });
             // clang-format on
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Per-tile UV computation helpers
+    // -------------------------------------------------------------------------
+
+    UVRect ComputeTileUV(const TileAtlasEntry& entry, const u32 tileId,
+                         const TileDef* def, const f32 elapsed,
+                         const u32 tileX, const u32 tileY)
+    {
+        const u32 localId = tileId - entry.BaseId;
+        const u32 cols    = entry.Atlas.Columns();
+
+        if (def && !def->Animation.empty())
+        {
+            // Flip-book: position-based phase prevents lockstep marching.
+            u32 totalMs = 0;
+            for (const auto& f : def->Animation) totalMs += f.DurationMs;
+            if (totalMs == 0) return entry.Atlas.GetUV(localId % cols, localId / cols);
+
+            const u32 phaseMs = (tileX * 37u + tileY * 53u) % totalMs;
+            u32 t     = (static_cast<u32>(elapsed * 1000.0f) + phaseMs) % totalMs;
+            u32 accum = 0;
+            for (const auto& f : def->Animation)
+            {
+                if (t < accum + f.DurationMs)
+                    return entry.Atlas.GetUV(f.TileX, f.TileY);
+                accum += f.DurationMs;
+            }
+            const auto& last = def->Animation.back();
+            return entry.Atlas.GetUV(last.TileX, last.TileY);
+        }
+
+        // Static tile — use the ID's natural position in the atlas grid.
+        UVRect uv = entry.Atlas.GetUV(localId % cols, localId / cols);
+
+        if (def && (def->UVScroll.X != 0.0f || def->UVScroll.Y != 0.0f))
+        {
+            const f32 sx = std::fmod(elapsed * def->UVScroll.X, 1.0f);
+            const f32 sy = std::fmod(elapsed * def->UVScroll.Y, 1.0f);
+            uv.U0 += sx; uv.U1 += sx;
+            uv.V0 += sy; uv.V1 += sy;
+        }
+        return uv;
+    }
+
+    void RegisterTilemapRenderSystem(World& world)
+    {
+        using Clock     = std::chrono::steady_clock;
+        using TimePoint = Clock::time_point;
+
+        world.RegisterRenderSystem("TilemapRender",
+            [startTime = Clock::now()](Scene& scene, FramePacket& packet) mutable
+        {
+            const TileMap& tileMap = scene.GetTileMap();
+            if (tileMap.GetChunks().empty()) return;
+
+            const Camera2D& cam     = scene.GetCamera();
+            const Vec2      camPos  = cam.GetEffectivePosition();
+            const Vec2      ref     = GetRefSize(packet);
+            const f32       ts      = tileMap.GetTileSize();
+            const f32       elapsed = std::chrono::duration<f32>(Clock::now() - startTime).count();
+
+            // Chunk world half-size for coarse culling.
+            const f32 chunkWorld = static_cast<f32>(ChunkSize) * ts;
+            const Vec2 chunkHalf = { chunkWorld * 0.5f, chunkWorld * 0.5f };
+
+            for (const auto& [key, chunk] : tileMap.GetChunks())
+            {
+                // Decode chunk coords from key.
+                const i32 chunkX = static_cast<i32>(static_cast<u32>(key >> 32));
+                const i32 chunkY = static_cast<i32>(static_cast<u32>(key & 0xFFFFFFFF));
+
+                // Coarse chunk visibility: center of chunk in world space.
+                const Vec2 chunkCenter = {
+                    (static_cast<f32>(chunkX) * chunkWorld) + chunkWorld * 0.5f - ts * 0.5f,
+                    (static_cast<f32>(chunkY) * chunkWorld) + chunkWorld * 0.5f - ts * 0.5f,
+                };
+                if (!cam.IsVisible(chunkCenter, { chunkWorld + ts * 2.0f, chunkWorld + ts * 2.0f }, ref))
+                    continue;
+
+                for (u32 layer = 0; layer < LayerCount; ++layer)
+                {
+                    for (u32 cell = 0; cell < ChunkSize * ChunkSize; ++cell)
+                    {
+                        const u32 tileId = chunk.Tiles[layer][cell];
+                        if (tileId == 0) continue;
+
+                        const TileAtlasEntry* entry = tileMap.FindAtlas(tileId);
+                        if (!entry || !entry->Atlas.IsValid()) continue;
+
+                        const u32 localX = cell % ChunkSize;
+                        const u32 localY = cell / ChunkSize;
+                        const i32 tileX  = chunkX * static_cast<i32>(ChunkSize) + static_cast<i32>(localX);
+                        const i32 tileY  = chunkY * static_cast<i32>(ChunkSize) + static_cast<i32>(localY);
+
+                        const Vec2 worldPos = tileMap.TileToWorld(tileX, tileY);
+                        if (!cam.IsVisible(worldPos, { ts, ts }, ref)) continue;
+
+                        const TileDef* def = tileMap.FindTileDef(tileId);
+                        const UVRect   uv  = ComputeTileUV(*entry, tileId, def, elapsed,
+                                                           static_cast<u32>(tileX),
+                                                           static_cast<u32>(tileY));
+
+                        // Layer sort: Ground = -1000, Objects = Y-sorted, Overlay = 1000000.
+                        i32 sortLayer = -1000;
+                        if (layer == 1)
+                            sortLayer = static_cast<i32>(worldPos.Y + ts * 0.5f);
+                        else if (layer == 2)
+                            sortLayer = 1000000;
+
+                        Sprite s{};
+                        s.Texture  = entry->Atlas.GetTexture();
+                        s.Sampler  = entry->Sampler;
+                        s.Position = worldPos;
+                        s.Size     = { ts, ts };
+                        s.UV       = uv;
+                        s.Layer    = sortLayer;
+                        packet.Sprites.push_back(s);
+                    }
+                }
+            }
         });
     }
 
@@ -325,7 +450,8 @@ void RegisterBuiltinSystems(World& world)
     RegisterAnimatorSystem(world);             // advances frames, fires events, writes UV
     RegisterAudioSystem(world);                // spatial sound lifecycle + listener update
 
-    // Render-collect phase.
+    // Render-collect phase — tilemap first so its sprites enter the shared sort.
+    RegisterTilemapRenderSystem(world);
     RegisterSpriteRenderSystem(world);
     RegisterLightRenderSystem(world);
 }
