@@ -6,6 +6,8 @@
 #include <arcbit/core/Types.h>
 #include <arcbit/render/RenderHandle.h>
 
+#include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -26,7 +28,9 @@ struct TileAtlasEntry
 {
     u32           BaseId;
     TileAtlas     Atlas;
-    SamplerHandle Sampler; // sampler used when rendering tiles from this atlas
+    SamplerHandle Sampler;     // sampler used when rendering tiles from this atlas
+    std::string   JsonPath;    // path to the .tileatlas.json (empty if not file-loaded)
+    std::string   SamplerName; // "nearest" or "linear" — written into .arcmap
 };
 
 // Chunk-based infinite tile map with multi-atlas support.
@@ -40,7 +44,9 @@ public:
 
     // Register a texture atlas and the base tile ID it starts at.
     // baseId must be > 0 and unique. Atlases are sorted internally by BaseId.
-    void RegisterAtlas(u32 baseId, TileAtlas atlas, SamplerHandle sampler);
+    // jsonPath/samplerName are stored so SaveMap can write them into the .arcmap.
+    void RegisterAtlas(u32 baseId, TileAtlas atlas, SamplerHandle sampler,
+                       std::string_view jsonPath = {}, std::string_view samplerName = "nearest");
 
     // Register a TileDef for a specific tile ID.
     // Only needed for tiles that have UV scroll, flip-book animation, or solid flags.
@@ -59,24 +65,40 @@ public:
     [[nodiscard]] bool IsSolid(i32 tileX, i32 tileY) const;
 
     // Read-only access used by the render system.
-    [[nodiscard]] const std::unordered_map<u64, TileChunk>& GetChunks()            const;
-    [[nodiscard]] const TileAtlasEntry*                      FindAtlas(u32 tileId)  const;
+    [[nodiscard]] const std::unordered_map<u64, TileChunk>& GetChunks()             const;
+    [[nodiscard]] const TileAtlasEntry*                      FindAtlas(u32 tileId)   const;
     [[nodiscard]] const TileDef*                             FindTileDef(u32 tileId) const;
 
     // Log a summary of the current map state: chunk count, tile counts per layer,
     // registered atlases, and registered tile defs. Use after map generation.
     void LogStats() const;
 
+    // Load a .arcmap JSON file: registers all atlases (via embedded .tileatlas.json paths),
+    // sets tile_size, and populates chunk data. "nearest"/"linear" in the arcmap sampler
+    // field is mapped to nearestSampler/linearSampler respectively.
+    bool LoadMap(std::string_view path, TextureManager& textures,
+                 SamplerHandle nearestSampler, SamplerHandle linearSampler);
+
+    // Serialize the current map state (atlases + all chunk data) to a .arcmap JSON file.
+    // Atlas entries must have been registered with jsonPath/samplerName for the output to
+    // be useful as a round-trip input to LoadMap.
+    bool SaveMap(std::string_view path) const;
+
 private:
     [[nodiscard]] static u64 ChunkKey(i32 chunkX, i32 chunkY);
     TileChunk&               GetOrCreateChunk(i32 chunkX, i32 chunkY);
     [[nodiscard]] const TileChunk* GetChunk(i32 chunkX, i32 chunkY) const;
 
+    // Parse a .tileatlas.json, load its texture, register any TileDefs, and call RegisterAtlas.
+    bool LoadAtlasJson(u32 baseId, std::string_view jsonPath,
+                       SamplerHandle sampler, std::string_view samplerName,
+                       TextureManager& textures);
+
     f32 _tileSize = 32.0f;
 
     // Sorted ascending by BaseId for binary-search lookups.
-    std::vector<TileAtlasEntry>       _atlases;
-    std::unordered_map<u32, TileDef>  _tileDefs;
+    std::vector<TileAtlasEntry>        _atlases;
+    std::unordered_map<u32, TileDef>   _tileDefs;
     std::unordered_map<u64, TileChunk> _chunks;
 };
 

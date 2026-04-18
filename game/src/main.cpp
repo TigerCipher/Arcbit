@@ -197,27 +197,37 @@ private:
     {
         TileMap& tm = GetScene().GetTileMap();
         tm.SetTileSize(TileSize);
+        
+        tm.LoadMap("assets/tilemaps/demo.arcmap", GetTextures(), _sampler, _linearSampler);
 
-        TileAtlas grassAtlas, waterAtlas, floorAtlas;
-        grassAtlas.Load("assets/textures/GRASS+.png",  16,  16,  GetTextures());
-        waterAtlas.Load("assets/textures/Water+.png",  16,  16,  GetTextures());
-        floorAtlas.Load("assets/textures/floor.jpg",  128, 128, GetTextures());
-
-        ARCBIT_ASSERT(grassAtlas.IsValid(), "Failed to load GRASS+ atlas");
-        ARCBIT_ASSERT(waterAtlas.IsValid(), "Failed to load Water+ atlas");
-        ARCBIT_ASSERT(floorAtlas.IsValid(), "Failed to load floor atlas");
-
-        _waterTex = waterAtlas.GetTexture();
-        tm.RegisterAtlas(1,   std::move(grassAtlas), _sampler);
-        tm.RegisterAtlas(401, std::move(waterAtlas),  _sampler);
-        tm.RegisterAtlas(601, std::move(floorAtlas),  _linearSampler);
-
-        RegisterWaterTiles(tm);
-        GenerateGround(tm);
-        GenerateWater(tm);
-        GenerateStoneFloor(tm);
-        GenerateObjects(tm);
+        // TileAtlas grassAtlas, waterAtlas, floorAtlas;
+        // grassAtlas.Load("assets/textures/GRASS+.png",  16,  16,  GetTextures());
+        // waterAtlas.Load("assets/textures/Water+.png",  16,  16,  GetTextures());
+        // floorAtlas.Load("assets/textures/floor.jpg",  128, 128, GetTextures());
+        //
+        // ARCBIT_ASSERT(grassAtlas.IsValid(), "Failed to load GRASS+ atlas");
+        // ARCBIT_ASSERT(waterAtlas.IsValid(), "Failed to load Water+ atlas");
+        // ARCBIT_ASSERT(floorAtlas.IsValid(), "Failed to load floor atlas");
+        //
+        // _waterTex = waterAtlas.GetTexture();
+        // tm.RegisterAtlas(1,   std::move(grassAtlas), _sampler,
+        //                  "assets/tilemaps/grass.tileatlas.json", "nearest");
+        // tm.RegisterAtlas(401, std::move(waterAtlas),  _sampler,
+        //                  "assets/tilemaps/water.tileatlas.json", "nearest");
+        // tm.RegisterAtlas(601, std::move(floorAtlas),  _linearSampler,
+        //                  "assets/tilemaps/floor.tileatlas.json", "linear");
+        //
+        // RegisterWaterTiles(tm);
+        // GenerateGround(tm);
+        // GenerateWater(tm);
+        // GenerateStoneFloor(tm);
+        // GenerateObjects(tm);
         tm.LogStats();
+
+        // Write the generated map to disk so LoadMap can be used in future runs.
+        // To test file-based loading, replace everything above (after SetTileSize) with:
+        //   tm.LoadMap("assets/tilemaps/demo.arcmap", GetTextures(), _sampler, _linearSampler);
+        // tm.SaveMap("assets/tilemaps/demo.arcmap");
     }
 
     // Apply UV scroll to water surface rows 0-3 so water appears animated.

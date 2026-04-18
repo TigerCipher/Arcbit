@@ -1,0 +1,7 @@
+{
+  "version": "1.0",
+  "texture": "assets/textures/floor.jpg",
+  "tile_width": 128,
+  "tile_height": 128,
+  "tiles": []
+}

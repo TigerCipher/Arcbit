@@ -1,12 +1,17 @@
 #include <arcbit/tilemap/TileMap.h>
+#include <arcbit/assets/TextureManager.h>
 #include <arcbit/core/Log.h>
+
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 
 namespace Arcbit {
 
-void TileMap::RegisterAtlas(const u32 baseId, TileAtlas atlas, const SamplerHandle sampler)
+void TileMap::RegisterAtlas(const u32 baseId, TileAtlas atlas, const SamplerHandle sampler,
+                             const std::string_view jsonPath, const std::string_view samplerName)
 {
     // Keep _atlases sorted by BaseId for binary search in FindAtlas.
     auto it = std::lower_bound(_atlases.begin(), _atlases.end(), baseId,
@@ -18,7 +23,10 @@ void TileMap::RegisterAtlas(const u32 baseId, TileAtlas atlas, const SamplerHand
     LOG_INFO(Engine, "TileMap: registered atlas base={} end={} ({} tiles, {}x{})",
              baseId, endId, tileCount, atlas.Columns(), atlas.Rows());
 
-    _atlases.insert(it, TileAtlasEntry{ baseId, std::move(atlas), sampler });
+    _atlases.insert(it, TileAtlasEntry{
+        baseId, std::move(atlas), sampler,
+        std::string(jsonPath), std::string(samplerName),
+    });
 }
 
 void TileMap::RegisterTile(const u32 tileId, TileDef def)
@@ -122,6 +130,160 @@ void TileMap::LogStats() const
                  entry.BaseId, entry.Atlas.Columns(), entry.Atlas.Rows(),
                  entry.BaseId, entry.BaseId + tileCount - 1);
     }
+}
+
+bool TileMap::LoadAtlasJson(const u32 baseId, const std::string_view jsonPath,
+                             const SamplerHandle sampler, const std::string_view samplerName,
+                             TextureManager& textures)
+{
+    std::ifstream f{std::string(jsonPath)};
+    if (!f)
+    {
+        LOG_WARN(Engine, "TileMap: cannot open atlas file '{}'", jsonPath);
+        return false;
+    }
+
+    nlohmann::json j;
+    try { f >> j; }
+    catch (const std::exception& e)
+    {
+        LOG_WARN(Engine, "TileMap: JSON parse error in '{}': {}", jsonPath, e.what());
+        return false;
+    }
+
+    const std::string texPath = j.at("texture").get<std::string>();
+    const u32 tileW = j.at("tile_width").get<u32>();
+    const u32 tileH = j.at("tile_height").get<u32>();
+
+    TileAtlas atlas;
+    if (!atlas.Load(texPath, tileW, tileH, textures))
+        return false;
+
+    // Register per-tile overrides (uv_scroll, solid, etc.).
+    for (const auto& t : j.value("tiles", nlohmann::json::array()))
+    {
+        const u32 localId = t.at("local_id").get<u32>();
+        TileDef def{};
+        if (t.contains("solid"))     def.Solid = t["solid"].get<bool>();
+        if (t.contains("uv_scroll"))
+        {
+            def.UVScroll.X = t["uv_scroll"].value("x", 0.0f);
+            def.UVScroll.Y = t["uv_scroll"].value("y", 0.0f);
+        }
+        RegisterTile(baseId + localId, std::move(def));
+    }
+
+    RegisterAtlas(baseId, std::move(atlas), sampler, jsonPath, samplerName);
+    return true;
+}
+
+bool TileMap::LoadMap(const std::string_view path, TextureManager& textures,
+                      const SamplerHandle nearestSampler, const SamplerHandle linearSampler)
+{
+    std::ifstream f{std::string(path)};
+    if (!f)
+    {
+        LOG_WARN(Engine, "TileMap: cannot open map file '{}'", path);
+        return false;
+    }
+
+    nlohmann::json j;
+    try { f >> j; }
+    catch (const std::exception& e)
+    {
+        LOG_WARN(Engine, "TileMap: JSON parse error in '{}': {}", path, e.what());
+        return false;
+    }
+
+    _tileSize = j.value("tile_size", _tileSize);
+
+    for (const auto& a : j.value("atlases", nlohmann::json::array()))
+    {
+        const u32         baseId      = a.at("base_id").get<u32>();
+        const std::string atlasPath   = a.at("path").get<std::string>();
+        const std::string samplerName = a.value("sampler", "nearest");
+        const SamplerHandle sampler   = (samplerName == "linear") ? linearSampler : nearestSampler;
+
+        if (!LoadAtlasJson(baseId, atlasPath, sampler, samplerName, textures))
+            return false;
+    }
+
+    for (const auto& c : j.value("chunks", nlohmann::json::array()))
+    {
+        const i32 cx = c.at("x").get<i32>();
+        const i32 cy = c.at("y").get<i32>();
+        TileChunk& chunk = GetOrCreateChunk(cx, cy);
+
+        auto fillLayer = [](TileChunk& ch, const u32 layer, const nlohmann::json& arr) {
+            u32 i = 0;
+            for (const auto& v : arr)
+                ch.Tiles[layer][i++] = v.get<u32>();
+        };
+
+        fillLayer(chunk, 0, c.value("ground",  nlohmann::json::array()));
+        fillLayer(chunk, 1, c.value("objects", nlohmann::json::array()));
+        fillLayer(chunk, 2, c.value("overlay", nlohmann::json::array()));
+    }
+
+    LOG_INFO(Engine, "TileMap: loaded '{}' — {} atlases, {} chunks",
+             path, _atlases.size(), _chunks.size());
+    return true;
+}
+
+bool TileMap::SaveMap(const std::string_view path) const
+{
+    nlohmann::json j;
+    j["version"]   = "1.0";
+    j["tile_size"] = _tileSize;
+
+    auto jAtlases = nlohmann::json::array();
+    for (const auto& e : _atlases)
+    {
+        nlohmann::json a;
+        a["base_id"] = e.BaseId;
+        a["path"]    = e.JsonPath;
+        a["sampler"] = e.SamplerName;
+        jAtlases.push_back(std::move(a));
+    }
+    j["atlases"] = std::move(jAtlases);
+
+    auto jChunks = nlohmann::json::array();
+    for (const auto& [key, chunk] : _chunks)
+    {
+        // Decode chunk coordinates from the packed key.
+        const i32 cx = static_cast<i32>(static_cast<u32>(key >> 32));
+        const i32 cy = static_cast<i32>(static_cast<u32>(key));
+
+        nlohmann::json c;
+        c["x"] = cx;
+        c["y"] = cy;
+
+        auto jGround  = nlohmann::json::array();
+        auto jObjects = nlohmann::json::array();
+        auto jOverlay = nlohmann::json::array();
+        for (u32 i = 0; i < ChunkSize * ChunkSize; ++i)
+        {
+            jGround.push_back(chunk.Tiles[0][i]);
+            jObjects.push_back(chunk.Tiles[1][i]);
+            jOverlay.push_back(chunk.Tiles[2][i]);
+        }
+        c["ground"]  = std::move(jGround);
+        c["objects"] = std::move(jObjects);
+        c["overlay"] = std::move(jOverlay);
+        jChunks.push_back(std::move(c));
+    }
+    j["chunks"] = std::move(jChunks);
+
+    std::ofstream f{std::string(path)};
+    if (!f)
+    {
+        LOG_WARN(Engine, "TileMap: cannot write '{}'", path);
+        return false;
+    }
+    f << j.dump(2);
+    LOG_INFO(Engine, "TileMap: saved '{}' — {} atlases, {} chunks",
+             path, _atlases.size(), _chunks.size());
+    return true;
 }
 
 u64 TileMap::ChunkKey(const i32 chunkX, const i32 chunkY)
