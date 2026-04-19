@@ -185,6 +185,8 @@ namespace
                                        const f32  chunkWorld = static_cast<f32>(ChunkSize) * ts;
                                        const Vec2 chunkHalf  = {chunkWorld * 0.5f, chunkWorld * 0.5f};
 
+                                       packet.TilemapChunksTotal = static_cast<u32>(tileMap.GetChunks().size());
+
                                        for (const auto& [key, chunk] : tileMap.GetChunks()) {
                                            // Decode chunk coords from key.
                                            const i32 chunkX = static_cast<i32>(static_cast<u32>(key >> 32));
@@ -199,6 +201,8 @@ namespace
                                                                   chunkWorld + ts * 2.0f, chunkWorld + ts * 2.0f
                                                               }, ref))
                                                continue;
+
+                                           ++packet.TilemapChunksRendered;
 
                                            for (u32 layer = 0; layer < LayerCount; ++layer) {
                                                for (u32 cell = 0; cell < ChunkSize * ChunkSize; ++cell) {
@@ -242,6 +246,7 @@ namespace
                                                    s.UV       = uv;
                                                    s.Layer    = sortLayer;
                                                    packet.Sprites.push_back(s);
+                                                   ++packet.TilemapTilesRendered;
                                                }
                                            }
                                        }

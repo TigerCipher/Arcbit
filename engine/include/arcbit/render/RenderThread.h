@@ -189,6 +189,12 @@ struct FramePacket
     // acquiring the next image. Set this when the window has been resized.
     // The flag is consumed once and does not persist across frames.
     bool NeedsResize = false;
+
+    // Tilemap stats — written by the TilemapRender system during CollectRenderData.
+    // Read by Application before SubmitFrame to populate _renderStats.
+    u32 TilemapChunksTotal    = 0; // total chunks in the active tilemap
+    u32 TilemapChunksRendered = 0; // chunks that passed the frustum cull
+    u32 TilemapTilesRendered  = 0; // individual tile sprites submitted
 };
 
 // ---------------------------------------------------------------------------
@@ -200,10 +206,13 @@ struct FramePacket
 // ---------------------------------------------------------------------------
 struct RenderStats
 {
-    f32 FPS              = 0; // Tracked by application game loop
+    f32 FPS              = 0; // tracked by the application game loop
     u32 SpritesSubmitted = 0; // total sprites in packet.Sprites
     u32 SpriteBatches    = 0; // instanced GPU draw calls emitted by the batcher
     u32 LegacyDrawCalls  = 0; // GPU draw calls from packet.DrawCalls
+    u32 ChunksTotal      = 0; // total chunks in the active tilemap
+    u32 ChunksRendered   = 0; // chunks that passed the frustum cull this frame
+    u32 TilesRendered    = 0; // tile sprites submitted to packet.Sprites
     u32 LightsActive     = 0; // point lights uploaded to the SSBO
 };
 

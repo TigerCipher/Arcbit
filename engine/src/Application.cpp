@@ -193,15 +193,24 @@ void Application::Run()
         OnRender(packet);
         if (_scene) _scene->CollectRenderData(packet);
 
+        // Capture tilemap stats from the packet before the move — the tilemap
+        // system populates these during CollectRenderData on the game thread.
+        _renderStats.ChunksTotal    = packet.TilemapChunksTotal;
+        _renderStats.ChunksRendered = packet.TilemapChunksRendered;
+        _renderStats.TilesRendered  = packet.TilemapTilesRendered;
+
         if (_showDebugOverlay && _debugFont.IsValid()) {
-            const std::string fpsText = std::format("FPS: {:.0f}\nSprites: {}\nDraw Calls: {}\nLights: {}", 
-                _renderStats.FPS, 
-                _renderStats.SpritesSubmitted, 
-                _renderStats.LegacyDrawCalls, 
-                _renderStats.LightsActive);
-            
-            DrawText(packet, _debugFont, fpsText, {8.0f, 8.0f}, 2.0f,
-                     Color::Yellow());
+            const std::string overlay = std::format(
+                "FPS: {:.0f}\n"
+                "Sprites: {} ({} batches)\n"
+                "Draw Calls: {}  Lights: {}\n"
+                "Chunks: {}/{}  Tiles: {}",
+                _renderStats.FPS,
+                _renderStats.SpritesSubmitted, _renderStats.SpriteBatches,
+                _renderStats.LegacyDrawCalls, _renderStats.LightsActive,
+                _renderStats.ChunksRendered, _renderStats.ChunksTotal,
+                _renderStats.TilesRendered);
+            DrawText(packet, _debugFont, overlay, {8.0f, 8.0f}, 1.0f, {1.0f, 1.0f, 0.0f, 1.0f});
         }
 
         _renderThread.SubmitFrame(std::move(packet));
