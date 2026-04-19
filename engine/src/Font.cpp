@@ -154,7 +154,7 @@ const GlyphInfo* FontAtlas::GetGlyph(const u32 codepoint) const
 }
 
 // Returns the total advance width of a single line (no newlines).
-static f32 MeasureLineWidth(const FontAtlas& font, const std::string_view line, const f32 scale)
+static f32 MeasureLineWidth(const FontAtlas& font, std::string_view line, f32 scale)
 {
     f32 width = 0.0f;
     for (const char c : line) {
@@ -278,6 +278,11 @@ void DrawTextUI(FramePacket& packet, const FontAtlas& font, const std::string_vi
         cursorY   += font.GetLineHeight() * scale;
         remaining  = remaining.substr(nl + 1);
     }
+}
+
+f32 MeasureTextWidth(const FontAtlas& font, const std::string_view line, const f32 scale)
+{
+    return MeasureLineWidth(font, line, scale);
 }
 
 } // namespace Arcbit

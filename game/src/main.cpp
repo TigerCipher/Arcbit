@@ -110,40 +110,65 @@ protected:
         RegisterShipAI();
         RegisterWhirlpoolAI();
         CreateMouseLight();
-        
+
         _bitmapFont.Load("assets/fonts/Roboto-Regular.ttf", 32.0f, FontMode::Bitmap, GetDevice());
-        
+
+        // Screen fades in automatically (TransitionSpeed defaults to 3.0f)
         auto screen = std::make_unique<UIScreen>();
 
-        // Centered panel, 300×200
-        auto* panel = screen->Add<Panel>();
-        panel->Size    = {300.0f, 200.0f};
-        panel->Anchor  = {0.5f, 0.5f};
-        panel->Pivot   = {0.5f, 0.5f};
+        // Centered panel
+        auto* panel       = screen->Add<Panel>();
+        panel->Size       = {340.0f, 260.0f};
+        panel->Anchor     = {0.5f, 0.5f};
+        panel->Pivot      = {0.5f, 0.5f};
         panel->DrawBorder = true;
-        panel->ZOrder  = 0;
+        panel->ZOrder     = 0;
 
-        // Label inside the panel
-        auto* label = panel->AddChild<Label>();
-        label->Text   = "Some confirmation window dialog thing";
-        label->Anchor = {0.5f, 0.0f};
-        label->Pivot  = {0.5f, 0.0f};
-        label->Offset = {0.0f, 20.0f};
-        label->Align  = TextAlign::Center;
-        label->ZOrder = 1;
+        // Title
+        auto* title   = panel->AddChild<Label>();
+        title->Text   = "Confirm Action";
+        title->Align  = TextAlign::Center;
+        title->Size   = {340.0f, 30.0f}; // matches panel width so Center alignment works
+        title->Anchor = {0.5f, 0.0f};
+        title->Pivot  = {0.5f, 0.0f};
+        title->Offset = {0.0f, 16.0f};
+        title->ZOrder = 1;
 
-        // Button below the label
-        auto* btn = panel->AddChild<Button>();
-        btn->Text     = "Click Me";
-        btn->Size     = {120.0f, 36.0f};
-        btn->Anchor   = {0.5f, 1.0f};
-        btn->Pivot    = {0.5f, 1.0f};
-        btn->Offset   = {0.0f, -20.0f};
-        btn->ZOrder   = 1;
-        btn->OnClick  = [&] {
-            LOG_INFO(Game, "Button clicked!");
+        // Word-wrapped body — key: Size.X must match available width, not the default 100px
+        auto* desc = panel->AddChild<Label>();
+        desc->Text =
+                "Some confirmation window dialog thing that goes on long enough to need wrapping across multiple lines.";
+        desc->WordWrap = true;
+        desc->Size     = {300.0f, 80.0f}; // 300 = panel (340) minus 20px padding each side
+        desc->Anchor   = {0.5f, 0.0f};
+        desc->Pivot    = {0.5f, 0.0f};
+        desc->Offset   = {0.0f, 56.0f};
+        desc->ZOrder   = 1;
+
+        // Two focusable buttons — Tab / arrow keys / D-pad cycle between them
+        // Enter / gamepad-A fires OnClick on the focused one
+        auto* btnConfirm      = panel->AddChild<Button>();
+        btnConfirm->Text      = "Confirm";
+        btnConfirm->Size      = {120.0f, 36.0f};
+        btnConfirm->Anchor    = {0.5f, 1.0f};
+        btnConfirm->Pivot     = {1.0f, 1.0f};
+        btnConfirm->Offset    = {-10.0f, -20.0f};
+        btnConfirm->Focusable = true;
+        btnConfirm->ZOrder    = 1;
+        btnConfirm->OnClick   = [&] {
+            LOG_INFO(Game, "Confirmed!");
             _showDebugOverlay = !_showDebugOverlay;
         };
+
+        auto* btnCancel      = panel->AddChild<Button>();
+        btnCancel->Text      = "Cancel";
+        btnCancel->Size      = {120.0f, 36.0f};
+        btnCancel->Anchor    = {0.5f, 1.0f};
+        btnCancel->Pivot     = {0.0f, 1.0f};
+        btnCancel->Offset    = {10.0f, -20.0f};
+        btnCancel->Focusable = true;
+        btnCancel->ZOrder    = 1;
+        btnCancel->OnClick   = [this] { GetUI().Pop(); };
 
         GetUI().Push(std::move(screen));
     }
@@ -162,8 +187,9 @@ protected:
         packet.AmbientColor  = Color{0.018f, 0.022f, 0.03f, 1.0f};
         packet.ReferenceSize = {ViewportW, ViewportH};
         if (_showGrid) SubmitDebugGrid(packet, {ViewportW, ViewportH});
-        
-        DrawText(packet, _bitmapFont, "Hello, World!\nThis is a test of a longer string", {100.0f, 100.0f}, 1.0f, Color::Magenta(), 0, TextAlign::Center);
+
+        DrawText(packet, _bitmapFont, "Hello, World!\nThis is a test of a longer string", {100.0f, 100.0f}, 1.0f,
+                 Color::Magenta(), 0, TextAlign::Center);
     }
 
     void OnShutdown() override
@@ -172,7 +198,7 @@ protected:
         GetDevice().DestroySampler(_gridSampler);
         GetDevice().DestroySampler(_linearSampler);
         GetDevice().DestroySampler(_sampler);
-        
+
         if (_bitmapFont.IsValid()) {
             GetDevice().DestroyTexture(_bitmapFont.GetTexture());
             GetDevice().DestroySampler(_bitmapFont.GetSampler());
@@ -537,9 +563,9 @@ private:
         _mouseLightEntity                               = world.CreateEntity();
         world.GetTransform(_mouseLightEntity)->Position = {};
         world.AddComponent<LightEmitter>(_mouseLightEntity, LightEmitter{
-                                             .Radius       = 75.0f,
-                                             .Intensity    = 2.0f,
-                                             .LightColor   = Color::Cyan()
+                                             .Radius     = 75.0f,
+                                             .Intensity  = 2.0f,
+                                             .LightColor = Color::Cyan()
                                          });
     }
 
@@ -799,7 +825,7 @@ private:
     TextureHandle _waterTex;
 
     SpriteSheet _playerSheet;
-    
+
     FontAtlas _bitmapFont;
 };
 

@@ -74,6 +74,9 @@ public:
     // Sort key within the same screen layer.  Higher values render on top.
     i32 ZOrder = 0;
 
+    // Whether this widget participates in keyboard/gamepad focus navigation.
+    bool Focusable = false;
+
     virtual ~UIWidget() = default;
 
     // Compute this widget's pixel rect relative to parentRect.
@@ -92,12 +95,6 @@ public:
 
 protected:
     // Called once per frame. Override to update interactive state.
-    // myRect: this widget's computed pixel rect this frame.
-    // mousePos: cursor position in screen pixels.
-    // mouseDown: left button currently held.
-    // mouseJustDown/Up: button transitioned this frame.
-    // consumed: set true if this widget handled the mouse event (prevents
-    //           lower-ZOrder siblings from also receiving it).
     virtual void OnUpdate(f32   dt, UIRect      myRect, Vec2        mousePos,
                           bool  mouseDown, bool mouseJustDown, bool mouseJustUp,
                           bool& consumed) {}
@@ -107,6 +104,18 @@ protected:
     virtual void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
                            TextureHandle whiteTex, SamplerHandle whiteSampler,
                            const UISkin& skin) = 0;
+
+    // Focus lifecycle hooks — called by UIScreen during focus navigation.
+    virtual void OnFocusGained() {}
+    virtual void OnFocusLost()   {}
+
+    // Called by UIScreen when confirm input (Enter/gamepad-A) is pressed
+    // while this widget holds focus.
+    virtual void OnActivate() {}
+
+    // True while this widget is the focused widget in its screen.
+    // Read in OnCollect to apply a focus highlight (e.g. Button uses it).
+    bool _focused = false;
 
     std::vector<std::unique_ptr<UIWidget>> _children;
 

@@ -13,19 +13,20 @@ struct FramePacket;
 // ---------------------------------------------------------------------------
 // UIScreen — a full-screen root widget container.
 //
-// Screens are stacked by UIManager.  Only the top screen receives input by
-// default; all visible screens collect their render data each frame.
+// Screens are stacked by UIManager. The top-most screen receives input; all
+// visible screens are collected each frame.  Push transitions fade in; Pop
+// transitions fade out before the screen is removed from the stack.
 // ---------------------------------------------------------------------------
 class UIScreen
 {
 public:
     virtual ~UIScreen() = default;
 
-    // Called once when the screen is pushed onto the stack.
     virtual void OnEnter() {}
+    virtual void OnExit()  {}
 
-    // Called once when the screen is popped off the stack.
-    virtual void OnExit() {}
+    // Rate at which transition opacity changes (units/second). 0 = instant.
+    f32 TransitionSpeed = 3.0f;
 
     // Add a root-level widget. Returns raw ptr; ownership stays here.
     template<typename T, typename... Args>
@@ -37,22 +38,47 @@ public:
         return ptr;
     }
 
-    // Drive the widget tree for this frame.
     void Update(f32 dt, UIRect screenRect, Vec2 mousePos,
                 bool mouseDown, bool mouseJustDown, bool mouseJustUp);
 
-    // Emit all quads into the packet.
     void Collect(FramePacket& packet, UIRect screenRect, const UISkin& skin,
                  TextureHandle whiteTex, SamplerHandle whiteSampler);
 
-    [[nodiscard]] bool IsVisible() const  { return _visible; }
-    void SetVisible(const bool v) { _visible = v; }
+    // --- Focus navigation ---------------------------------------------------
+
+    void FocusNext();
+    void FocusPrev();
+    void ActivateFocused();
+    void ClearFocus();
+
+    [[nodiscard]] UIWidget* GetFocusedWidget() const { return _focusedWidget; }
+
+    // --- Visibility / transition state --------------------------------------
+
+    [[nodiscard]] bool IsVisible()       const { return _visible; }
+    void               SetVisible(bool v)      { _visible = v; }
+
+    [[nodiscard]] bool IsFadingOut()          const { return _transitionState == TransitionState::FadingOut; }
+    [[nodiscard]] f32  GetTransitionOpacity() const { return _transitionOpacity; }
 
 protected:
     std::vector<std::unique_ptr<UIWidget>> _roots;
 
 private:
-    bool _visible = true;
+    enum class TransitionState { Idle, FadingIn, FadingOut };
+
+    bool            _visible           = true;
+    TransitionState _transitionState   = TransitionState::Idle;
+    f32             _transitionOpacity = 1.0f;
+    UIWidget*       _focusedWidget     = nullptr;
+
+    void AdvanceTransition(f32 dt);
+    void ApplyFocus(UIWidget* widget);
+
+    std::vector<UIWidget*> GatherFocusables() const;
+    static void CollectFocusables(UIWidget& w, std::vector<UIWidget*>& out);
+
+    friend class UIManager;
 };
 
 } // namespace Arcbit

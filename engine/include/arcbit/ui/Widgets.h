@@ -30,11 +30,9 @@ class Label : public UIWidget
 {
 public:
     std::string Text;
-    TextAlign   Align = TextAlign::Left;
-
-    // If true, position.X is the horizontal center of the widget rect.
-    // Combines with the Anchor/Pivot layout system.
-    bool AutoCenter = false;
+    TextAlign   Align      = TextAlign::Left;
+    bool        WordWrap   = false;  // wrap lines at word boundaries to fit myRect.W
+    bool        AutoCenter = false;
 
 protected:
     void OnCollect(FramePacket& packet, UIRect myRect, f32 effectiveOpacity,
@@ -60,6 +58,9 @@ protected:
                    TextureHandle whiteTex, SamplerHandle whiteSampler,
                    const UISkin& skin) override;
 
+    // Fires OnClick when activated by keyboard/gamepad confirm input.
+    void OnActivate() override { if (OnClick) OnClick(); }
+
 private:
     bool _hovered = false;
     bool _pressed = false;
@@ -75,6 +76,37 @@ public:
     SamplerHandle Sampler;
     Color         Tint = {1, 1, 1, 1};
     UVRect        UV   = {0, 0, 1, 1};
+
+protected:
+    void OnCollect(FramePacket& packet, UIRect myRect, f32 effectiveOpacity,
+                   TextureHandle whiteTex, SamplerHandle whiteSampler,
+                   const UISkin& skin) override;
+};
+
+// ---------------------------------------------------------------------------
+// NineSlice — a panel drawn from a 9-patch texture.
+//
+// The texture is divided into a 3×3 grid by UV-space border fractions.
+// Corners are emitted at PixelBorder* sizes; the center stretches to fill.
+// ---------------------------------------------------------------------------
+class NineSlice : public UIWidget
+{
+public:
+    TextureHandle Texture;
+    SamplerHandle Sampler;
+    Color         Tint = {1, 1, 1, 1};
+
+    // Source UV-space borders (fraction of texture, 0–1).
+    f32 UVBorderLeft   = 0.25f;
+    f32 UVBorderRight  = 0.25f;
+    f32 UVBorderTop    = 0.25f;
+    f32 UVBorderBottom = 0.25f;
+
+    // Rendered border sizes in screen pixels.
+    f32 PixelLeft   = 16.0f;
+    f32 PixelRight  = 16.0f;
+    f32 PixelTop    = 16.0f;
+    f32 PixelBottom = 16.0f;
 
 protected:
     void OnCollect(FramePacket& packet, UIRect myRect, f32 effectiveOpacity,

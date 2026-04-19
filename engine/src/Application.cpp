@@ -118,7 +118,9 @@ void Application::Run()
     _debugFont.Load("assets/fonts/Roboto-Regular.ttf", 24.0f, FontMode::SDF, *_device);
 
     // Init UI manager after the render thread is running so white-texture handles are valid.
-    _ui.Init(_renderThread, _debugFont);
+    // Registers UI navigation actions (UI_Confirm, UI_FocusNext, UI_FocusPrev) before OnStart
+    // so games can rebind them via Settings::LoadInputBindings after OnStart.
+    _ui.Init(_renderThread, _debugFont, _input);
 
     // Give the game a chance to register actions, create GPU resources, etc.
     // Input bindings are loaded from settings AFTER OnStart so that default

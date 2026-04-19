@@ -2,6 +2,7 @@
 
 #include <arcbit/ui/UIScreen.h>
 #include <arcbit/ui/UISkin.h>
+#include <arcbit/input/InputTypes.h>
 
 #include <memory>
 #include <vector>
@@ -15,42 +16,51 @@ class  RenderThread;
 // ---------------------------------------------------------------------------
 // UIManager — owns the screen stack, drives update/collect each frame.
 //
-// Push screens to show them; pop to dismiss.  The top-most screen receives
-// mouse input; all visible screens are collected for rendering.
+// Push screens to show them; Pop starts a fade-out before removal.
+// All visible screens are collected (rendered); only the topmost non-fading
+// screen receives input.
 // ---------------------------------------------------------------------------
 class UIManager
 {
 public:
-    // Must be called once after the render device is ready.
-    void Init(const RenderThread& rt, const FontAtlas& font);
+    // Pre-registered UI navigation actions — bound to defaults in Init().
+    // Games may rebind these via Settings the same as any other action.
+    static constexpr ActionID ActionConfirm   = MakeAction("UI_Confirm");
+    static constexpr ActionID ActionFocusNext = MakeAction("UI_FocusNext");
+    static constexpr ActionID ActionFocusPrev = MakeAction("UI_FocusPrev");
 
-    // Replace the default skin colors/font.
+    // Must be called once after the render device is ready.
+    // Registers navigation actions and binds their default keys.
+    void Init(const RenderThread& rt, const FontAtlas& font, InputManager& input);
+
     void SetSkin(const UISkin& skin) { _skin = skin; }
     [[nodiscard]] const UISkin& GetSkin() const { return _skin; }
 
     void Push(std::unique_ptr<UIScreen> screen);
     void Pop();
 
-    [[nodiscard]] UIScreen* Top() const;
+    [[nodiscard]] UIScreen* Top()   const;
     [[nodiscard]] bool      Empty() const { return _stack.empty(); }
 
-    // Called every game frame from Application::Update.
     void Update(f32 dt, Vec2 windowSize, const InputManager& input);
-
-    // Emit all UI quads into the frame packet.
     void CollectRenderData(FramePacket& packet, Vec2 windowSize);
 
 private:
     std::vector<std::unique_ptr<UIScreen>> _stack;
-    UISkin          _skin;
-    TextureHandle   _whiteTex;
-    SamplerHandle   _whiteSampler;
+    UISkin        _skin;
+    TextureHandle _whiteTex;
+    SamplerHandle _whiteSampler;
 
-    // Cached per-frame input (set in Update, read in CollectRenderData if needed).
-    Vec2  _mousePos       = {0, 0};
-    bool  _mouseDown      = false;
-    bool  _mouseJustDown  = false;
-    bool  _mouseJustUp    = false;
+    Vec2 _mousePos      = {0, 0};
+    bool _mouseDown     = false;
+    bool _mouseJustDown = false;
+    bool _mouseJustUp   = false;
+
+    // Returns the topmost screen that is not fading out (receives input).
+    [[nodiscard]] UIScreen* ActiveInputScreen() const;
+
+    // Remove screens that have completed their fade-out.
+    void RemoveCompletedFadeOuts();
 };
 
 } // namespace Arcbit

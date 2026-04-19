@@ -91,4 +91,7 @@ void DrawTextUI(FramePacket& packet, const FontAtlas& font, std::string_view tex
                 Vec2 position, f32 scale, Color color,
                 i32 layer = 0, TextAlign align = TextAlign::Left);
 
+// Measure the pixel width of a single line (no newlines) at the given scale.
+f32 MeasureTextWidth(const FontAtlas& font, std::string_view line, f32 scale);
+
 } // namespace Arcbit
