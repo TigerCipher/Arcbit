@@ -113,16 +113,23 @@ protected:
 
         _bitmapFont.Load("assets/fonts/Roboto-Regular.ttf", 32.0f, FontMode::Bitmap, GetDevice());
 
+        _uiPanelTex = GetTextures().Load("assets/textures/ui_panel.png");
+
         // Screen fades in automatically (TransitionSpeed defaults to 3.0f)
         auto screen = std::make_unique<UIScreen>();
 
-        // Centered panel
-        auto* panel       = screen->Add<Panel>();
-        panel->Size       = {340.0f, 260.0f};
-        panel->Anchor     = {0.5f, 0.5f};
-        panel->Pivot      = {0.5f, 0.5f};
-        panel->DrawBorder = true;
-        panel->ZOrder     = 0;
+        // NineSlice panel — 64×64 source, ~8px border each side → UV = 8/64 = 0.125
+        auto* panel         = screen->Add<NineSlice>();
+        panel->Size         = {340.0f, 260.0f};
+        panel->Anchor       = {0.5f, 0.5f};
+        panel->Pivot        = {0.5f, 0.5f};
+        panel->Texture      = _uiPanelTex;
+        panel->Sampler      = _linearSampler;
+        panel->UVBorderLeft = panel->UVBorderRight  = 0.125f;
+        panel->UVBorderTop  = panel->UVBorderBottom = 0.125f;
+        panel->PixelLeft    = panel->PixelRight     = 12.0f;
+        panel->PixelTop     = panel->PixelBottom    = 12.0f;
+        panel->ZOrder       = 0;
 
         // Title
         auto* title   = panel->AddChild<Label>();
@@ -133,6 +140,7 @@ protected:
         title->Pivot  = {0.5f, 0.0f};
         title->Offset = {0.0f, 16.0f};
         title->ZOrder = 1;
+        title->TextColor = Color::Black();
 
         // Word-wrapped body — key: Size.X must match available width, not the default 100px
         auto* desc = panel->AddChild<Label>();
@@ -144,6 +152,7 @@ protected:
         desc->Pivot    = {0.5f, 0.0f};
         desc->Offset   = {0.0f, 56.0f};
         desc->ZOrder   = 1;
+        desc->TextColor = Color::Black();
 
         // Two focusable buttons — Tab / arrow keys / D-pad cycle between them
         // Enter / gamepad-A fires OnClick on the focused one
@@ -823,6 +832,7 @@ private:
     TextureHandle _shipTex;
     TextureHandle _bridgeTex;
     TextureHandle _waterTex;
+    TextureHandle _uiPanelTex;
 
     SpriteSheet _playerSheet;
 

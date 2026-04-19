@@ -128,7 +128,9 @@ void Label::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effect
 {
     if (!skin.Font || Text.empty()) return;
 
-    const Color col = WithAlpha(Enabled ? skin.TextLabel : skin.TextDisabled, effectiveOpacity);
+    const Color base = (TextColor.A > 0.0f) ? TextColor
+                                             : (Enabled ? skin.TextLabel : skin.TextDisabled);
+    const Color col  = WithAlpha(base, effectiveOpacity);
 
     f32 textX = myRect.X;
     if (Align == TextAlign::Center || AutoCenter) textX = myRect.X + myRect.W * 0.5f;

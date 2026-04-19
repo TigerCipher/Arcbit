@@ -33,6 +33,7 @@ public:
     TextAlign   Align      = TextAlign::Left;
     bool        WordWrap   = false;  // wrap lines at word boundaries to fit myRect.W
     bool        AutoCenter = false;
+    Color       TextColor  = {0, 0, 0, 0};  // {0,0,0,0} = use skin default
 
 protected:
     void OnCollect(FramePacket& packet, UIRect myRect, f32 effectiveOpacity,
