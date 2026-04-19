@@ -10,6 +10,8 @@
 #include <arcbit/render/RenderTypes.h>
 #include <arcbit/scene/Scene.h>
 #include <arcbit/tilemap/TileMap.h>
+#include <arcbit/ui/UIScreen.h>
+#include <arcbit/ui/Widgets.h>
 
 #include <cmath>
 #include <vector>
@@ -110,6 +112,40 @@ protected:
         CreateMouseLight();
         
         _bitmapFont.Load("assets/fonts/Roboto-Regular.ttf", 32.0f, FontMode::Bitmap, GetDevice());
+        
+        auto screen = std::make_unique<UIScreen>();
+
+        // Centered panel, 300×200
+        auto* panel = screen->Add<Panel>();
+        panel->Size    = {300.0f, 200.0f};
+        panel->Anchor  = {0.5f, 0.5f};
+        panel->Pivot   = {0.5f, 0.5f};
+        panel->DrawBorder = true;
+        panel->ZOrder  = 0;
+
+        // Label inside the panel
+        auto* label = panel->AddChild<Label>();
+        label->Text   = "Some confirmation window dialog thing";
+        label->Anchor = {0.5f, 0.0f};
+        label->Pivot  = {0.5f, 0.0f};
+        label->Offset = {0.0f, 20.0f};
+        label->Align  = TextAlign::Center;
+        label->ZOrder = 1;
+
+        // Button below the label
+        auto* btn = panel->AddChild<Button>();
+        btn->Text     = "Click Me";
+        btn->Size     = {120.0f, 36.0f};
+        btn->Anchor   = {0.5f, 1.0f};
+        btn->Pivot    = {0.5f, 1.0f};
+        btn->Offset   = {0.0f, -20.0f};
+        btn->ZOrder   = 1;
+        btn->OnClick  = [&] {
+            LOG_INFO(Game, "Button clicked!");
+            _showDebugOverlay = !_showDebugOverlay;
+        };
+
+        GetUI().Push(std::move(screen));
     }
 
     void OnUpdate(const f32 dt) override

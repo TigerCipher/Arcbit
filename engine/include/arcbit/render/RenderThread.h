@@ -87,6 +87,10 @@ struct Sprite
     // Draw order. Sprites are rendered lower-layer-first (painter's algorithm).
     // Sprites on the same layer with the same texture are batched into one draw.
     i32 Layer = 0;
+
+    // UI pipeline only: set true for SDF text quads emitted by Label/Button widgets.
+    // False = regular texture × tint; true = SDF distance-field decode.
+    bool SDFMode = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -155,6 +159,12 @@ struct FramePacket
     // Position and Size are in window pixels (0,0 = top-left). No camera transform or lighting.
     // Populated by DrawText() with a FontAtlas in SDF mode.
     std::vector<Sprite> SDFSprites;
+
+    // UI widget quads — screen-space, no camera transform, no lighting.
+    // Populated by UIManager::CollectRenderData each frame.
+    // Rendered after sprites and legacy calls but before the SDF debug overlay.
+    // Sprite::SDFMode controls rendering mode per quad (regular texture vs SDF text).
+    std::vector<Sprite> UISprites;
 
     // Dynamic point light list. Uploaded to a per-frame SSBO each tick.
     // The forward+ fragment shader loops over all entries.
@@ -272,6 +282,11 @@ public:
     // Safe to call from any thread — values are written with relaxed atomics.
     [[nodiscard]] RenderStats GetStats() const;
 
+    // The 1×1 white texture and its sampler used by UIManager for solid-color quads.
+    // Available after Start(); UIManager stores these during its own Init.
+    [[nodiscard]] TextureHandle GetUIWhiteTexture() const { return _uiWhiteTex; }
+    [[nodiscard]] SamplerHandle GetUIWhiteSampler() const { return _uiWhiteSampler; }
+
 private:
     // Thread entry point — loops calling RenderFrame until Stop() is called.
     void Run();
@@ -288,12 +303,18 @@ private:
     void CreateShadowSSBOs();
     void CreateSDFPipeline(Format swapchainFormat);
     void CreateSDFInstanceBuffers();
+    void CreateUIPipeline(Format swapchainFormat);
+    void CreateUIResources();  // creates 1×1 white texture + sampler + instance buffers
 
     // ----- RenderFrame() helpers (called once per frame) ---------------------
 
     void UploadSDFInstances(const std::vector<const Sprite*>& sorted, u32 frameSlot);
     void DrawSDFBatches(CommandListHandle  cmd, const std::vector<const Sprite*>& sorted,
                         const FramePacket& packet, u32                            frameSlot) const;
+
+    void UploadUIInstances(const std::vector<const Sprite*>& sorted, u32 frameSlot);
+    void DrawUIBatches(CommandListHandle  cmd, const std::vector<const Sprite*>& sorted,
+                       const FramePacket& packet, u32                            frameSlot) const;
 
     // Pixel-space rect of the rendered game area within the actual framebuffer.
     // When ReferenceSize is set and the window aspect differs from the design
@@ -397,6 +418,19 @@ private:
     // Separate per-frame instance buffers for SDF text quads.
     std::array<BufferHandle, FrameSlots> _sdfInstanceBuffers        = {};
     u32                                  _sdfInstanceBufferCapacity = 0;
+
+    // ----- UI pipeline resources -------------------------------------------
+
+    // Pipeline created from ui.vert + ui.frag. Screen-space, handles both
+    // regular texture quads (SDFMode=false) and SDF text (SDFMode=true).
+    PipelineHandle _uiPipeline;
+
+    std::array<BufferHandle, FrameSlots> _uiInstanceBuffers        = {};
+    u32                                  _uiInstanceBufferCapacity = 0;
+
+    // 1×1 white RGBA texture used for solid-color UI quads (panels, bars, etc.).
+    TextureHandle _uiWhiteTex;
+    SamplerHandle _uiWhiteSampler;
 
     // ----- Forward+ light SSBO resources -----------------------------------
 

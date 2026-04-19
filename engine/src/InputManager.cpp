@@ -357,6 +357,13 @@ void InputManager::Update()
 
 void InputManager::ProcessEdges()
 {
+    // Build per-button edge masks from the pending event sets.
+    // Same bitmask convention as _mouseButtonMask (SDL_BUTTON_MASK = 1 << (sdlBtn-1)).
+    _mouseJustDownMask = 0;
+    _mouseJustUpMask   = 0;
+    for (const i32 btn : _pendingMouseDown) _mouseJustDownMask |= SDL_BUTTON_MASK(btn);
+    for (const i32 btn : _pendingMouseUp)   _mouseJustUpMask   |= SDL_BUTTON_MASK(btn);
+
     for (auto& entry : _actions | std::views::values)
     {
         bool anyJustPressed  = false;

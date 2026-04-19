@@ -229,4 +229,55 @@ void DrawText(FramePacket& packet, const FontAtlas& font, const std::string_view
     }
 }
 
+void DrawTextUI(FramePacket& packet, const FontAtlas& font, const std::string_view text,
+                const Vec2 position, const f32 scale, const Color color,
+                const i32 layer, const TextAlign align)
+{
+    if (!font.IsValid() || text.empty()) return;
+
+    const f32        baselineY = position.Y + font.GetAscent() * scale;
+    std::string_view remaining = text;
+    f32              cursorY   = baselineY;
+
+    while (true)
+    {
+        const auto       nl     = remaining.find('\n');
+        const auto       line   = remaining.substr(0, nl);
+        const f32        lineW  = (align != TextAlign::Left) ? MeasureLineWidth(font, line, scale) : 0.0f;
+        f32              cursorX = LineStartX(position.X, lineW, align);
+
+        for (const char c : line) {
+            if (c == '\t') {
+                if (const GlyphInfo* sp = font.GetGlyph(' '))
+                    cursorX += sp->Advance * scale * 4.0f;
+                continue;
+            }
+
+            const GlyphInfo* g = font.GetGlyph(static_cast<u32>(c));
+            if (!g) continue;
+            if (g->BitmapSize.X == 0.0f) { cursorX += g->Advance * scale; continue; }
+
+            const Vec2 size    = { g->BitmapSize.X * scale, g->BitmapSize.Y * scale };
+            const Vec2 topLeft = { cursorX + g->Bearing.X * scale, cursorY + g->Bearing.Y * scale };
+
+            Sprite s{};
+            s.Texture  = font.GetTexture();
+            s.Sampler  = font.GetSampler();
+            s.Position = { topLeft.X + size.X * 0.5f, topLeft.Y + size.Y * 0.5f };
+            s.Size     = size;
+            s.UV       = g->UV;
+            s.Tint     = color;
+            s.Layer    = layer;
+            s.SDFMode  = true;
+            packet.UISprites.push_back(s);
+
+            cursorX += g->Advance * scale;
+        }
+
+        if (nl == std::string_view::npos) break;
+        cursorY   += font.GetLineHeight() * scale;
+        remaining  = remaining.substr(nl + 1);
+    }
+}
+
 } // namespace Arcbit

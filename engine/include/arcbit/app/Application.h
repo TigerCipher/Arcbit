@@ -7,6 +7,7 @@
 #include <arcbit/render/Font.h>
 #include <arcbit/input/InputManager.h>
 #include <arcbit/assets/TextureManager.h>
+#include <arcbit/ui/UIManager.h>
 
 #include <memory>
 
@@ -105,6 +106,9 @@ public:
     // The active scene — access the ECS world, camera, and world config from OnStart onwards.
     [[nodiscard]] Scene& GetScene();
 
+    // The UI manager — push screens in OnStart; query widgets in OnUpdate.
+    [[nodiscard]] UIManager& GetUI() { return _ui; }
+
     // Color format of the swapchain — pass to PipelineDesc::ColorFormat so
     // pipelines match the actual surface format chosen by the driver.
     [[nodiscard]] Format GetSwapchainFormat() const;
@@ -171,6 +175,7 @@ private:
 
     FontAtlas   _debugFont;
     RenderStats _renderStats{};
+    UIManager   _ui;
 
     std::unique_ptr<Scene>          _scene;
     RenderDevice*                   _device = nullptr;

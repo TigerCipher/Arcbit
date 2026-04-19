@@ -273,6 +273,86 @@ void RenderThread::CreateSDFInstanceBuffers()
         buf = _device->CreateBuffer(desc);
 }
 
+void RenderThread::CreateUIPipeline(const Format swapchainFormat)
+{
+    auto vertSpv = LoadShaderFile("shaders/ui.vert.spv");
+    auto fragSpv = LoadShaderFile("shaders/ui.frag.spv");
+
+    const ShaderHandle vert = _device->CreateShader(
+        { ShaderStage::Vertex,   vertSpv.data(), static_cast<u32>(vertSpv.size()), "main", "ui.vert" });
+    const ShaderHandle frag = _device->CreateShader(
+        { ShaderStage::Fragment, fragSpv.data(), static_cast<u32>(fragSpv.size()), "main", "ui.frag" });
+
+    const VertexAttribute attrs[] = {
+        { 0, 0, Format::RGBA32_Float,  0 },
+        { 1, 0, Format::RGBA32_Float, 16 },
+        { 2, 0, Format::RGBA32_Float, 32 },
+        { 3, 0, Format::RGBA32_Float, 48 },
+    };
+    const VertexBinding bindings[] = {
+        { 0, static_cast<u32>(sizeof(SpriteInstance)), true },
+    };
+
+    PipelineDesc desc{};
+    desc.VertexShader   = vert;
+    desc.FragmentShader = frag;
+    desc.Attributes     = attrs;
+    desc.Bindings       = bindings;
+    desc.CullMode       = CullMode::None;
+    desc.ColorFormat    = swapchainFormat;
+    desc.DepthFormat    = Format::Undefined;
+    desc.UseTextures    = true;
+    desc.Blend.Enable   = true;
+    desc.Blend.SrcColor = BlendFactor::SrcAlpha;
+    desc.Blend.DstColor = BlendFactor::OneMinusSrcAlpha;
+    desc.Blend.ColorOp  = BlendOp::Add;
+    desc.Blend.SrcAlpha = BlendFactor::One;
+    desc.Blend.DstAlpha = BlendFactor::Zero;
+    desc.Blend.AlphaOp  = BlendOp::Add;
+    desc.DebugName      = "UIPipeline";
+
+    _uiPipeline = _device->CreatePipeline(desc);
+    ARCBIT_ASSERT(_uiPipeline.IsValid(), "RenderThread: failed to create UI pipeline");
+    _device->DestroyShader(vert);
+    _device->DestroyShader(frag);
+}
+
+void RenderThread::CreateUIResources()
+{
+    // 1×1 white RGBA8 texture — bound for solid-color UI quads so the shader
+    // multiplies (1,1,1,1) × tint = tint, giving the desired solid color.
+    TextureDesc texDesc{};
+    texDesc.Width     = 1;
+    texDesc.Height    = 1;
+    texDesc.Format    = Format::RGBA8_UNorm;
+    texDesc.Usage     = TextureUsage::Sampled | TextureUsage::Transfer;
+    texDesc.DebugName = "ui_white";
+    _uiWhiteTex       = _device->CreateTexture(texDesc);
+
+    const u8 white[4] = { 255, 255, 255, 255 };
+    _device->UploadTexture(_uiWhiteTex, white, sizeof(white));
+
+    SamplerDesc sampDesc{};
+    sampDesc.MinFilter = Filter::Nearest;
+    sampDesc.MagFilter = Filter::Nearest;
+    sampDesc.AddressU  = AddressMode::ClampToEdge;
+    sampDesc.AddressV  = AddressMode::ClampToEdge;
+    sampDesc.DebugName = "ui_white_sampler";
+    _uiWhiteSampler    = _device->CreateSampler(sampDesc);
+
+    static constexpr u32 InitialCapacity = 256;
+    _uiInstanceBufferCapacity            = InitialCapacity;
+
+    BufferDesc bufDesc{};
+    bufDesc.Size        = InitialCapacity * sizeof(SpriteInstance);
+    bufDesc.Usage       = BufferUsage::Vertex;
+    bufDesc.HostVisible = true;
+    bufDesc.DebugName   = "ui_instances";
+
+    for (auto& buf : _uiInstanceBuffers)
+        buf = _device->CreateBuffer(bufDesc);
+}
+
 // ---------------------------------------------------------------------------
 // Lifetime
 // ---------------------------------------------------------------------------
@@ -288,6 +368,8 @@ void RenderThread::Start(RenderDevice* device, const Format swapchainFormat)
     CreateShadowSSBOs();
     CreateSDFPipeline(swapchainFormat);
     CreateSDFInstanceBuffers();
+    CreateUIPipeline(swapchainFormat);
+    CreateUIResources();
 
     _running = true;
     _thread  = std::thread(&RenderThread::Run, this);
@@ -326,8 +408,14 @@ void RenderThread::Stop()
         if (buf.IsValid())
             _device->DestroyBuffer(buf);
 
-    if (_sdfPipeline.IsValid())
-        _device->DestroyPipeline(_sdfPipeline);
+    for (auto& buf : _uiInstanceBuffers)
+        if (buf.IsValid())
+            _device->DestroyBuffer(buf);
+
+    if (_uiWhiteSampler.IsValid()) _device->DestroySampler(_uiWhiteSampler);
+    if (_uiWhiteTex.IsValid())     _device->DestroyTexture(_uiWhiteTex);
+    if (_uiPipeline.IsValid())     _device->DestroyPipeline(_uiPipeline);
+    if (_sdfPipeline.IsValid())    _device->DestroyPipeline(_sdfPipeline);
     if (_spritePipeline.IsValid())
         _device->DestroyPipeline(_spritePipeline);
     if (_defaultNormalSampler.IsValid())
@@ -342,17 +430,6 @@ void RenderThread::Stop()
 // Frame submission (game thread side)
 // ---------------------------------------------------------------------------
 
-RenderStats RenderThread::GetStats() const
-{
-    return {
-        0,
-        _statSpritesSubmitted.load(std::memory_order_relaxed),
-        _statSpriteBatches.load(std::memory_order_relaxed),
-        _statDrawCalls.load(std::memory_order_relaxed),
-        _statLightsActive.load(std::memory_order_relaxed),
-    };
-}
-
 void RenderThread::SubmitFrame(FramePacket packet)
 {
     std::unique_lock lock(_mutex);
@@ -364,6 +441,17 @@ void RenderThread::SubmitFrame(FramePacket packet)
 
     lock.unlock();
     _frameReady.notify_one();
+}
+
+RenderStats RenderThread::GetStats() const
+{
+    return {
+        0,
+        _statSpritesSubmitted.load(std::memory_order_relaxed),
+        _statSpriteBatches.load(std::memory_order_relaxed),
+        _statDrawCalls.load(std::memory_order_relaxed), 1, 1,1,
+        _statLightsActive.load(std::memory_order_relaxed),
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -755,6 +843,41 @@ void RenderThread::UploadSDFInstances(const std::vector<const Sprite*>& sorted, 
     _device->UpdateBuffer(_sdfInstanceBuffers[frameSlot], instances.data(), count * sizeof(SpriteInstance));
 }
 
+void RenderThread::UploadUIInstances(const std::vector<const Sprite*>& sorted, const u32 frameSlot)
+{
+    const u32 count = static_cast<u32>(sorted.size());
+    if (count == 0) return;
+
+    if (count > _uiInstanceBufferCapacity) {
+        _device->WaitIdle();
+        u32 cap = _uiInstanceBufferCapacity;
+        while (cap < count) cap *= 2;
+        _uiInstanceBufferCapacity = cap;
+
+        BufferDesc desc{};
+        desc.Size        = cap * sizeof(SpriteInstance);
+        desc.Usage       = BufferUsage::Vertex;
+        desc.HostVisible = true;
+        desc.DebugName   = "ui_instances";
+        for (auto& buf : _uiInstanceBuffers) { _device->DestroyBuffer(buf); buf = _device->CreateBuffer(desc); }
+        LOG_INFO(Render, "UI instance buffer resized to {} quads", cap);
+    }
+
+    std::vector<SpriteInstance> instances;
+    instances.reserve(count);
+    for (const Sprite* s : sorted) {
+        SpriteInstance& inst = instances.emplace_back();
+        inst.PosX  = s->Position.X; inst.PosY  = s->Position.Y;
+        inst.HalfW = s->Size.X * 0.5f; inst.HalfH = s->Size.Y * 0.5f;
+        inst.U0    = s->UV.U0; inst.V0 = s->UV.V0; inst.U1 = s->UV.U1; inst.V1 = s->UV.V1;
+        inst.TintR = s->Tint.R; inst.TintG = s->Tint.G; inst.TintB = s->Tint.B; inst.TintA = s->Tint.A;
+        inst.RotCos = 1.0f; inst.RotSin = 0.0f;
+        inst._pad0  = s->SDFMode ? 1.0f : 0.0f; // mode flag read by ui.vert / ui.frag
+        inst._pad1  = 0.0f;
+    }
+    _device->UpdateBuffer(_uiInstanceBuffers[frameSlot], instances.data(), count * sizeof(SpriteInstance));
+}
+
 void RenderThread::DrawSDFBatches(const CommandListHandle cmd, const std::vector<const Sprite*>& sorted,
                                   const FramePacket& packet, const u32 frameSlot) const
 {
@@ -780,6 +903,37 @@ void RenderThread::DrawSDFBatches(const CommandListHandle cmd, const std::vector
 
         _device->BindTexture(cmd, first->Texture, first->Sampler, 0);
         _device->BindVertexBuffer(cmd, _sdfInstanceBuffers[frameSlot], 0,
+                                  static_cast<u64>(groupStart) * sizeof(SpriteInstance));
+        _device->Draw(cmd, 6, 0, groupEnd - groupStart, 0);
+        groupStart = groupEnd;
+    }
+}
+
+void RenderThread::DrawUIBatches(const CommandListHandle cmd, const std::vector<const Sprite*>& sorted,
+                                 const FramePacket& packet, const u32 frameSlot) const
+{
+    if (sorted.empty()) return;
+
+    _device->BindPipeline(cmd, _uiPipeline);
+    _device->SetViewport(cmd, 0.0f, 0.0f, static_cast<f32>(packet.Width), static_cast<f32>(packet.Height));
+    _device->SetScissor(cmd, 0, 0, packet.Width, packet.Height);
+
+    SDFPushConstants pc{ static_cast<f32>(packet.Width), static_cast<f32>(packet.Height) };
+    _device->PushConstants(cmd, ShaderStage::Vertex | ShaderStage::Fragment, &pc, sizeof(pc));
+
+    const u32 count      = static_cast<u32>(sorted.size());
+    u32       groupStart = 0;
+    while (groupStart < count) {
+        const Sprite* first    = sorted[groupStart];
+        u32           groupEnd = groupStart + 1;
+        while (groupEnd < count &&
+               sorted[groupEnd]->Texture.Index() == first->Texture.Index() &&
+               sorted[groupEnd]->Sampler.Index() == first->Sampler.Index() &&
+               sorted[groupEnd]->SDFMode          == first->SDFMode)
+            ++groupEnd;
+
+        _device->BindTexture(cmd, first->Texture, first->Sampler, 0);
+        _device->BindVertexBuffer(cmd, _uiInstanceBuffers[frameSlot], 0,
                                   static_cast<u64>(groupStart) * sizeof(SpriteInstance));
         _device->Draw(cmd, 6, 0, groupEnd - groupStart, 0);
         groupStart = groupEnd;
@@ -816,14 +970,17 @@ void RenderThread::RenderFrame(const FramePacket& packet)
 
     const auto sorted    = SortSprites(packet.Sprites);
     const auto sdfSorted = SortSprites(packet.SDFSprites);
+    const auto uiSorted  = SortSprites(packet.UISprites);
     UploadInstances(sorted, frameSlot);
     UploadSDFInstances(sdfSorted, frameSlot);
+    UploadUIInstances(uiSorted, frameSlot);
 
     CommandListHandle cmd = _device->BeginCommandList();
     BeginRenderPass(cmd, backbuffer, corrected, lb);
 
     const u32 batchCount = DrawSpriteBatches(cmd, sorted, frameSlot, corrected, lightCount, lb);
     DrawLegacyCalls(cmd, corrected, frameSlot, lightCount, lb);
+    DrawUIBatches(cmd, uiSorted, corrected, frameSlot);
     DrawSDFBatches(cmd, sdfSorted, corrected, frameSlot);
 
     _device->EndRendering(cmd);

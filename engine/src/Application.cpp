@@ -117,6 +117,9 @@ void Application::Run()
     // can use it in OnStart if they need to (e.g. preload additional glyphs).
     _debugFont.Load("assets/fonts/Roboto-Regular.ttf", 24.0f, FontMode::SDF, *_device);
 
+    // Init UI manager after the render thread is running so white-texture handles are valid.
+    _ui.Init(_renderThread, _debugFont);
+
     // Give the game a chance to register actions, create GPU resources, etc.
     // Input bindings are loaded from settings AFTER OnStart so that default
     // bindings set up in OnStart are overwritten by any user-saved bindings.
@@ -179,6 +182,9 @@ void Application::Run()
             if (_input.JustPressed(ActionEngineFullscreen)) ToggleFullscreen();
             OnUpdate(_fixedTimestep);
             if (_scene) _scene->Update(_fixedTimestep);
+            _ui.Update(_fixedTimestep,
+                       { static_cast<f32>(_window->GetWidth()), static_cast<f32>(_window->GetHeight()) },
+                       _input);
             accumulator -= static_cast<f64>(_fixedTimestep);
         }
 
@@ -192,6 +198,8 @@ void Application::Run()
 
         OnRender(packet);
         if (_scene) _scene->CollectRenderData(packet);
+        _ui.CollectRenderData(packet,
+            { static_cast<f32>(_window->GetWidth()), static_cast<f32>(_window->GetHeight()) });
 
         // Capture tilemap stats from the packet before the move — the tilemap
         // system populates these during CollectRenderData on the game thread.

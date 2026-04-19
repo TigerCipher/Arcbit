@@ -22,6 +22,10 @@ add_library(arcbit-engine STATIC
     src/TileAtlas.cpp
     src/TileMap.cpp
     src/Font.cpp
+    src/UIWidget.cpp
+    src/UIScreen.cpp
+    src/Widgets.cpp
+    src/UIManager.cpp
 )
 
 target_include_directories(arcbit-engine
@@ -61,6 +65,8 @@ set(ENGINE_SHADER_SOURCES
     sprite.frag
     sdf.vert
     sdf.frag
+    ui.vert
+    ui.frag
 )
 
 set(ENGINE_SHADER_OUTPUTS)

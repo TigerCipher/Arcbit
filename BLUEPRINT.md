@@ -209,10 +209,11 @@ define *how* it gets there. Any controller pairs with any style.
 ---
 
 ## Phase 20: Font Rendering
-- [ ] Font rasterizer integration (`stb_truetype` or FreeType via vcpkg)
-- [ ] Bitmap font atlas generation at startup (bake glyphs into a `TextureHandle`)
-- [ ] `DrawText` helper — lays out a string into sprite-batch quads with correct UVs
-- [ ] SDF font variant (optional — better quality at large sizes)
+- [x] Font rasterizer integration (`stb_truetype`)
+- [x] Bitmap font atlas generation at startup (bake glyphs into a `TextureHandle`)
+- [x] `DrawText` helper — lays out a string into sprite-batch quads with correct UVs; supports `\n`, `\t`, and `TextAlign` (Left / Center / Right)
+- [x] SDF font variant — dedicated screen-space pipeline; engine ships Roboto-Regular for the built-in debug overlay
+- [x] Debug overlay — FPS, sprite/batch counts, draw calls, lights, chunk culling stats; toggle via `_showDebugOverlay`
 
 ---
 

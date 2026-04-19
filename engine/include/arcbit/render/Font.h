@@ -84,4 +84,11 @@ void DrawText(FramePacket& packet, const FontAtlas& font, std::string_view text,
               Vec2 position, f32 scale, Color color,
               i32 layer = 0, TextAlign align = TextAlign::Left);
 
+// Same as DrawText but emits into packet.UISprites with SDFMode=true so the
+// UI pipeline renders it at the correct layer relative to UI backgrounds.
+// Used by Label and Button widgets — do not call from world-space game code.
+void DrawTextUI(FramePacket& packet, const FontAtlas& font, std::string_view text,
+                Vec2 position, f32 scale, Color color,
+                i32 layer = 0, TextAlign align = TextAlign::Left);
+
 } // namespace Arcbit

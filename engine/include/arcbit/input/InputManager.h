@@ -160,6 +160,25 @@ public:
     // Pixels the cursor moved since the previous Update() call.
     void GetMouseDelta(i32& outDx, i32& outDy) const;
 
+    // True if the given mouse button is currently held down.
+    // Valid after Update() each display frame.
+    [[nodiscard]] bool IsMouseButtonDown(MouseButton button) const
+    {
+        return (_mouseButtonMask & (1u << static_cast<u32>(button))) != 0;
+    }
+
+    // True if the button transitioned down/up this game tick.
+    // Valid after ProcessEdges() — read these in OnUpdate / UIManager::Update.
+    [[nodiscard]] bool IsMouseButtonJustDown(MouseButton button) const
+    {
+        return (_mouseJustDownMask & (1u << static_cast<u32>(button))) != 0;
+    }
+
+    [[nodiscard]] bool IsMouseButtonJustUp(MouseButton button) const
+    {
+        return (_mouseJustUpMask & (1u << static_cast<u32>(button))) != 0;
+    }
+
     // -----------------------------------------------------------------------
     // Serialization helpers (consumed by Settings System in Phase 10)
     // -----------------------------------------------------------------------
@@ -202,7 +221,9 @@ private:
     const bool* _keyState = nullptr;
 
     // SDL mouse state bitmask and position.
-    u32 _mouseButtonMask = 0;
+    u32 _mouseButtonMask  = 0;
+    u32 _mouseJustDownMask = 0;  // set by ProcessEdges(), cleared at next ProcessEdges() call
+    u32 _mouseJustUpMask   = 0;
     i32 _mouseX = 0, _mouseY = 0;
     i32 _prevMouseX = 0, _prevMouseY = 0;
 
