@@ -27,7 +27,7 @@ bool TileAtlas::Load(std::string_view texturePath, const u32 tilePixelW, const u
     _invTexHeight  = 1.0f / static_cast<f32>(info.Height);
     _tilePixelSize = { static_cast<f32>(tilePixelW), static_cast<f32>(tilePixelH) };
 
-    LOG_INFO(Engine, "TileAtlas: loaded '{}' — {}x{} tiles ({}x{} px each)",
+    LOG_INFO(Engine, "TileAtlas: loaded '{}' - {}x{} tiles ({}x{} px each)",
              texturePath, _columns, _rows, tilePixelW, tilePixelH);
     return true;
 }

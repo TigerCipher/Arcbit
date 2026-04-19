@@ -42,11 +42,14 @@ constexpr u32 TileSmallRock  = 333; // (7,13)
 constexpr u32 TileStatue     = 335; // (9,13)
 constexpr u32 TileTallGrass  = 293; // (17,11)
 // WATER+.png ground tiles
-constexpr u32 TileWaterDeep  = 401; // (0,0)
-constexpr u32 TileWaterMid   = 402; // (1,0)
-constexpr u32 TileWaterLight = 403; // (2,0)
-constexpr u32 TileWaterAlt   = 404; // (3,0)
-constexpr u32 TileWaterFoam  = 405; // (4,0)
+// constexpr u32 TileWaterDeep  = 401; // (0,0)
+// constexpr u32 TileWaterMid   = 402; // (1,0)
+// constexpr u32 TileWaterLight = 403; // (2,0)
+// constexpr u32 TileWaterAlt   = 404; // (3,0)
+// constexpr u32 TileWaterFoam  = 405; // (4,0)
+// constexpr u32 TileWaterFoam  = 406; // (5,0)
+// constexpr u32 TileWaterFoam  = 407; // (6,0)
+constexpr u32 TileWaterLight  = 408; // (7,0)
 // WATER+.png object tiles
 constexpr u32 TileWaterRock  = 509; // (0,9)
 constexpr u32 TileWaterStone = 512; // (3,9)
@@ -238,7 +241,7 @@ private:
 
         // Always resolve _waterTex from the loaded atlas so CreateWhirlpool has a valid handle
         // regardless of whether the map was loaded from file or generated.
-        if (const auto* entry = tm.FindAtlas(TileWaterDeep))
+        if (const auto* entry = tm.FindAtlas(TileWaterLight))
             _waterTex = entry->Atlas.GetTexture();
         ARCBIT_ASSERT(_waterTex.IsValid(), "Failed to resolve water atlas texture");
 
@@ -288,26 +291,22 @@ private:
 
     void GenerateWater(TileMap& tm)
     {
-        const u32 wTiles[] = {
-            TileWaterDeep, TileWaterMid, TileWaterDeep, TileWaterLight,
-            TileWaterMid, TileWaterDeep, TileWaterAlt, TileWaterFoam,
-        };
         for (i32 ty = 1; ty <= 9; ++ty)
             for (i32 tx = -12; tx <= -2; ++tx)
-                tm.SetTile(tx, ty, 0, wTiles[HashTile(tx, ty) % 8]);
+                tm.SetTile(tx, ty, 0, TileWaterLight);
 
         for (i32 ty = 5; ty <= 22; ++ty)
             for (i32 tx = 8; tx <= 28; ++tx)
-                tm.SetTile(tx, ty, 0, wTiles[HashTile(tx + 3, ty + 7) % 8]);
+                tm.SetTile(tx, ty, 0, TileWaterLight);
     }
 
     void GenerateStoneFloor(TileMap& tm)
     {
-        const u32 cracked[] = {
+        constexpr u32 cracked[] = {
             TileFloorCrk1, TileFloorCrk2, TileFloorCrk3,
             TileFloorCrk4, TileFloorCrk5, TileFloorCrk6,
         };
-        const u32 smooth[] = {
+        constexpr u32 smooth[] = {
             TileFloorSm1, TileFloorSm2, TileFloorSm3,
             TileFloorSm4, TileFloorSm5, TileFloorSm6,
         };
@@ -322,7 +321,7 @@ private:
     void GenerateObjects(TileMap& tm)
     {
         // Grass objects scattered at ~6% of non-water, non-floor tiles.
-        const u32 grassObjs[] = {
+        constexpr u32 grassObjs[] = {
             TileStick, TileSmallRock, TileRock2, TileRock, TileMushroom,
             TileLog, TileStump, TileDeadLeaves, TileLeaves, TileTallGrass,
             TileStatue, TileTallGrass, TileSmallRock, TileStick, TileLeaves,
@@ -337,18 +336,18 @@ private:
             }
 
         // Water body 1 objects.
-        const i32 w1x[] = {-10, -8, -5, -3, -11, -7};
-        const i32 w1y[] = {3, 7, 2, 6, 5, 4};
-        const u32 w1t[] = {
+        constexpr i32 w1x[] = {-10, -8, -5, -3, -11, -7};
+        const i32     w1y[] = {3, 7, 2, 6, 5, 4};
+        constexpr u32 w1t[] = {
             TileWaterRock, TileWaterRock, TileWaterStone,
             TileWaterRock, TileIceberg, TileWaterRock,
         };
         for (u32 i = 0; i < 6; ++i) tm.SetTile(w1x[i], w1y[i], 1, w1t[i]);
 
         // Water body 2 objects.
-        const i32 w2x[] = {10, 15, 20, 25, 12, 22, 17};
-        const i32 w2y[] = {7, 12, 8, 18, 20, 15, 10};
-        const u32 w2t[] = {
+        const i32     w2x[] = {10, 15, 20, 25, 12, 22, 17};
+        const i32     w2y[] = {7, 12, 8, 18, 20, 15, 10};
+        constexpr u32 w2t[] = {
             TileWaterRock, TileIceberg, TileWaterRock, TileWaterStone,
             TileWaterRock, TileIceberg, TileWaterRock,
         };
@@ -368,7 +367,7 @@ private:
         _playerEntity                                 = world.CreateEntity();
         world.GetComponent<Tag>(_playerEntity)->Value = "Player";
 
-        auto* t     = world.GetComponent<Transform2D>(_playerEntity);
+        auto* t     = world.GetTransform(_playerEntity);
         t->Position = {};
         t->Scale    = _playerSheet.TileWorldSize(TileSize);
 
@@ -379,16 +378,18 @@ private:
                                          .Clip    = _playerSheet.GetAnimation("idle_down"),
                                          .Sheet   = &_playerSheet,
                                          .Playing = true,
-                                         .OnEvent = [](std::string_view ev) {
+                                         .OnEvent = [](const std::string_view ev) {
                                              if (ev == "AttackHit")
                                                  AudioManager::PlayOneShot(
                                                      "assets/sfx/sword_slashing.mp3");
                                          },
                                      });
         world.AddComponent<CameraTarget>(_playerEntity, CameraTarget{.Lag = 0.12f});
-        world.AddComponent<FreeMovement>(_playerEntity, FreeMovement{
-                                             .Friction = 15.0f, .MaxSpeed = WalkSpeed,
-                                         });
+
+        world.AddComponent<SmoothTileMovement>(_playerEntity, SmoothTileMovement{
+                                                   .Speed = WalkTileSpeed,
+                                               });
+        
         world.AddComponent<AudioSource>(_playerEntity, AudioSource{
                                             .Path = "assets/sfx/footsteps.mp3", .Volume = 0.6f,
                                             .Loop = true, .Playing                      = false,
@@ -401,7 +402,7 @@ private:
         const Entity e                    = world.CreateEntity();
         world.GetComponent<Tag>(e)->Value = "PirateShip";
 
-        auto* t     = world.GetComponent<Transform2D>(e);
+        auto* t     = world.GetTransform(e);
         t->Position = pos;
         t->Scale    = {ShipSize, ShipSize};
 
@@ -423,13 +424,13 @@ private:
             "assets/textures/MiniWorldSprites/Miscellaneous/PirateShip.png");
         ARCBIT_ASSERT(_shipTex.IsValid(), "Failed to load PirateShip texture");
 
-        const Vec2 w1Min = {-12.0f * TileSize, 1.0f * TileSize};
-        const Vec2 w1Max = {-2.0f * TileSize, 9.0f * TileSize};
+        constexpr Vec2 w1Min = {-12.0f * TileSize, 1.0f * TileSize};
+        constexpr Vec2 w1Max = {-2.0f * TileSize, 9.0f * TileSize};
         MakeShip({-7.0f * TileSize, 4.0f * TileSize}, {ShipSpeed, 0.0f}, w1Min, w1Max);
         MakeShip({-10.0f * TileSize, 6.0f * TileSize}, {-ShipSpeed, ShipSpeed * 0.5f}, w1Min, w1Max);
 
-        const Vec2 w2Min = {8.0f * TileSize, 5.0f * TileSize};
-        const Vec2 w2Max = {28.0f * TileSize, 22.0f * TileSize};
+        constexpr Vec2 w2Min = {8.0f * TileSize, 5.0f * TileSize};
+        constexpr Vec2 w2Max = {28.0f * TileSize, 22.0f * TileSize};
         MakeShip({14.0f * TileSize, 10.0f * TileSize}, {ShipSpeed, ShipSpeed * 0.4f}, w2Min, w2Max);
         MakeShip({22.0f * TileSize, 17.0f * TileSize}, {-ShipSpeed * 0.8f, -ShipSpeed * 0.6f}, w2Min, w2Max);
     }
@@ -581,27 +582,33 @@ private:
     {
         auto& world = GetScene().GetWorld();
         if (!world.IsValid(_playerEntity)) return;
-        auto* fm = world.GetComponent<FreeMovement>(_playerEntity);
-        if (!fm) return;
+        auto* stm = world.GetComponent<SmoothTileMovement>(_playerEntity);
+        if (!stm) return;
 
-        const f32 sprint = GetInput().IsPressed(ActionSprint) ? 2.0f : 1.0f;
-        const f32 speed  = WalkSpeed * sprint;
-        Vec2      dir    = {};
-        if (GetInput().IsPressed(ActionMoveLeft)) dir.X -= 1.0f;
-        if (GetInput().IsPressed(ActionMoveRight)) dir.X += 1.0f;
-        if (GetInput().IsPressed(ActionMoveUp)) dir.Y -= 1.0f;
-        if (GetInput().IsPressed(ActionMoveDown)) dir.Y += 1.0f;
+        Vec2 dir = {};
+        if (GetInput().IsPressed(ActionMoveLeft))  dir.X -= 1.0f;
+        if (GetInput().IsPressed(ActionMoveRight))  dir.X += 1.0f;
+        if (GetInput().IsPressed(ActionMoveUp))    dir.Y -= 1.0f;
+        if (GetInput().IsPressed(ActionMoveDown))   dir.Y += 1.0f;
+
+        // Prefer cardinal movement — pick the dominant axis to stay tile-aligned.
+        if (dir.X != 0.0f && dir.Y != 0.0f)
+            std::abs(dir.X) >= std::abs(dir.Y) ? dir.Y = 0.0f : dir.X = 0.0f;
 
         const bool moving = dir.X != 0.0f || dir.Y != 0.0f;
         if (moving) {
-            const f32 len = std::sqrt(dir.X * dir.X + dir.Y * dir.Y);
-            fm->Velocity  = {dir.X / len * speed, dir.Y / len * speed};
-            if (std::abs(dir.X) >= std::abs(dir.Y))
+            stm->QueuedDir = dir;
+            stm->HasQueued = true;
+            if (dir.X != 0.0f)
                 _playerFacing = (dir.X < 0.0f) ? Facing::Left : Facing::Right;
             else
                 _playerFacing = (dir.Y < 0.0f) ? Facing::Up : Facing::Down;
+        } else {
+            stm->HasQueued = false;
         }
-        UpdatePlayerAnimation(moving);
+
+        const bool isMoving = stm->Progress < 1.0f || moving;
+        UpdatePlayerAnimation(isMoving);
     }
 
     void UpdatePlayerAnimation(const bool moving)
@@ -672,7 +679,7 @@ private:
             Sprite s{};
             s.Texture  = _gridTex;
             s.Sampler  = _gridSampler;
-            s.Position = {col * TileSize, origY + totalH * 0.5f};
+            s.Position = {col * TileSize + (TileSize * 0.5f), origY + totalH * 0.5f};
             s.Size     = {thick, totalH};
             s.Tint     = GCol;
             s.Layer    = GLay;
@@ -682,7 +689,7 @@ private:
             Sprite s{};
             s.Texture  = _gridTex;
             s.Sampler  = _gridSampler;
-            s.Position = {origX + totalW * 0.5f, row * TileSize};
+            s.Position = {origX + totalW * 0.5f, row * TileSize + (TileSize * 0.5f)};
             s.Size     = {totalW, thick};
             s.Tint     = GCol;
             s.Layer    = GLay;
@@ -704,7 +711,7 @@ private:
     static constexpr f32 ViewportH    = 1080.0f;
     static constexpr f32 TileSize     = 64.0f;
     static constexpr f32 InitialZoom  = 2.0f;
-    static constexpr f32 WalkSpeed    = 96.0f;  // 1.5 tiles/sec; sprint doubles
+    static constexpr f32 WalkTileSpeed = 4.0f;   // tiles/sec for smooth tile movement
     static constexpr f32 ShipSize     = 128.0f; // 2×2 tiles
     static constexpr f32 ShipSpeed    = 24.0f;  // ~0.375 tiles/sec
     static constexpr f32 ShipMaxSpeed = 36.0f;

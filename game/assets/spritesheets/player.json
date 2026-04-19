@@ -9,9 +9,9 @@
     },
 
     "frames": [
-        { "name": "idle_down_0", "rect": { "x":   0, "y":   0, "w": 32, "h": 32 }, "pivot": { "x": 0.5, "y": 1.0 }  },
-        { "name": "idle_down_1", "rect": { "x":  32, "y":   0, "w": 32, "h": 32 }, "pivot": { "x": 0.5, "y": 1.0 } },
-        { "name": "idle_down_2", "rect": { "x":  64, "y":   0, "w": 32, "h": 32 }, "pivot": { "x": 0.5, "y": 1.0 } },
+        { "name": "idle_down_0", "rect": { "x":   0, "y":   0, "w": 32, "h": 32 } },
+        { "name": "idle_down_1", "rect": { "x":  32, "y":   0, "w": 32, "h": 32 } },
+        { "name": "idle_down_2", "rect": { "x":  64, "y":   0, "w": 32, "h": 32 } },
         { "name": "idle_down_3", "rect": { "x":  96, "y":   0, "w": 32, "h": 32 } },
         { "name": "idle_down_4", "rect": { "x": 128, "y":   0, "w": 32, "h": 32 } },
         { "name": "idle_down_5", "rect": { "x": 160, "y":   0, "w": 32, "h": 32 } },

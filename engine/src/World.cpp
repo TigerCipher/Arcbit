@@ -3,6 +3,7 @@
 #include <arcbit/core/Log.h>
 
 #include <cmath>
+#include <ranges>
 
 namespace Arcbit {
 
@@ -23,12 +24,12 @@ ComponentTypeID AllocID()
     return static_cast<ComponentTypeID>(GetRegistry().size() - 1);
 }
 
-void RegisterFactory(ComponentTypeID id, std::function<ComponentArray()> factory)
+void RegisterFactory(const ComponentTypeID id, std::function<ComponentArray()> factory)
 {
     GetRegistry()[id] = std::move(factory);
 }
 
-ComponentArray CreateArray(ComponentTypeID id)
+ComponentArray CreateArray(const ComponentTypeID id)
 {
     ARCBIT_ASSERT(id < GetRegistry().size() && GetRegistry()[id], "CreateArray: unknown component type");
     return GetRegistry()[id]();
@@ -47,14 +48,14 @@ void ComponentArray::PushDefault()
     ++_count;
 }
 
-void ComponentArray::MoveFrom(u32 srcIndex, ComponentArray& src)
+void ComponentArray::MoveFrom(const u32 srcIndex, ComponentArray& src)
 {
     _data.resize(_data.size() + _elementSize);
     _moveConstruct(GetRaw(_count), src.GetRaw(srcIndex));
     ++_count;
 }
 
-void ComponentArray::SwapRemove(u32 index)
+void ComponentArray::SwapRemove(const u32 index)
 {
     ARCBIT_ASSERT(index < _count, "SwapRemove: index out of range");
     const u32 last = _count - 1;
@@ -85,7 +86,7 @@ Archetype& World::GetOrCreateArchetype(ComponentMask mask)
     return arch;
 }
 
-void World::SwapRemoveFromArchetype(Archetype& arch, u32 slot)
+void World::SwapRemoveFromArchetype(Archetype& arch, const u32 slot)
 {
     const u32 lastSlot = static_cast<u32>(arch.Entities.size()) - 1;
 
@@ -125,7 +126,7 @@ Entity World::CreateEntity()
     const Entity entity = { index, generation };
     const u32    slot   = static_cast<u32>(arch.Entities.size());
 
-    for (auto& [id, col] : arch.Columns)
+    for (auto& col : arch.Columns | std::views::values)
         col.PushDefault();
     arch.Entities.push_back(entity);
 
@@ -133,7 +134,7 @@ Entity World::CreateEntity()
     return entity;
 }
 
-void World::DestroyEntity(Entity entity)
+void World::DestroyEntity(const Entity entity)
 {
     if (!IsValid(entity)) return;
     auto& rec = _entityTable[entity.Index];
@@ -144,33 +145,35 @@ void World::DestroyEntity(Entity entity)
     _freeList.push_back(entity.Index);
 }
 
-bool World::IsValid(Entity entity) const
+bool World::IsValid(const Entity entity) const
 {
     if (entity.Index == ~0u || entity.Index >= _entityTable.size())
         return false;
     return _entityTable[entity.Index].generation == entity.Generation;
 }
 
-void World::RegisterSystem(std::string_view name, UpdateFn fn)
+void World::RegisterSystem(const std::string_view name, UpdateFn fn)
 {
     _updateSystems.emplace_back(std::string(name), std::move(fn));
 }
 
-void World::RegisterRenderSystem(std::string_view name, RenderFn fn)
+void World::RegisterRenderSystem(const std::string_view name, RenderFn fn)
 {
     _renderSystems.emplace_back(std::string(name), std::move(fn));
 }
 
-void World::RunUpdateSystems(Scene& scene, f32 dt)
+void World::RunUpdateSystems(Scene& scene, const f32 dt)
 {
-    for (auto& [name, fn] : _updateSystems)
+    for (auto& fn : _updateSystems | std::views::values)
         fn(scene, dt);
 }
 
 void World::RunRenderSystems(Scene& scene, FramePacket& packet)
 {
-    for (auto& [name, fn] : _renderSystems)
+    for (auto& fn : _renderSystems | std::views::values)
         fn(scene, packet);
 }
+
+Transform2D* World::GetTransform(const Entity entity) { return GetComponent<Transform2D>(entity); }
 
 } // namespace Arcbit

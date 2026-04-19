@@ -54,7 +54,6 @@ namespace
     void RegisterFreeMovementSystem(World& world)
     {
         world.RegisterSystem("FreeMovement", [](Scene& scene, f32 dt) {
-        // clang-format off
         scene.GetWorld()
                 .Query<Transform2D, FreeMovement>()
                 .Without<Disabled>()
@@ -71,14 +70,47 @@ namespace
                     t.Position  = t.Position + fm.Velocity * dt;
                     fm.Velocity = fm.Velocity * std::exp(-fm.Friction * dt);
                 });
-            // clang-format on
+        });
+    }
+
+    void RegisterSmoothTileMoveSystem(World& world)
+    {
+        world.RegisterSystem("SmoothTileMove", [](Scene& scene, const f32 dt) {
+            const f32 ts = scene.GetTileMap().GetTileSize();
+            scene.GetWorld()
+                 .Query<Transform2D, SmoothTileMovement>()
+                 .Without<Disabled>()
+                 .ForEach([ts, dt](Transform2D& t, SmoothTileMovement& stm) {
+                     if (stm.Progress >= 1.0f) {
+                         if (!stm.HasQueued) return;
+
+                         // Snap to the nearest tile center, then step one tile in QueuedDir.
+                         stm.OriginWorld = {
+                             std::round(t.Position.X / ts) * ts,
+                             std::round(t.Position.Y / ts) * ts,
+                         };
+                         stm.TargetWorld = {
+                             stm.OriginWorld.X + stm.QueuedDir.X * ts,
+                             stm.OriginWorld.Y + stm.QueuedDir.Y * ts,
+                         };
+                         stm.Progress  = 0.0f;
+                         stm.HasQueued = false;
+                         return;
+                     }
+
+                     stm.Progress      += stm.Speed * dt;
+                     const f32 alpha    = std::min(stm.Progress, 1.0f);
+                     t.Position         = {
+                         stm.OriginWorld.X + (stm.TargetWorld.X - stm.OriginWorld.X) * alpha,
+                         stm.OriginWorld.Y + (stm.TargetWorld.Y - stm.OriginWorld.Y) * alpha,
+                     };
+                 });
         });
     }
 
     void RegisterCameraFollowSystem(World& world)
     {
         world.RegisterSystem("CameraFollow", [](Scene& scene, const f32 dt) {
-        // clang-format off
         scene.GetWorld()
                 .Query<const Transform2D, const CameraTarget>()
                 .Without<Disabled>()
@@ -87,7 +119,6 @@ namespace
                         const f32 smoothing = ct.Lag < 1.0f ? 10.0f * (1.0f - ct.Lag) : 0.001f;
                         scene.GetCamera().Follow(t.Position, smoothing, dt);
                     });
-            // clang-format on
         });
     }
 
@@ -96,24 +127,22 @@ namespace
     // -------------------------------------------------------------------------
 
     UVRect ComputeTileUV(const TileAtlasEntry& entry, const u32 tileId,
-                         const TileDef* def, const f32 elapsed,
-                         const u32 tileX, const u32 tileY)
+                         const TileDef*        def, const f32   elapsed,
+                         const u32             tileX, const u32 tileY)
     {
         const u32 localId = tileId - entry.BaseId;
         const u32 cols    = entry.Atlas.Columns();
 
-        if (def && !def->Animation.empty())
-        {
+        if (def && !def->Animation.empty()) {
             // Flip-book: position-based phase prevents lockstep marching.
             u32 totalMs = 0;
             for (const auto& f : def->Animation) totalMs += f.DurationMs;
             if (totalMs == 0) return entry.Atlas.GetUV(localId % cols, localId / cols);
 
             const u32 phaseMs = (tileX * 37u + tileY * 53u) % totalMs;
-            u32 t     = (static_cast<u32>(elapsed * 1000.0f) + phaseMs) % totalMs;
-            u32 accum = 0;
-            for (const auto& f : def->Animation)
-            {
+            u32       t       = (static_cast<u32>(elapsed * 1000.0f) + phaseMs) % totalMs;
+            u32       accum   = 0;
+            for (const auto& f : def->Animation) {
                 if (t < accum + f.DurationMs)
                     return entry.Atlas.GetUV(f.TileX, f.TileY);
                 accum += f.DurationMs;
@@ -125,12 +154,13 @@ namespace
         // Static tile — use the ID's natural position in the atlas grid.
         UVRect uv = entry.Atlas.GetUV(localId % cols, localId / cols);
 
-        if (def && (def->UVScroll.X != 0.0f || def->UVScroll.Y != 0.0f))
-        {
+        if (def && (def->UVScroll.X != 0.0f || def->UVScroll.Y != 0.0f)) {
             const f32 sx = std::fmod(elapsed * def->UVScroll.X, 1.0f);
             const f32 sy = std::fmod(elapsed * def->UVScroll.Y, 1.0f);
-            uv.U0 += sx; uv.U1 += sx;
-            uv.V0 += sy; uv.V1 += sy;
+            uv.U0        += sx;
+            uv.U1        += sx;
+            uv.V0        += sy;
+            uv.V1        += sy;
         }
         return uv;
     }
@@ -141,77 +171,77 @@ namespace
         using TimePoint = Clock::time_point;
 
         world.RegisterRenderSystem("TilemapRender",
-            [startTime = Clock::now()](Scene& scene, FramePacket& packet) mutable
-        {
-            const TileMap& tileMap = scene.GetTileMap();
-            if (tileMap.GetChunks().empty()) return;
+                                   [startTime = Clock::now()](Scene& scene, FramePacket& packet) mutable {
+                                       const TileMap& tileMap = scene.GetTileMap();
+                                       if (tileMap.GetChunks().empty()) return;
 
-            const Camera2D& cam     = scene.GetCamera();
-            const Vec2      camPos  = cam.GetEffectivePosition();
-            const Vec2      ref     = GetRefSize(packet);
-            const f32       ts      = tileMap.GetTileSize();
-            const f32       elapsed = std::chrono::duration<f32>(Clock::now() - startTime).count();
+                                       const Camera2D& cam = scene.GetCamera();
+                                       const Vec2 camPos = cam.GetEffectivePosition();
+                                       const Vec2 ref = GetRefSize(packet);
+                                       const f32 ts = tileMap.GetTileSize();
+                                       const f32 elapsed = std::chrono::duration<f32>(Clock::now() - startTime).count();
 
-            // Chunk world half-size for coarse culling.
-            const f32 chunkWorld = static_cast<f32>(ChunkSize) * ts;
-            const Vec2 chunkHalf = { chunkWorld * 0.5f, chunkWorld * 0.5f };
+                                       // Chunk world half-size for coarse culling.
+                                       const f32  chunkWorld = static_cast<f32>(ChunkSize) * ts;
+                                       const Vec2 chunkHalf  = {chunkWorld * 0.5f, chunkWorld * 0.5f};
 
-            for (const auto& [key, chunk] : tileMap.GetChunks())
-            {
-                // Decode chunk coords from key.
-                const i32 chunkX = static_cast<i32>(static_cast<u32>(key >> 32));
-                const i32 chunkY = static_cast<i32>(static_cast<u32>(key & 0xFFFFFFFF));
+                                       for (const auto& [key, chunk] : tileMap.GetChunks()) {
+                                           // Decode chunk coords from key.
+                                           const i32 chunkX = static_cast<i32>(static_cast<u32>(key >> 32));
+                                           const i32 chunkY = static_cast<i32>(static_cast<u32>(key & 0xFFFFFFFF));
 
-                // Coarse chunk visibility: center of chunk in world space.
-                const Vec2 chunkCenter = {
-                    (static_cast<f32>(chunkX) * chunkWorld) + chunkWorld * 0.5f - ts * 0.5f,
-                    (static_cast<f32>(chunkY) * chunkWorld) + chunkWorld * 0.5f - ts * 0.5f,
-                };
-                if (!cam.IsVisible(chunkCenter, { chunkWorld + ts * 2.0f, chunkWorld + ts * 2.0f }, ref))
-                    continue;
+                                           // Coarse chunk visibility: center of chunk in world space.
+                                           const Vec2 chunkCenter = {
+                                               (static_cast<f32>(chunkX) * chunkWorld) + chunkWorld * 0.5f - ts * 0.5f,
+                                               (static_cast<f32>(chunkY) * chunkWorld) + chunkWorld * 0.5f - ts * 0.5f,
+                                           };
+                                           if (!cam.IsVisible(chunkCenter, {
+                                                                  chunkWorld + ts * 2.0f, chunkWorld + ts * 2.0f
+                                                              }, ref))
+                                               continue;
 
-                for (u32 layer = 0; layer < LayerCount; ++layer)
-                {
-                    for (u32 cell = 0; cell < ChunkSize * ChunkSize; ++cell)
-                    {
-                        const u32 tileId = chunk.Tiles[layer][cell];
-                        if (tileId == 0) continue;
+                                           for (u32 layer = 0; layer < LayerCount; ++layer) {
+                                               for (u32 cell = 0; cell < ChunkSize * ChunkSize; ++cell) {
+                                                   const u32 tileId = chunk.Tiles[layer][cell];
+                                                   if (tileId == 0) continue;
 
-                        const TileAtlasEntry* entry = tileMap.FindAtlas(tileId);
-                        if (!entry || !entry->Atlas.IsValid()) continue;
+                                                   const TileAtlasEntry* entry = tileMap.FindAtlas(tileId);
+                                                   if (!entry || !entry->Atlas.IsValid()) continue;
 
-                        const u32 localX = cell % ChunkSize;
-                        const u32 localY = cell / ChunkSize;
-                        const i32 tileX  = chunkX * static_cast<i32>(ChunkSize) + static_cast<i32>(localX);
-                        const i32 tileY  = chunkY * static_cast<i32>(ChunkSize) + static_cast<i32>(localY);
+                                                   const u32 localX = cell % ChunkSize;
+                                                   const u32 localY = cell / ChunkSize;
+                                                   const i32 tileX = chunkX * static_cast<i32>(ChunkSize) + static_cast<
+                                                       i32>(localX);
+                                                   const i32 tileY = chunkY * static_cast<i32>(ChunkSize) + static_cast<
+                                                       i32>(localY);
 
-                        const Vec2 worldPos = tileMap.TileToWorld(tileX, tileY);
-                        if (!cam.IsVisible(worldPos, { ts, ts }, ref)) continue;
+                                                   const Vec2 worldPos = tileMap.TileToWorld(tileX, tileY);
+                                                   if (!cam.IsVisible(worldPos, {ts, ts}, ref)) continue;
 
-                        const TileDef* def = tileMap.FindTileDef(tileId);
-                        const UVRect   uv  = ComputeTileUV(*entry, tileId, def, elapsed,
-                                                           static_cast<u32>(tileX),
-                                                           static_cast<u32>(tileY));
+                                                   const TileDef* def = tileMap.FindTileDef(tileId);
+                                                   const UVRect   uv  = ComputeTileUV(*entry, tileId, def, elapsed,
+                                                       static_cast<u32>(tileX),
+                                                       static_cast<u32>(tileY));
 
-                        // Layer sort: Ground = -1000, Objects = Y-sorted, Overlay = 1000000.
-                        i32 sortLayer = -1000;
-                        if (layer == 1)
-                            sortLayer = static_cast<i32>(worldPos.Y + ts * 0.5f);
-                        else if (layer == 2)
-                            sortLayer = 1000000;
+                                                   // Layer sort: Ground = far below Y-sort range, Objects = Y-sorted, Overlay = far above.
+                                                   i32 sortLayer = -1000000;
+                                                   if (layer == 1)
+                                                       sortLayer = static_cast<i32>(worldPos.Y + ts * 0.5f);
+                                                   else if (layer == 2)
+                                                       sortLayer = 1000000;
 
-                        Sprite s{};
-                        s.Texture  = entry->Atlas.GetTexture();
-                        s.Sampler  = entry->Sampler;
-                        s.Position = worldPos;
-                        s.Size     = { ts, ts };
-                        s.UV       = uv;
-                        s.Layer    = sortLayer;
-                        packet.Sprites.push_back(s);
-                    }
-                }
-            }
-        });
+                                                   Sprite s{};
+                                                   s.Texture  = entry->Atlas.GetTexture();
+                                                   s.Sampler  = entry->Sampler;
+                                                   s.Position = worldPos;
+                                                   s.Size     = {ts, ts};
+                                                   s.UV       = uv;
+                                                   s.Layer    = sortLayer;
+                                                   packet.Sprites.push_back(s);
+                                               }
+                                           }
+                                       }
+                                   });
     }
 
     void RegisterSpriteRenderSystem(World& world)
@@ -221,7 +251,6 @@ namespace
             const Vec2      camPos = cam.GetEffectivePosition();
             const Vec2      ref    = GetRefSize(packet);
 
-        // clang-format off
         scene.GetWorld()
                 .Query<const Transform2D, const SpriteRenderer>()
                 .Without<Disabled>()
@@ -254,14 +283,12 @@ namespace
                         s.Layer     = sr.Layer;
                         packet.Sprites.push_back(s);
                     });
-            // clang-format on
         });
     }
 
     void RegisterAnimatorStateMachineSystem(World& world)
     {
         world.RegisterSystem("AnimatorStateMachine", [](Scene& scene, const f32 /*dt*/) {
-        // clang-format off
         scene.GetWorld()
                 .Query<AnimatorStateMachine, Animator>()
                 .Without<Disabled>()
@@ -297,14 +324,12 @@ namespace
                     anim.Elapsed    = 0.0f;
                     anim.Finished   = false;
                 });
-            // clang-format on
         });
     }
 
     void RegisterAnimatorSystem(World& world)
     {
         world.RegisterSystem("Animator", [](Scene& scene, const f32 dt) {
-        // clang-format off
         scene.GetWorld()
                 .Query<Animator, SpriteRenderer>()
                 .Without<Disabled>()
@@ -346,7 +371,6 @@ namespace
                         sr.Pivot = frame->Pivot;
                     }
                 });
-            // clang-format on
         });
     }
 
@@ -364,38 +388,33 @@ namespace
             std::unordered_set<u64> seen;
 
             scene.GetWorld()
-                .Query<const Transform2D, AudioSource>()
-                .Without<Disabled>()
-                .ForEach([&](Entity e, const Transform2D& t, AudioSource& src) {
-                    const u64 key = (static_cast<u64>(e.Generation) << 32) | e.Index;
-                    seen.insert(key);
+                 .Query<const Transform2D, AudioSource>()
+                 .Without<Disabled>()
+                 .ForEach([&](Entity e, const Transform2D& t, AudioSource& src) {
+                     const u64 key = (static_cast<u64>(e.Generation) << 32) | e.Index;
+                     seen.insert(key);
 
-                    // Start a new sound the first time we see a playing source.
-                    if (!src._handle && src.Playing)
-                    {
-                        src._handle = AudioManager::CreateSpatialSound(src.Path, src.Loop, src.Volume);
-                        sounds[key] = src._handle;
-                    }
+                     // Start a new sound the first time we see a playing source.
+                     if (!src._handle && src.Playing) {
+                         src._handle = AudioManager::CreateSpatialSound(src.Path, src.Loop, src.Volume);
+                         sounds[key] = src._handle;
+                     }
 
-                    if (src._handle)
-                    {
-                        AudioManager::SetSpatialSoundPosition(src._handle, t.Position, src.Radius);
+                     if (src._handle) {
+                         AudioManager::SetSpatialSoundPosition(src._handle, t.Position, src.Radius);
 
-                        // Playing set to false at runtime — stop and release.
-                        if (!src.Playing)
-                        {
-                            AudioManager::DestroySpatialSound(src._handle);
-                            src._handle = nullptr;
-                            sounds.erase(key);
-                        }
-                    }
-                });
+                         // Playing set to false at runtime — stop and release.
+                         if (!src.Playing) {
+                             AudioManager::DestroySpatialSound(src._handle);
+                             src._handle = nullptr;
+                             sounds.erase(key);
+                         }
+                     }
+                 });
 
             // Destroy sounds for entities that were removed since last tick.
-            for (auto it = sounds.begin(); it != sounds.end(); )
-            {
-                if (!seen.count(it->first))
-                {
+            for (auto it = sounds.begin(); it != sounds.end();) {
+                if (!seen.contains(it->first)) {
                     AudioManager::DestroySpatialSound(it->second);
                     it = sounds.erase(it);
                 }
@@ -410,7 +429,7 @@ namespace
 
     // DDA grid traversal: returns distance from origin along unit-vector dir
     // to the nearest solid tile, or maxDist if none is found within range.
-    f32 RayAABBDist(const Vec2 origin, const Vec2 dir, const f32 maxDist,
+    f32 RayAABBDist(const Vec2     origin, const Vec2 dir, const f32 maxDist,
                     const TileMap& tileMap)
     {
         const f32 ts     = tileMap.GetTileSize();
@@ -432,20 +451,27 @@ namespace
         const f32 invY = dir.Y != 0.0f ? ts / std::abs(dir.Y) : 1e30f;
 
         f32 tMaxX = dir.X != 0.0f
-            ? (dir.X > 0.0f ? ((tileX + 1) * ts - sx) : (sx - tileX * ts)) / std::abs(dir.X)
-            : 1e30f;
+                    ? (dir.X > 0.0f ? ((tileX + 1) * ts - sx) : (sx - tileX * ts)) / std::abs(dir.X)
+                    : 1e30f;
         f32 tMaxY = dir.Y != 0.0f
-            ? (dir.Y > 0.0f ? ((tileY + 1) * ts - sy) : (sy - tileY * ts)) / std::abs(dir.Y)
-            : 1e30f;
+                    ? (dir.Y > 0.0f ? ((tileY + 1) * ts - sy) : (sy - tileY * ts)) / std::abs(dir.Y)
+                    : 1e30f;
 
         f32 t = 0.0f;
-        while (t < maxDist)
-        {
+        while (t < maxDist) {
             if (tileMap.BlocksLight(tileX, tileY))
                 return t;
 
-            if (tMaxX < tMaxY) { t = tMaxX; tMaxX += invX; tileX += stepX; }
-            else                { t = tMaxY; tMaxY += invY; tileY += stepY; }
+            if (tMaxX < tMaxY) {
+                t     = tMaxX;
+                tMaxX += invX;
+                tileX += stepX;
+            }
+            else {
+                t     = tMaxY;
+                tMaxY += invY;
+                tileY += stepY;
+            }
         }
         return maxDist;
     }
@@ -455,13 +481,11 @@ namespace
     ShadowMapData ComputeShadowMap(const u32 lightIndex, const Vec2 origin,
                                    const f32 radius, const TileMap& tileMap)
     {
-        constexpr f32 TwoPi = 6.28318530717958647f;
         ShadowMapData sm{};
         sm.LightIndex = lightIndex;
-        for (u32 i = 0; i < ShadowResolution; ++i)
-        {
+        for (u32 i = 0; i < ShadowResolution; ++i) {
             const f32  angle = (static_cast<f32>(i) / ShadowResolution) * TwoPi;
-            const Vec2 dir   = { std::cos(angle), std::sin(angle) };
+            const Vec2 dir   = {std::cos(angle), std::sin(angle)};
             sm.Distances[i]  = RayAABBDist(origin, dir, radius, tileMap);
         }
         return sm;
@@ -474,28 +498,27 @@ namespace
             const Vec2      ref     = GetRefSize(packet);
             const TileMap&  tileMap = scene.GetTileMap();
 
-        // clang-format off
-        scene.GetWorld()
-                .Query<const Transform2D, const LightEmitter>()
-                .Without<Disabled>()
-                .ForEach(
-                    [&](const Transform2D& t, const LightEmitter& le) {
-                        if (!cam.IsLightVisible(t.Position, le.Radius, ref))
-                            return;
+            scene.GetWorld()
+                 .Query<const Transform2D, const LightEmitter>()
+                 .Without<Disabled>()
+                 .ForEach(
+                     [&](const Transform2D& t, const LightEmitter& le) {
+                         if (!cam.IsLightVisible(t.Position, le.Radius, ref))
+                             return;
 
-                        const u32 lightIndex = static_cast<u32>(packet.Lights.size());
-                        PointLight pl{};
-                        pl.Position   = t.Position;
-                        pl.Radius     = le.Radius;
-                        pl.Intensity  = le.Intensity;
-                        pl.LightColor = le.LightColor;
-                        packet.Lights.push_back(pl);
+                         const u32  lightIndex = static_cast<u32>(packet.Lights.size());
+                         PointLight pl{};
+                         pl.Position   = t.Position;
+                         pl.Radius     = le.Radius;
+                         pl.Intensity  = le.Intensity;
+                         pl.LightColor = le.LightColor;
+                         packet.Lights.push_back(pl);
 
-                        if (le.CastsShadows && packet.ShadowMaps.size() < MaxShadowLights)
-                            packet.ShadowMaps.push_back(
-                                ComputeShadowMap(lightIndex, t.Position, le.Radius, tileMap));
-                    });
-            // clang-format on
+                         if (le.CastsShadows && packet.ShadowMaps.size() < MaxShadowLights)
+                             packet.ShadowMaps.push_back(
+                                 ComputeShadowMap(
+                                     lightIndex, t.Position, le.Radius, tileMap));
+                     });
         });
     }
 } // anonymous namespace
@@ -515,6 +538,7 @@ void RegisterBuiltinSystems(World& world)
     // Update phase — order matches the blueprint execution table.
     RegisterLifetimeSystem(world);
     RegisterFreeMovementSystem(world);
+    RegisterSmoothTileMoveSystem(world);
     RegisterCameraFollowSystem(world);
     RegisterAnimatorStateMachineSystem(world); // evaluates transitions, updates Animator clip
     RegisterAnimatorSystem(world);             // advances frames, fires events, writes UV

@@ -4,6 +4,17 @@
 
 namespace Arcbit
 {
+
+// Common constants
+constexpr f32 Pi = 3.14159265358979323846f;
+constexpr f32 TwoPi = Pi * 2.0f;
+constexpr f32 HalfPi = Pi * 0.5f;
+constexpr f32 QuarterPi = Pi * 0.25f;
+constexpr f32 Epsilon = 0.00001f;
+constexpr f32 DegToRad = Pi / 180.0f;
+constexpr f32 RadToDeg = 180.0f / Pi;
+
+
 // ---------------------------------------------------------------------------
 // Vec2 / Vec3 / Vec4
 //

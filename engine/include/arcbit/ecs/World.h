@@ -233,6 +233,8 @@ public:
 
     void RunUpdateSystems(Scene& scene, f32 dt);
     void RunRenderSystems(Scene& scene, FramePacket& packet);
+    
+    Transform2D* GetTransform(Entity entity);
 
 private:
     struct EntityRecord
