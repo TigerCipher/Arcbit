@@ -51,6 +51,12 @@ constexpr u32 TileWaterFoam  = 405; // (4,0)
 constexpr u32 TileWaterRock  = 509; // (0,9)
 constexpr u32 TileWaterStone = 512; // (3,9)
 constexpr u32 TileIceberg    = 517; // (8,9)
+// WATER+.png whirlpool animation frames — row 13, cols 0-3
+constexpr u32        TileWhirlpool0    = 401 + 13 * 12 + 0; // (0,13)
+constexpr u32        TileWhirlpool1    = 401 + 13 * 12 + 1; // (1,13)
+constexpr u32        TileWhirlpool2    = 401 + 13 * 12 + 2; // (2,13)
+constexpr u32        TileWhirlpool3    = 401 + 13 * 12 + 3; // (3,13)
+static constexpr u32 WhirlpoolFrames[] = {TileWhirlpool0, TileWhirlpool1, TileWhirlpool2, TileWhirlpool3};
 // floor.jpg tiles (cracked stone per instructions; rest = smooth)
 constexpr u32 TileFloorCrk1 = 601; // (0,0)
 constexpr u32 TileFloorCrk2 = 602; // (1,0)
@@ -112,7 +118,7 @@ protected:
 
     void OnRender(FramePacket& packet) override
     {
-        packet.AmbientColor  = Color{0.18f, 0.22f, 0.3f, 1.0f};
+        packet.AmbientColor  = Color{0.018f, 0.022f, 0.03f, 1.0f};
         packet.ReferenceSize = {ViewportW, ViewportH};
         if (_showGrid) SubmitDebugGrid(packet, {ViewportW, ViewportH});
     }
@@ -212,24 +218,16 @@ private:
         tm.SetTileSize(TileSize);
 
         if (!tm.LoadMap("assets/tilemaps/demo.arcmap", GetTextures(), _sampler, _linearSampler)) {
-            TileAtlas grassAtlas, waterAtlas, floorAtlas;
-            grassAtlas.Load("assets/textures/GRASS+.png", 16, 16, GetTextures());
-            waterAtlas.Load("assets/textures/Water+.png", 16, 16, GetTextures());
-            floorAtlas.Load("assets/textures/floor.jpg", 128, 128, GetTextures());
+            ARCBIT_ASSERT(
+                tm.LoadAtlasJson(1, "assets/tilemaps/grass.tileatlas.json", _sampler, "nearest", GetTextures()),
+                "Failed to load grass atlas");
+            ARCBIT_ASSERT(
+                tm.LoadAtlasJson(401, "assets/tilemaps/water.tileatlas.json", _sampler, "nearest", GetTextures()),
+                "Failed to load water atlas");
+            ARCBIT_ASSERT(
+                tm.LoadAtlasJson(601, "assets/tilemaps/floor.tileatlas.json", _linearSampler, "linear", GetTextures()),
+                "Failed to load floor atlas");
 
-            ARCBIT_ASSERT(grassAtlas.IsValid(), "Failed to load GRASS+ atlas");
-            ARCBIT_ASSERT(waterAtlas.IsValid(), "Failed to load Water+ atlas");
-            ARCBIT_ASSERT(floorAtlas.IsValid(), "Failed to load floor atlas");
-
-            _waterTex = waterAtlas.GetTexture();
-            tm.RegisterAtlas(1, std::move(grassAtlas), _sampler,
-                             "assets/tilemaps/grass.tileatlas.json", "nearest");
-            tm.RegisterAtlas(401, std::move(waterAtlas), _sampler,
-                             "assets/tilemaps/water.tileatlas.json", "nearest");
-            tm.RegisterAtlas(601, std::move(floorAtlas), _linearSampler,
-                             "assets/tilemaps/floor.tileatlas.json", "linear");
-
-            RegisterWaterTiles(tm);
             GenerateGround(tm);
             GenerateWater(tm);
             GenerateStoneFloor(tm);
@@ -238,15 +236,13 @@ private:
             if (!tm.SaveMap("assets/tilemaps/demo.arcmap")) { LOG_WARN(Game, "Failed to save tilemap to disk"); }
         }
 
-        tm.LogStats();
-    }
+        // Always resolve _waterTex from the loaded atlas so CreateWhirlpool has a valid handle
+        // regardless of whether the map was loaded from file or generated.
+        if (const auto* entry = tm.FindAtlas(TileWaterDeep))
+            _waterTex = entry->Atlas.GetTexture();
+        ARCBIT_ASSERT(_waterTex.IsValid(), "Failed to resolve water atlas texture");
 
-    // Apply UV scroll to water surface rows 0-3 so water appears animated.
-    void RegisterWaterTiles(TileMap& tm)
-    {
-        for (u32 row = 0; row <= 3; ++row)
-            for (u32 col = 0; col < 12; ++col)
-                tm.RegisterTile(401 + row * 12 + col, TileDef{.UVScroll = {0.08f, 0.04f}});
+        tm.LogStats();
     }
 
     static u32 HashTile(const i32 x, const i32 y)
@@ -384,8 +380,9 @@ private:
                                          .Sheet   = &_playerSheet,
                                          .Playing = true,
                                          .OnEvent = [](std::string_view ev) {
-                                             if (ev == "AttackHit") AudioManager::PlayOneShot(
-                                                 "assets/sfx/sword_slashing.mp3");
+                                             if (ev == "AttackHit")
+                                                 AudioManager::PlayOneShot(
+                                                     "assets/sfx/sword_slashing.mp3");
                                          },
                                      });
         world.AddComponent<CameraTarget>(_playerEntity, CameraTarget{.Lag = 0.12f});
@@ -465,9 +462,6 @@ private:
     // Whirlpool: 2×2 tile entity inside water body 1; animated via AI system.
     void CreateWhirlpool()
     {
-        // UV for tile (col=0, row=13) in WATER+.png 12×14 grid.
-        constexpr UVRect WpUV = {0.0f / 12.0f, 13.0f / 14.0f, 1.0f / 12.0f, 14.0f / 14.0f};
-
         auto& world                                      = GetScene().GetWorld();
         _whirlpoolEntity                                 = world.CreateEntity();
         world.GetComponent<Tag>(_whirlpoolEntity)->Value = "Whirlpool";
@@ -477,7 +471,8 @@ private:
         t->Scale    = {TileSize * 2.0f, TileSize * 2.0f};
 
         world.AddComponent<SpriteRenderer>(_whirlpoolEntity, SpriteRenderer{
-                                               .Texture = _waterTex, .Sampler = _sampler, .UV = WpUV,
+                                               .Texture = _waterTex, .Sampler = _sampler,
+                                               .UV      = GetScene().GetTileMap().GetTileUV(TileWhirlpool0),
                                                .Layer   = static_cast<i32>(t->Position.Y + t->Scale.Y * 0.5f),
                                            });
     }
@@ -488,8 +483,9 @@ private:
         _mouseLightEntity                                            = world.CreateEntity();
         world.GetComponent<Transform2D>(_mouseLightEntity)->Position = {};
         world.AddComponent<LightEmitter>(_mouseLightEntity, LightEmitter{
-                                             .Radius     = 300.0f, .Intensity = 2.0f,
-                                             .LightColor = Color{0.9f, 0.85f, 0.6f, 1.0f},
+                                             .Radius       = 150.0f,
+                                             .Intensity    = 2.0f,
+                                             .CastsShadows = true
                                          });
     }
 
@@ -539,22 +535,13 @@ private:
     void RegisterWhirlpoolAI()
     {
         GetScene().GetWorld().RegisterSystem("WhirlpoolAI",
-                                             [wp = _whirlpoolEntity, elapsed = 0.0f
-                                             ](Scene& scene, const f32 dt) mutable {
-                                                 elapsed     += dt;
+                                             [wp = _whirlpoolEntity](Scene& scene, const f32 dt) {
                                                  auto& world = scene.GetWorld();
                                                  if (!world.IsValid(wp)) return;
-                                                 auto* sr = world.GetComponent<SpriteRenderer>(wp);
-                                                 if (!sr) return;
-
-                                                 // Cycle through 4 whirlpool frames across row 13 of WATER+.png.
-                                                 const u32     frame = static_cast<u32>(elapsed / 0.12f) % 4;
-                                                 constexpr f32 colW  = 1.0f / 12.0f;
-                                                 constexpr f32 rowV  = 13.0f / 14.0f;
-                                                 sr->UV              = {
-                                                     static_cast<f32>(frame) * colW, rowV,
-                                                     static_cast<f32>(frame + 1) * colW, 14.0f / 14.0f,
-                                                 };
+                                                 auto* t = world.GetComponent<Transform2D>(wp);
+                                                 if (!t) return;
+                                                 constexpr f32 AngularSpeed = 1.5f; // radians per second
+                                                 t->Rotation                += AngularSpeed * dt;
                                              });
     }
 

@@ -8,6 +8,9 @@
 // that multiplies the sampled albedo before lighting is applied.
 // ---------------------------------------------------------------------------
 
+// Must match ShadowResolution in RenderThread.h.
+#define SHADOW_RESOLUTION 256
+
 layout(set = 0, binding = 0) uniform sampler2D u_Albedo;
 layout(set = 1, binding = 0) uniform sampler2D u_Normal;
 
@@ -15,11 +18,17 @@ struct PointLight {
     vec2  position;    // world-space center in pixels, matching Sprite::Position
     float radius;      // world-space radius in pixels — falls off to zero at this distance
     float intensity;   // multiplier applied to the color contribution
-    vec4  color;       // rgba light color (.a reserved)
+    vec4  color;       // rgb = light color; a = shadow SSBO row (-1 = no shadows)
 };
 
 layout(std430, set = 2, binding = 0) readonly buffer LightBuffer {
     PointLight lights[];
+};
+
+// One row per shadow-casting light: SHADOW_RESOLUTION floats storing the
+// world-space distance to the nearest solid occluder at each polar angle.
+layout(std430, set = 3, binding = 0) readonly buffer ShadowBuffer {
+    float shadowData[];
 };
 
 // Push constant layout must match SpritePushConstants on the CPU (44 bytes, tightly packed).
@@ -42,6 +51,28 @@ layout(location = 1) in vec2 inWorldPos;
 layout(location = 2) in vec4 inTint;
 
 layout(location = 0) out vec4 outColor;
+
+// ---------------------------------------------------------------------------
+// Shadow lookup with 3-tap PCF
+//
+// Returns 1.0 when the fragment is lit, 0.0 when fully in shadow.
+// Samples three adjacent polar-angle buckets and averages to soften edges.
+// ---------------------------------------------------------------------------
+float SampleShadow(int row, vec2 delta, float dist)
+{
+    if (row < 0) return 1.0;
+
+    const float TWO_PI = 6.28318530718;
+    float norm   = fract(atan(-delta.y, -delta.x) / TWO_PI + 1.0); // [0,1] — negate: delta points fragment→light, rays point light→fragment
+    int   center = int(norm * float(SHADOW_RESOLUTION)) % SHADOW_RESOLUTION;
+    int   prev   = (center - 1 + SHADOW_RESOLUTION) % SHADOW_RESOLUTION;
+    int   next   = (center + 1) % SHADOW_RESOLUTION;
+
+    int   base     = row * SHADOW_RESOLUTION;
+    float occluder = (shadowData[base + prev] + shadowData[base + center] + shadowData[base + next]) / 3.0;
+
+    return step(dist, occluder); // 1 if lit, 0 if behind occluder
+}
 
 void main()
 {
@@ -83,7 +114,9 @@ void main()
         vec3  L     = normalize(vec3(dir2d, 1.0));
         float NdotL = max(dot(N, L), 0.0);
 
-        lighting += light.color.rgb * light.intensity * attenuation * NdotL;
+        float shadow = SampleShadow(int(light.color.a), delta, dist);
+
+        lighting += light.color.rgb * light.intensity * attenuation * NdotL * shadow;
     }
 
     outColor = vec4(albedo.rgb * lighting, albedo.a);

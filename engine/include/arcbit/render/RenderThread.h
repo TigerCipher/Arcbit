@@ -38,6 +38,27 @@ struct PointLight
 };
 
 // ---------------------------------------------------------------------------
+// Shadow map constants
+//
+// ShadowResolution — angle buckets in each 1D shadow map (must match the
+//   SHADOW_RESOLUTION define in sprite.frag).
+// MaxShadowLights  — maximum shadow-casting lights per frame. Shadow-casting
+//   lights beyond this count are rendered without shadows.
+// ---------------------------------------------------------------------------
+static constexpr u32 ShadowResolution = 256;
+static constexpr u32 MaxShadowLights  = 8;
+
+// Per-light shadow occlusion data computed by the game thread.
+// Distances[i] = world-space distance from the light center to the nearest
+// solid-tile occluder at angle (i / ShadowResolution) * 2π.  A value equal
+// to the light's Radius means no occluder was found in that direction.
+struct ShadowMapData
+{
+    u32 LightIndex;                    // index into FramePacket::Lights[]
+    f32 Distances[ShadowResolution];   // one entry per angle bucket
+};
+
+// ---------------------------------------------------------------------------
 // Sprite
 //
 // A world-space sprite submitted by the game thread each frame.
@@ -61,6 +82,7 @@ struct Sprite
     Vec2   Size     = { 64.0f, 64.0f };              // full width × height in pixels
     UVRect UV       = { 0.0f, 0.0f, 1.0f, 1.0f };   // normalized sub-region; defaults to whole texture
     Color  Tint     = Color::White();                 // per-sprite RGBA tint multiplied against the albedo
+    f32    Rotation = 0.0f;                           // clockwise rotation in radians around the sprite center
 
     // Draw order. Sprites are rendered lower-layer-first (painter's algorithm).
     // Sprites on the same layer with the same texture are batched into one draw.
@@ -132,6 +154,12 @@ struct FramePacket
     // Dynamic point light list. Uploaded to a per-frame SSBO each tick.
     // The forward+ fragment shader loops over all entries.
     std::vector<PointLight> Lights;
+
+    // Shadow occlusion data for lights with CastsShadows=true, built by the game thread.
+    // At most MaxShadowLights entries ordered by LightIndex. The render thread uploads
+    // this to a fixed-size SSBO at set=3; the light SSBO encodes which row each
+    // shadow-casting light uses (via the w component of its color field).
+    std::vector<ShadowMapData> ShadowMaps;
 
     // Additive ambient light applied to every pixel regardless of light proximity.
     Color AmbientColor = Color{ 0.1f, 0.1f, 0.1f, 1.0f };
@@ -243,6 +271,7 @@ private:
     void CreateSpritePipeline(Format swapchainFormat);
     void CreateInstanceBuffers();
     void CreateLightSSBOs();
+    void CreateShadowSSBOs();
 
     // ----- RenderFrame() helpers (called once per frame) ---------------------
 
@@ -259,8 +288,12 @@ private:
     [[nodiscard]] TextureHandle AcquireBackBuffer(const FramePacket& packet) const;
 
     // Grows the light SSBO if needed, uploads this frame's lights.
+    // Encodes shadow row indices from packet.ShadowMaps into the light SSBO.
     // Returns the light count for use in push constants.
     [[nodiscard]] u32 UploadLights(const FramePacket& packet, u32 frameSlot);
+
+    // Writes this frame's shadow map data to the fixed-size shadow SSBO.
+    void UploadShadowData(const FramePacket& packet, u32 frameSlot);
 
     // Returns pointers into packet.Sprites sorted by (layer, texture, sampler).
     [[nodiscard]] static std::vector<const Sprite*> SortSprites(const std::vector<Sprite>& sprites);
@@ -339,6 +372,13 @@ private:
     // One SSBO per frame-in-flight slot — same cycling rationale as instance buffers.
     std::array<BufferHandle, FrameSlots> _lightSSBO = {};
     u32 _lightSSBOCapacity = 0;
+
+    // ----- Shadow map SSBO resources ----------------------------------------
+
+    // Fixed-size SSBO: MaxShadowLights rows × ShadowResolution float distances.
+    // Cycled per frame like the light SSBO so the CPU can write while the GPU reads
+    // the previous frame's data. Never resized — the capacity is fixed at allocation.
+    std::array<BufferHandle, FrameSlots> _shadowSSBO = {};
 };
 
 } // namespace Arcbit

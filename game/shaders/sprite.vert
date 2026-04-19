@@ -20,10 +20,11 @@
 // ---------------------------------------------------------------------------
 
 // Per-instance attributes — one entry per sprite in the instance buffer.
-// Packed as 3 × vec4 so Format::RGBA32_Float covers all three.
+// Packed as 4 × vec4 so Format::RGBA32_Float covers all four.
 layout(location = 0) in vec4 a_PosSize; // (centerX, centerY, halfW, halfH) in world pixels
 layout(location = 1) in vec4 a_UV;      // (u0, v0, u1, v1) normalized texture sub-region
 layout(location = 2) in vec4 a_Tint;    // (r, g, b, a) linear tint color
+layout(location = 3) in vec4 a_Rot;     // (rotCos, rotSin, _, _) sprite rotation
 
 // Push constant layout must match SpritePushConstants on the CPU (44 bytes, tightly packed).
 // ambient is split into four floats — see sprite.frag for the alignment rationale.
@@ -57,8 +58,13 @@ void main()
         vec2(-1.0,  1.0)    // bottom-left
     );
 
-    vec2 corner   = corners[gl_VertexIndex % 6];
-    vec2 worldPos = a_PosSize.xy + corner * a_PosSize.zw;
+    vec2 corner = corners[gl_VertexIndex % 6];
+
+    // Rotate corner in local [-1,1] space around sprite center, then scale.
+    vec2 rc;
+    rc.x = a_Rot.x * corner.x - a_Rot.y * corner.y;
+    rc.y = a_Rot.y * corner.x + a_Rot.x * corner.y;
+    vec2 worldPos = a_PosSize.xy + rc * a_PosSize.zw;
 
     // World → NDC with camera rotation. Rotate delta by -cameraAngle so the
     // world appears to rotate in the opposite direction to the camera.

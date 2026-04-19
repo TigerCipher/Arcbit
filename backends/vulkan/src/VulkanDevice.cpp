@@ -894,10 +894,12 @@ PipelineHandle RenderDevice::CreatePipeline(const PipelineDesc& desc)
     //   set 0 — albedo texture      (UseTextures)
     //   set 1 — normal map texture  (UseNormalTexture; requires UseTextures)
     //   set 2 — storage buffer SSBO (UseStorageBuffer; appended after texture sets)
+    //   set 3 — shadow map SSBO     (UseShadowBuffer; requires UseStorageBuffer)
     std::vector<VkDescriptorSetLayout> setLayouts;
     if (desc.UseTextures)      setLayouts.push_back(_context->TextureSetLayout);
     if (desc.UseNormalTexture) setLayouts.push_back(_context->TextureSetLayout);
     if (desc.UseStorageBuffer) setLayouts.push_back(_context->StorageBufferSetLayout);
+    if (desc.UseShadowBuffer)  setLayouts.push_back(_context->StorageBufferSetLayout);
 
     if (!setLayouts.empty())
     {

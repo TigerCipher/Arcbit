@@ -27,7 +27,8 @@ struct TileAnimFrame
 // Tiles without a registered def render at their default atlas UV.
 struct TileDef
 {
-    bool Solid = false; // blocks pathfinding / collision queries
+    bool Solid       = false; // blocks pathfinding / collision queries
+    bool BlocksLight = false; // casts shadows — independent of Solid
 
     // Flip-book animation — cycles through listed frames in order.
     // Uses a per-position phase offset so adjacent tiles don't march in lockstep.

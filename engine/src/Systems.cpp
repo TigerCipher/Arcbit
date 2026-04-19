@@ -242,15 +242,16 @@ namespace
                             return;
 
                         Sprite s{};
-                        s.Texture  = sr.Texture;
-                        s.Sampler  = sr.Sampler;
-                        s.Position = pos;
-                        s.Size     = t.Scale;
-                        s.UV       = sr.FlipX
-                                         ? UVRect{ sr.UV.U1, sr.UV.V0, sr.UV.U0, sr.UV.V1 }
-                                         : sr.UV;
-                        s.Tint     = sr.Tint;
-                        s.Layer    = sr.Layer;
+                        s.Texture   = sr.Texture;
+                        s.Sampler   = sr.Sampler;
+                        s.Position  = pos;
+                        s.Size      = t.Scale;
+                        s.UV        = sr.FlipX
+                                          ? UVRect{ sr.UV.U1, sr.UV.V0, sr.UV.U0, sr.UV.V1 }
+                                          : sr.UV;
+                        s.Tint      = sr.Tint;
+                        s.Rotation  = t.Rotation;
+                        s.Layer     = sr.Layer;
                         packet.Sprites.push_back(s);
                     });
             // clang-format on
@@ -403,11 +404,75 @@ namespace
         });
     }
 
+    // ---------------------------------------------------------------------------
+    // Shadow raycast helpers
+    // ---------------------------------------------------------------------------
+
+    // DDA grid traversal: returns distance from origin along unit-vector dir
+    // to the nearest solid tile, or maxDist if none is found within range.
+    f32 RayAABBDist(const Vec2 origin, const Vec2 dir, const f32 maxDist,
+                    const TileMap& tileMap)
+    {
+        const f32 ts     = tileMap.GetTileSize();
+        const f32 halfTs = ts * 0.5f;
+
+        // TileToWorld returns tile centers (n*ts), so tile n visually spans
+        // [n*ts - halfTs, n*ts + halfTs]. Shifting by +halfTs makes floor(x/ts)
+        // align with those center-anchored boundaries.
+        const f32 sx = origin.X + halfTs;
+        const f32 sy = origin.Y + halfTs;
+
+        i32 tileX = static_cast<i32>(std::floor(sx / ts));
+        i32 tileY = static_cast<i32>(std::floor(sy / ts));
+
+        const i32 stepX = dir.X >= 0.0f ? 1 : -1;
+        const i32 stepY = dir.Y >= 0.0f ? 1 : -1;
+
+        const f32 invX = dir.X != 0.0f ? ts / std::abs(dir.X) : 1e30f;
+        const f32 invY = dir.Y != 0.0f ? ts / std::abs(dir.Y) : 1e30f;
+
+        f32 tMaxX = dir.X != 0.0f
+            ? (dir.X > 0.0f ? ((tileX + 1) * ts - sx) : (sx - tileX * ts)) / std::abs(dir.X)
+            : 1e30f;
+        f32 tMaxY = dir.Y != 0.0f
+            ? (dir.Y > 0.0f ? ((tileY + 1) * ts - sy) : (sy - tileY * ts)) / std::abs(dir.Y)
+            : 1e30f;
+
+        f32 t = 0.0f;
+        while (t < maxDist)
+        {
+            if (tileMap.BlocksLight(tileX, tileY))
+                return t;
+
+            if (tMaxX < tMaxY) { t = tMaxX; tMaxX += invX; tileX += stepX; }
+            else                { t = tMaxY; tMaxY += invY; tileY += stepY; }
+        }
+        return maxDist;
+    }
+
+    // Casts ShadowResolution rays from origin, recording the distance to the
+    // first solid tile at each polar angle bucket.
+    ShadowMapData ComputeShadowMap(const u32 lightIndex, const Vec2 origin,
+                                   const f32 radius, const TileMap& tileMap)
+    {
+        constexpr f32 TwoPi = 6.28318530717958647f;
+        ShadowMapData sm{};
+        sm.LightIndex = lightIndex;
+        for (u32 i = 0; i < ShadowResolution; ++i)
+        {
+            const f32  angle = (static_cast<f32>(i) / ShadowResolution) * TwoPi;
+            const Vec2 dir   = { std::cos(angle), std::sin(angle) };
+            sm.Distances[i]  = RayAABBDist(origin, dir, radius, tileMap);
+        }
+        return sm;
+    }
+
     void RegisterLightRenderSystem(World& world)
     {
         world.RegisterRenderSystem("LightRender", [](Scene& scene, FramePacket& packet) {
-            const Camera2D& cam = scene.GetCamera();
-            const Vec2      ref = GetRefSize(packet);
+            const Camera2D& cam     = scene.GetCamera();
+            const Vec2      ref     = GetRefSize(packet);
+            const TileMap&  tileMap = scene.GetTileMap();
 
         // clang-format off
         scene.GetWorld()
@@ -418,12 +483,17 @@ namespace
                         if (!cam.IsLightVisible(t.Position, le.Radius, ref))
                             return;
 
+                        const u32 lightIndex = static_cast<u32>(packet.Lights.size());
                         PointLight pl{};
                         pl.Position   = t.Position;
                         pl.Radius     = le.Radius;
                         pl.Intensity  = le.Intensity;
                         pl.LightColor = le.LightColor;
                         packet.Lights.push_back(pl);
+
+                        if (le.CastsShadows && packet.ShadowMaps.size() < MaxShadowLights)
+                            packet.ShadowMaps.push_back(
+                                ComputeShadowMap(lightIndex, t.Position, le.Radius, tileMap));
                     });
             // clang-format on
         });

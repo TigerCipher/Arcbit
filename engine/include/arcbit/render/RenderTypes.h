@@ -325,6 +325,10 @@ struct PipelineDesc
     // Used for the per-frame dynamic light list.
     bool UseStorageBuffer = false;
 
+    // Set to true to add a second storage buffer descriptor set (set 3 when all
+    // three flags above are set). Used for the per-frame shadow map SSBO.
+    bool UseShadowBuffer = false;
+
     const char* DebugName = nullptr;
 };
 

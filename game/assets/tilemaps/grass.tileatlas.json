@@ -3,5 +3,9 @@
   "texture": "assets/textures/GRASS+.png",
   "tile_width": 16,
   "tile_height": 16,
-  "tiles": []
+  "tiles": [
+    { "local_id": 326, "blocks_light": true },
+    { "local_id": 327, "blocks_light": true },
+    { "local_id": 332, "blocks_light": true }
+  ]
 }

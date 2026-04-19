@@ -17,24 +17,28 @@ namespace Arcbit
 
 // Point light layout — must match std430 in sprite.frag / forward.frag:
 //   struct PointLight { vec2 position; float radius; float intensity; vec4 color; };
+// vec4.w (ColorA in older code, ShadowRow here) encodes the shadow SSBO row:
+//   -1.0 = this light casts no shadows; N.0 = row N in the shadow SSBO.
 // 32 bytes, naturally aligned.
 struct GpuPointLight
 {
     f32 PosX, PosY;
     f32 Radius;
     f32 Intensity;
-    f32 ColorR, ColorG, ColorB, ColorA;
+    f32 ColorR, ColorG, ColorB;
+    f32 ShadowRow; // -1.0 = no shadow, 0..MaxShadowLights-1 = shadow SSBO row
 };
 
 // Per-sprite instance data uploaded to the instance vertex buffer.
-// Packed as 3 × vec4 so all attributes use Format::RGBA32_Float.
-// Must match the layout(location = 0/1/2) inputs in sprite.vert.
+// Packed as 4 × vec4 so all attributes use Format::RGBA32_Float.
+// Must match the layout(location = 0/1/2/3) inputs in sprite.vert.
 struct SpriteInstance
 {
     f32 PosX, PosY, HalfW, HalfH;   // world-space center + half-extents (location 0)
     f32 U0, V0, U1, V1;             // normalized UV rect                (location 1)
     f32 TintR, TintG, TintB, TintA; // RGBA tint                         (location 2)
-}; // 48 bytes
+    f32 RotCos, RotSin, _pad0, _pad1; // sprite rotation cos/sin          (location 3)
+}; // 64 bytes
 
 // Push constants for the sprite pipeline.
 // Same block declared in both sprite.vert and sprite.frag; each stage
@@ -118,12 +122,13 @@ void RenderThread::CreateSpritePipeline(const Format swapchainFormat)
     const ShaderHandle frag = _device->CreateShader(
         { ShaderStage::Fragment, fragSpv.data(), static_cast<u32>(fragSpv.size()), "main", "sprite.frag" });
 
-    // Three vec4 instance attributes — each 16 bytes, packed in one binding.
+    // Four vec4 instance attributes — each 16 bytes, packed in one binding.
     // PerInstance = true → VK_VERTEX_INPUT_RATE_INSTANCE (one entry per sprite).
     const VertexAttribute attrs[] = {
         { 0, 0, Format::RGBA32_Float,  0 }, // a_PosSize  (posX, posY, halfW, halfH)
         { 1, 0, Format::RGBA32_Float, 16 }, // a_UV       (u0, v0, u1, v1)
         { 2, 0, Format::RGBA32_Float, 32 }, // a_Tint     (r, g, b, a)
+        { 3, 0, Format::RGBA32_Float, 48 }, // a_Rot      (rotCos, rotSin, _, _)
     };
     const VertexBinding bindings[] = {
         { 0, static_cast<u32>(sizeof(SpriteInstance)), true }, // per-instance
@@ -140,6 +145,7 @@ void RenderThread::CreateSpritePipeline(const Format swapchainFormat)
     desc.UseTextures      = true; // set 0 = albedo
     desc.UseNormalTexture = true; // set 1 = normal map
     desc.UseStorageBuffer = true; // set 2 = light SSBO
+    desc.UseShadowBuffer  = true; // set 3 = shadow map SSBO
     // Standard premultiplied-alpha blend for sprite transparency.
     desc.Blend.Enable   = true;
     desc.Blend.SrcColor = BlendFactor::SrcAlpha;
@@ -187,6 +193,19 @@ void RenderThread::CreateLightSSBOs()
         ssbo = _device->CreateBuffer(desc);
 }
 
+void RenderThread::CreateShadowSSBOs()
+{
+    // Fixed size — MaxShadowLights rows of ShadowResolution floats each.
+    BufferDesc desc{};
+    desc.Size        = MaxShadowLights * ShadowResolution * sizeof(f32);
+    desc.Usage       = BufferUsage::Storage;
+    desc.HostVisible = true;
+    desc.DebugName   = "shadow_ssbo";
+
+    for (auto& ssbo : _shadowSSBO)
+        ssbo = _device->CreateBuffer(desc);
+}
+
 // ---------------------------------------------------------------------------
 // Lifetime
 // ---------------------------------------------------------------------------
@@ -199,6 +218,7 @@ void RenderThread::Start(RenderDevice* device, const Format swapchainFormat)
     CreateSpritePipeline(swapchainFormat);
     CreateInstanceBuffers();
     CreateLightSSBOs();
+    CreateShadowSSBOs();
 
     _running = true;
     _thread  = std::thread(&RenderThread::Run, this);
@@ -222,6 +242,10 @@ void RenderThread::Stop()
     _device->WaitIdle();
 
     for (auto& ssbo : _lightSSBO)
+        if (ssbo.IsValid())
+            _device->DestroyBuffer(ssbo);
+
+    for (auto& ssbo : _shadowSSBO)
         if (ssbo.IsValid())
             _device->DestroyBuffer(ssbo);
 
@@ -344,24 +368,50 @@ u32 RenderThread::UploadLights(const FramePacket& packet, const u32 frameSlot)
 
     if (lightCount > 0)
     {
+        // Build shadow row lookup: Lights[i] → SSBO row (-1.0 = no shadow).
+        std::vector<f32> shadowRows(lightCount, -1.0f);
+        for (u32 row = 0; row < packet.ShadowMaps.size() && row < MaxShadowLights; ++row)
+            shadowRows[packet.ShadowMaps[row].LightIndex] = static_cast<f32>(row);
+
         std::vector<GpuPointLight> gpuLights;
         gpuLights.reserve(lightCount);
-        for (const auto& [Position, Radius, Intensity, LightColor] : packet.Lights)
+        for (u32 i = 0; i < lightCount; ++i)
         {
-            GpuPointLight& g = gpuLights.emplace_back();
-            g.PosX           = Position.X;
-            g.PosY           = Position.Y;
-            g.Radius         = Radius;
-            g.Intensity      = Intensity;
-            g.ColorR         = LightColor.R;
-            g.ColorG         = LightColor.G;
-            g.ColorB         = LightColor.B;
-            g.ColorA         = LightColor.A;
+            const PointLight& l = packet.Lights[i];
+            GpuPointLight&    g = gpuLights.emplace_back();
+            g.PosX      = l.Position.X;
+            g.PosY      = l.Position.Y;
+            g.Radius    = l.Radius;
+            g.Intensity = l.Intensity;
+            g.ColorR    = l.LightColor.R;
+            g.ColorG    = l.LightColor.G;
+            g.ColorB    = l.LightColor.B;
+            g.ShadowRow = shadowRows[i];
         }
         _device->UpdateBuffer(_lightSSBO[frameSlot], gpuLights.data(), lightCount * sizeof(GpuPointLight));
     }
 
     return lightCount;
+}
+
+void RenderThread::UploadShadowData(const FramePacket& packet, const u32 frameSlot)
+{
+    // Always write the full fixed-size block. Unused rows are filled with a large
+    // sentinel so the shader's distance comparison never fires for empty rows.
+    static constexpr u64 TotalSize = MaxShadowLights * ShadowResolution * sizeof(f32);
+    static constexpr f32 NoOccluder = 1e9f;
+
+    std::array<f32, MaxShadowLights * ShadowResolution> data;
+    data.fill(NoOccluder);
+
+    const u32 mapCount = std::min(static_cast<u32>(packet.ShadowMaps.size()), MaxShadowLights);
+    for (u32 row = 0; row < mapCount; ++row)
+    {
+        const ShadowMapData& sm = packet.ShadowMaps[row];
+        std::memcpy(&data[row * ShadowResolution], sm.Distances, ShadowResolution * sizeof(f32));
+    }
+
+    _device->UpdateBuffer(_shadowSSBO[frameSlot], data.data(), TotalSize);
 }
 
 std::vector<const Sprite*> RenderThread::SortSprites(const std::vector<Sprite>& sprites)
@@ -427,6 +477,10 @@ void RenderThread::UploadInstances(const std::vector<const Sprite*>& sorted, con
         inst.TintG           = s->Tint.G;
         inst.TintB           = s->Tint.B;
         inst.TintA           = s->Tint.A;
+        inst.RotCos          = std::cos(s->Rotation);
+        inst.RotSin          = std::sin(s->Rotation);
+        inst._pad0           = 0.0f;
+        inst._pad1           = 0.0f;
     }
     _device->UpdateBuffer(_instanceBuffers[frameSlot], instances.data(), spriteCount * sizeof(SpriteInstance));
 }
@@ -493,7 +547,8 @@ u32 RenderThread::DrawSpriteBatches(const CommandListHandle cmd, const std::vect
     _device->SetViewport(cmd, lb.X, lb.Y, lb.W, lb.H);
     _device->SetScissor(cmd, static_cast<i32>(lb.X), static_cast<i32>(lb.Y),
                         static_cast<u32>(lb.W), static_cast<u32>(lb.H));
-    _device->BindStorageBuffer(cmd, _lightSSBO[frameSlot], 2, 0);
+    _device->BindStorageBuffer(cmd, _lightSSBO[frameSlot],   2, 0);
+    _device->BindStorageBuffer(cmd, _shadowSSBO[frameSlot],  3, 0);
 
     // Use the reference resolution for the NDC transform when set, so the same world
     // area is always visible regardless of window size. Fall back to the letterbox
@@ -603,6 +658,7 @@ void RenderThread::RenderFrame(const FramePacket& packet)
 
     const u32 frameSlot  = _device->GetCurrentFrameIndex(packet.Swapchain);
     const u32 lightCount = UploadLights(packet, frameSlot);
+    UploadShadowData(packet, frameSlot);
 
     // Query the actual swapchain extent after any resize that AcquireBackbuffer
     // may have triggered. packet.Width/Height can be stale by one frame (the SDL

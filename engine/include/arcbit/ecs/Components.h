@@ -69,9 +69,13 @@ struct SpriteRenderer
 // and pushes a PointLight into FramePacket.
 struct LightEmitter
 {
-    f32   Radius     = 200.0f;
-    f32   Intensity  = 1.0f;
-    Color LightColor = Color::NaturalLight();
+    f32   Radius       = 200.0f;
+    f32   Intensity    = 1.0f;
+    Color LightColor   = Color::NaturalLight();
+    // When true, the light system raycasts solid tiles around this light each frame
+    // and builds a 1D shadow map that the sprite shader uses for occlusion.
+    // Tile IDs must have TileDef::BlocksLight=true to block light.
+    bool  CastsShadows = false;
 };
 
 // ---------------------------------------------------------------------------

@@ -62,7 +62,12 @@ public:
     // Tile coordinate containing a world-space point.
     void WorldToTile(Vec2 worldPos, i32& outX, i32& outY) const;
 
-    [[nodiscard]] bool IsSolid(i32 tileX, i32 tileY) const;
+    [[nodiscard]] bool   IsSolid(i32 tileX, i32 tileY) const;
+    [[nodiscard]] bool   BlocksLight(i32 tileX, i32 tileY) const;
+
+    // UV rect for a tile ID's static position in its atlas.
+    // Equivalent to FindAtlas(tileId)->Atlas.GetUV(col, row) without manual math.
+    [[nodiscard]] UVRect GetTileUV(u32 tileId) const;
 
     // Read-only access used by the render system.
     [[nodiscard]] const std::unordered_map<u64, TileChunk>& GetChunks()             const;
@@ -84,15 +89,17 @@ public:
     // be useful as a round-trip input to LoadMap.
     bool SaveMap(std::string_view path) const;
 
+    // Parse a .tileatlas.json, load its texture, register any TileDefs, and call RegisterAtlas.
+    // Use this instead of RegisterAtlas when the tileatlas JSON defines tile properties
+    // (solid, blocks_light, uv_scroll) — RegisterAtlas alone does not read the JSON.
+    bool LoadAtlasJson(u32 baseId, std::string_view jsonPath,
+                       SamplerHandle sampler, std::string_view samplerName,
+                       TextureManager& textures);
+
 private:
     [[nodiscard]] static u64 ChunkKey(i32 chunkX, i32 chunkY);
     TileChunk&               GetOrCreateChunk(i32 chunkX, i32 chunkY);
     [[nodiscard]] const TileChunk* GetChunk(i32 chunkX, i32 chunkY) const;
-
-    // Parse a .tileatlas.json, load its texture, register any TileDefs, and call RegisterAtlas.
-    bool LoadAtlasJson(u32 baseId, std::string_view jsonPath,
-                       SamplerHandle sampler, std::string_view samplerName,
-                       TextureManager& textures);
 
     f32 _tileSize = 32.0f;
 
