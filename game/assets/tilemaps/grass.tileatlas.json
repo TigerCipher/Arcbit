@@ -4,6 +4,9 @@
   "tile_width": 16,
   "tile_height": 16,
   "tiles": [
+    { "local_id": 262, "flat": true },
+    { "local_id": 271, "flat": true },
+    { "local_id": 307, "flat": true },
     { "local_id": 326, "blocks_light": true },
     { "local_id": 327, "blocks_light": true },
     { "local_id": 332, "blocks_light": true }

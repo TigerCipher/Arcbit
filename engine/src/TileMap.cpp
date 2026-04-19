@@ -272,8 +272,9 @@ bool TileMap::LoadAtlasJson(const u32           baseId, const std::string_view  
     for (const auto& t : j.value("tiles", nlohmann::json::array())) {
         const u32 localId = t.at("local_id").get<u32>();
         TileDef   def{};
-        if (t.contains("solid")) def.Solid = t["solid"].get<bool>();
+        if (t.contains("solid"))        def.Solid       = t["solid"].get<bool>();
         if (t.contains("blocks_light")) def.BlocksLight = t["blocks_light"].get<bool>();
+        if (t.contains("flat"))         def.Flat        = t["flat"].get<bool>();
         if (t.contains("uv_scroll")) {
             def.UVScroll.X = t["uv_scroll"].value("x", 0.0f);
             def.UVScroll.Y = t["uv_scroll"].value("y", 0.0f);

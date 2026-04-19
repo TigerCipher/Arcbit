@@ -223,11 +223,15 @@ namespace
                                                        static_cast<u32>(tileX),
                                                        static_cast<u32>(tileY));
 
-                                                   // Layer sort: Ground = far below Y-sort range, Objects = Y-sorted, Overlay = far above.
+                                                   // Ground = far below Y-sort range, Objects = Y-sorted,
+                                                   // Flat objects = just above ground (always below entities),
+                                                   // Overlay = far above.
                                                    i32 sortLayer = -1000000;
-                                                   if (layer == 1)
-                                                       sortLayer = static_cast<i32>(worldPos.Y + ts * 0.5f);
-                                                   else if (layer == 2)
+                                                   if (layer == 1) {
+                                                       const bool flat = def && def->Flat;
+                                                       sortLayer = flat ? -999999
+                                                                       : static_cast<i32>(worldPos.Y + ts);
+                                                   } else if (layer == 2)
                                                        sortLayer = 1000000;
 
                                                    Sprite s{};

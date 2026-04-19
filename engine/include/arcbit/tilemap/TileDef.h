@@ -29,6 +29,7 @@ struct TileDef
 {
     bool Solid       = false; // blocks pathfinding / collision queries
     bool BlocksLight = false; // casts shadows — independent of Solid
+    bool Flat        = false; // always sorts below entities (sticks, leaves, decals)
 
     // Flip-book animation — cycles through listed frames in order.
     // Uses a per-position phase offset so adjacent tiles don't march in lockstep.
