@@ -7,6 +7,8 @@
 #include <arcbit/core/Log.h>
 #include <arcbit/core/Assert.h>
 
+#include <format>
+
 #include <chrono>
 #include <thread>
 
@@ -40,9 +42,9 @@ Application::Application(const ApplicationConfig& config) : _config(config)
     deviceDesc.NativeWindowHandle = _window->GetNativeHandle();
     deviceDesc.AppName            = config.Title;
     deviceDesc.AppVersion         = 1;
-#ifdef ARCBIT_DEBUG
+    #ifdef ARCBIT_DEBUG
     deviceDesc.EnableValidation = true;
-#endif
+    #endif
     _device = Arcbit_CreateDevice(deviceDesc);
     ARCBIT_ASSERT(_device != nullptr, "Failed to create render device");
     LOG_INFO(Render, "Render device ready");
@@ -76,8 +78,9 @@ RenderDevice& Application::GetDevice()
     return *_device;
 }
 
-u32 Application::GetWindowWidth()  const { return _window->GetWidth(); }
+u32 Application::GetWindowWidth() const { return _window->GetWidth(); }
 u32 Application::GetWindowHeight() const { return _window->GetHeight(); }
+
 Scene& Application::GetScene()
 {
     ARCBIT_ASSERT(_scene != nullptr, "GetScene() called before Run()");
@@ -91,8 +94,7 @@ void Application::ToggleFullscreen()
     Settings::MarkDirty();
 }
 
-Format Application::GetSwapchainFormat() const
-{ return _device->GetSwapchainColorFormat(_swapchain); }
+Format Application::GetSwapchainFormat() const { return _device->GetSwapchainColorFormat(_swapchain); }
 
 // ---------------------------------------------------------------------------
 // Run — the main loop.
@@ -103,13 +105,17 @@ void Application::Run()
     // Register engine system actions with defaults before OnStart so that:
     //   a) settings can rebind them (LoadInputBindings runs after OnStart), and
     //   b) game code cannot accidentally stomp the same ActionID before they exist.
-    _input.RegisterAction(ActionEngineQuit,       "Engine_Quit");
+    _input.RegisterAction(ActionEngineQuit, "Engine_Quit");
     _input.RegisterAction(ActionEngineFullscreen, "Engine_Fullscreen");
-    _input.BindKey(ActionEngineQuit,       Key::Escape);
+    _input.BindKey(ActionEngineQuit, Key::Escape);
     _input.BindKey(ActionEngineFullscreen, Key::F11);
 
     // Create the scene before OnStart so game code can use GetScene() immediately.
     _scene = std::make_unique<Scene>();
+
+    // Load the engine's built-in debug font before game code runs so subclasses
+    // can use it in OnStart if they need to (e.g. preload additional glyphs).
+    _debugFont.Load("assets/fonts/Roboto-Regular.ttf", 24.0f, FontMode::SDF, *_device);
 
     // Give the game a chance to register actions, create GPU resources, etc.
     // Input bindings are loaded from settings AFTER OnStart so that default
@@ -123,7 +129,9 @@ void Application::Run()
     // accumulator fires zero update ticks in a given display frame.
     _window->SetKeyEventCallback([this](i32 sc, bool down) { _input.InjectKeyEvent(sc, down); });
     _window->SetMouseButtonCallback([this](i32 btn, bool down) { _input.InjectMouseButton(btn, down); });
-    _window->SetGamepadButtonCallback([this](u32 which, i32 btn, bool down) { _input.InjectGamepadButton(which, btn, down); });
+    _window->SetGamepadButtonCallback([this](u32 which, i32 btn, bool down) {
+        _input.InjectGamepadButton(which, btn, down);
+    });
 
     // High-resolution wall-clock timer for accurate delta time.
     using Clock    = std::chrono::steady_clock;
@@ -142,8 +150,7 @@ void Application::Run()
 
     LOG_INFO(Engine, "Entering game loop");
 
-    while (_window->PollEvents() && !_shouldQuit)
-    {
+    while (_window->PollEvents() && !_shouldQuit) {
         // Record the frame start time before any work so the FPS limiter can
         // measure the total cost of this frame (including SubmitFrame's back-
         // pressure wait) and sleep only the time that remains.
@@ -162,14 +169,13 @@ void Application::Run()
         prevTime     = frameStart;
 
         accumulator += dt;
-        while (accumulator >= static_cast<f64>(_fixedTimestep))
-        {
+        while (accumulator >= static_cast<f64>(_fixedTimestep)) {
             // ProcessEdges() consumes accumulated key/mouse/gamepad button events
             // and sets JustPressed/JustReleased for this tick. Events are held in
             // the pending sets until ProcessEdges() runs, so they survive frames
             // where the accumulator doesn't reach the threshold.
             _input.ProcessEdges();
-            if (_input.JustPressed(ActionEngineQuit))       _shouldQuit = true;
+            if (_input.JustPressed(ActionEngineQuit)) _shouldQuit = true;
             if (_input.JustPressed(ActionEngineFullscreen)) ToggleFullscreen();
             OnUpdate(_fixedTimestep);
             if (_scene) _scene->Update(_fixedTimestep);
@@ -187,18 +193,31 @@ void Application::Run()
         OnRender(packet);
         if (_scene) _scene->CollectRenderData(packet);
 
+        if (_showDebugOverlay && _debugFont.IsValid()) {
+            const std::string fpsText = std::format("FPS: {:.0f}", _renderStats.FPS);
+            const std::string numSpritesText = std::format("Sprites: {}", _renderStats.SpritesSubmitted);
+            const std::string drawCallsText = std::format("DrawCalls: {}", _renderStats.LegacyDrawCalls);
+            const std::string lightsText = std::format("Lights: {}", _renderStats.LightsActive);
+            
+            DrawText(packet, _debugFont, fpsText, {8.0f, 8.0f}, 2.0f,
+                     Color::Yellow());
+            DrawText(packet, _debugFont, numSpritesText, {8.0f, 48.0f}, 2.0f,
+                     Color::Yellow());
+            DrawText(packet, _debugFont, drawCallsText, {8.0f, 88.0f}, 2.0f,
+                     Color::Yellow());
+            DrawText(packet, _debugFont, lightsText, {8.0f, 128.0f}, 2.0f,
+                     Color::Yellow());
+        }
+
         _renderThread.SubmitFrame(std::move(packet));
 
         // --- FPS counter + render stats --------------------------------------
         // Count completed frames; report once per second alongside the most
         // recent frame's render statistics from the render thread.
         ++fpsFrameCount;
-        if (const f64 fpsElapsed = Duration(Clock::now() - fpsWindowStart).count(); fpsElapsed >= 1.0)
-        {
-            const RenderStats stats = _renderThread.GetStats();
-            LOG_TRACE(Engine, "FPS: {:.1f} | Sprites: {} ({} batches) | DrawCalls: {} | Lights: {}",
-                      static_cast<f64>(fpsFrameCount) / fpsElapsed, stats.SpritesSubmitted, stats.SpriteBatches,
-                      stats.LegacyDrawCalls, stats.LightsActive);
+        if (const f64 fpsElapsed = Duration(Clock::now() - fpsWindowStart).count(); fpsElapsed >= 1.0) {
+            _renderStats            = _renderThread.GetStats();
+            _renderStats.FPS        = static_cast<f32>(static_cast<f64>(fpsFrameCount) / fpsElapsed);
             fpsFrameCount  = 0;
             fpsWindowStart = Clock::now();
         }
@@ -207,8 +226,7 @@ void Application::Run()
         // Checked once per second rather than every frame to avoid the cost
         // of stat()-ing every loaded texture path each tick.
         _hotReloadAccumulator += dt;
-        if (_hotReloadAccumulator >= 1.0)
-        {
+        if (_hotReloadAccumulator >= 1.0) {
             _textures->CheckReloads();
             _hotReloadAccumulator -= 1.0;
         }
@@ -217,8 +235,7 @@ void Application::Run()
         // Only active when VSync is off and a limit is configured.
         // sleep_for is imprecise (~1-2 ms granularity on Windows), which is
         // acceptable here — VSync is the preferred path for exact pacing.
-        if (!Settings::Graphics.VSync && Settings::Graphics.FpsLimit > 0)
-        {
+        if (!Settings::Graphics.VSync && Settings::Graphics.FpsLimit > 0) {
             const f64 targetFrameTime = 1.0 / static_cast<f64>(Settings::Graphics.FpsLimit);
             const f64 frameTime       = Duration(Clock::now() - frameStart).count();
             if (const f64 remaining = targetFrameTime - frameTime; remaining > 0.001)
@@ -240,6 +257,12 @@ void Application::Run()
 
     OnShutdown();
     AudioManager::Shutdown();
+
+    // Destroy the debug font atlas resources before the device goes away.
+    if (_debugFont.IsValid()) {
+        _device->DestroyTexture(_debugFont.GetTexture());
+        _device->DestroySampler(_debugFont.GetSampler());
+    }
 
     // Release all cached textures before the device is destroyed.
     _textures->Clear();

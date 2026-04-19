@@ -54,6 +54,13 @@ struct SpritePushConstants
     u32 LightCount;
 }; // 44 bytes
 
+// Push constants for the SDF text pipeline (sdf.vert).
+// Screen-space only — just the viewport size to map pixels to NDC.
+struct SDFPushConstants
+{
+    f32 ViewportW, ViewportH;
+}; // 8 bytes
+
 // Push constants for the legacy DrawCall (forward) pipeline.
 // Must match ForwardPushConstants layout in forward.vert / forward.frag.
 struct ForwardPushConstants
@@ -206,6 +213,66 @@ void RenderThread::CreateShadowSSBOs()
         ssbo = _device->CreateBuffer(desc);
 }
 
+void RenderThread::CreateSDFPipeline(const Format swapchainFormat)
+{
+    auto vertSpv = LoadShaderFile("shaders/sdf.vert.spv");
+    auto fragSpv = LoadShaderFile("shaders/sdf.frag.spv");
+
+    const ShaderHandle vert = _device->CreateShader(
+        { ShaderStage::Vertex,   vertSpv.data(), static_cast<u32>(vertSpv.size()), "main", "sdf.vert" });
+    const ShaderHandle frag = _device->CreateShader(
+        { ShaderStage::Fragment, fragSpv.data(), static_cast<u32>(fragSpv.size()), "main", "sdf.frag" });
+
+    const VertexAttribute attrs[] = {
+        { 0, 0, Format::RGBA32_Float,  0 },
+        { 1, 0, Format::RGBA32_Float, 16 },
+        { 2, 0, Format::RGBA32_Float, 32 },
+        { 3, 0, Format::RGBA32_Float, 48 },
+    };
+    const VertexBinding bindings[] = {
+        { 0, static_cast<u32>(sizeof(SpriteInstance)), true },
+    };
+
+    PipelineDesc desc{};
+    desc.VertexShader   = vert;
+    desc.FragmentShader = frag;
+    desc.Attributes     = attrs;
+    desc.Bindings       = bindings;
+    desc.CullMode       = CullMode::None;
+    desc.ColorFormat    = swapchainFormat;
+    desc.DepthFormat    = Format::Undefined;
+    desc.UseTextures    = true; // set 0 = font atlas
+    desc.Blend.Enable   = true;
+    desc.Blend.SrcColor = BlendFactor::SrcAlpha;
+    desc.Blend.DstColor = BlendFactor::OneMinusSrcAlpha;
+    desc.Blend.ColorOp  = BlendOp::Add;
+    desc.Blend.SrcAlpha = BlendFactor::One;
+    desc.Blend.DstAlpha = BlendFactor::Zero;
+    desc.Blend.AlphaOp  = BlendOp::Add;
+    desc.DebugName      = "SDFPipeline";
+
+    _sdfPipeline = _device->CreatePipeline(desc);
+    ARCBIT_ASSERT(_sdfPipeline.IsValid(), "RenderThread: failed to create SDF pipeline");
+
+    _device->DestroyShader(vert);
+    _device->DestroyShader(frag);
+}
+
+void RenderThread::CreateSDFInstanceBuffers()
+{
+    static constexpr u32 InitialCapacity = 128;
+    _sdfInstanceBufferCapacity           = InitialCapacity;
+
+    BufferDesc desc{};
+    desc.Size        = InitialCapacity * sizeof(SpriteInstance);
+    desc.Usage       = BufferUsage::Vertex;
+    desc.HostVisible = true;
+    desc.DebugName   = "sdf_instances";
+
+    for (auto& buf : _sdfInstanceBuffers)
+        buf = _device->CreateBuffer(desc);
+}
+
 // ---------------------------------------------------------------------------
 // Lifetime
 // ---------------------------------------------------------------------------
@@ -219,6 +286,8 @@ void RenderThread::Start(RenderDevice* device, const Format swapchainFormat)
     CreateInstanceBuffers();
     CreateLightSSBOs();
     CreateShadowSSBOs();
+    CreateSDFPipeline(swapchainFormat);
+    CreateSDFInstanceBuffers();
 
     _running = true;
     _thread  = std::thread(&RenderThread::Run, this);
@@ -253,6 +322,12 @@ void RenderThread::Stop()
         if (buf.IsValid())
             _device->DestroyBuffer(buf);
 
+    for (auto& buf : _sdfInstanceBuffers)
+        if (buf.IsValid())
+            _device->DestroyBuffer(buf);
+
+    if (_sdfPipeline.IsValid())
+        _device->DestroyPipeline(_sdfPipeline);
     if (_spritePipeline.IsValid())
         _device->DestroyPipeline(_spritePipeline);
     if (_defaultNormalSampler.IsValid())
@@ -270,6 +345,7 @@ void RenderThread::Stop()
 RenderStats RenderThread::GetStats() const
 {
     return {
+        0,
         _statSpritesSubmitted.load(std::memory_order_relaxed),
         _statSpriteBatches.load(std::memory_order_relaxed),
         _statDrawCalls.load(std::memory_order_relaxed),
@@ -646,6 +722,70 @@ void RenderThread::DrawLegacyCalls(const CommandListHandle cmd, const FramePacke
     }
 }
 
+void RenderThread::UploadSDFInstances(const std::vector<const Sprite*>& sorted, const u32 frameSlot)
+{
+    const u32 count = static_cast<u32>(sorted.size());
+    if (count == 0) return;
+
+    if (count > _sdfInstanceBufferCapacity) {
+        _device->WaitIdle();
+        u32 cap = _sdfInstanceBufferCapacity;
+        while (cap < count) cap *= 2;
+        _sdfInstanceBufferCapacity = cap;
+
+        BufferDesc desc{};
+        desc.Size        = cap * sizeof(SpriteInstance);
+        desc.Usage       = BufferUsage::Vertex;
+        desc.HostVisible = true;
+        desc.DebugName   = "sdf_instances";
+        for (auto& buf : _sdfInstanceBuffers) { _device->DestroyBuffer(buf); buf = _device->CreateBuffer(desc); }
+        LOG_INFO(Render, "SDF instance buffer resized to {} quads", cap);
+    }
+
+    std::vector<SpriteInstance> instances;
+    instances.reserve(count);
+    for (const Sprite* s : sorted) {
+        SpriteInstance& inst = instances.emplace_back();
+        inst.PosX   = s->Position.X; inst.PosY  = s->Position.Y;
+        inst.HalfW  = s->Size.X * 0.5f; inst.HalfH = s->Size.Y * 0.5f;
+        inst.U0     = s->UV.U0; inst.V0 = s->UV.V0; inst.U1 = s->UV.U1; inst.V1 = s->UV.V1;
+        inst.TintR  = s->Tint.R; inst.TintG = s->Tint.G; inst.TintB = s->Tint.B; inst.TintA = s->Tint.A;
+        inst.RotCos = 1.0f; inst.RotSin = 0.0f; inst._pad0 = 0.0f; inst._pad1 = 0.0f;
+    }
+    _device->UpdateBuffer(_sdfInstanceBuffers[frameSlot], instances.data(), count * sizeof(SpriteInstance));
+}
+
+void RenderThread::DrawSDFBatches(const CommandListHandle cmd, const std::vector<const Sprite*>& sorted,
+                                  const FramePacket& packet, const u32 frameSlot) const
+{
+    if (sorted.empty()) return;
+
+    _device->BindPipeline(cmd, _sdfPipeline);
+    // SDF text uses full window space — not constrained to the letterbox rect.
+    _device->SetViewport(cmd, 0.0f, 0.0f, static_cast<f32>(packet.Width), static_cast<f32>(packet.Height));
+    _device->SetScissor(cmd, 0, 0, packet.Width, packet.Height);
+
+    SDFPushConstants pc{ static_cast<f32>(packet.Width), static_cast<f32>(packet.Height) };
+    _device->PushConstants(cmd, ShaderStage::Vertex | ShaderStage::Fragment, &pc, sizeof(pc));
+
+    const u32 count      = static_cast<u32>(sorted.size());
+    u32       groupStart = 0;
+    while (groupStart < count) {
+        const Sprite* first    = sorted[groupStart];
+        u32           groupEnd = groupStart + 1;
+        while (groupEnd < count &&
+               sorted[groupEnd]->Texture.Index() == first->Texture.Index() &&
+               sorted[groupEnd]->Sampler.Index() == first->Sampler.Index())
+            ++groupEnd;
+
+        _device->BindTexture(cmd, first->Texture, first->Sampler, 0);
+        _device->BindVertexBuffer(cmd, _sdfInstanceBuffers[frameSlot], 0,
+                                  static_cast<u64>(groupStart) * sizeof(SpriteInstance));
+        _device->Draw(cmd, 6, 0, groupEnd - groupStart, 0);
+        groupStart = groupEnd;
+    }
+}
+
 // ---------------------------------------------------------------------------
 // RenderFrame — orchestrates one frame on the render thread
 // ---------------------------------------------------------------------------
@@ -674,14 +814,17 @@ void RenderThread::RenderFrame(const FramePacket& packet)
 
     const LetterboxRect lb = ComputeLetterbox(corrected);
 
-    const auto sorted = SortSprites(packet.Sprites);
+    const auto sorted    = SortSprites(packet.Sprites);
+    const auto sdfSorted = SortSprites(packet.SDFSprites);
     UploadInstances(sorted, frameSlot);
+    UploadSDFInstances(sdfSorted, frameSlot);
 
     CommandListHandle cmd = _device->BeginCommandList();
     BeginRenderPass(cmd, backbuffer, corrected, lb);
 
     const u32 batchCount = DrawSpriteBatches(cmd, sorted, frameSlot, corrected, lightCount, lb);
     DrawLegacyCalls(cmd, corrected, frameSlot, lightCount, lb);
+    DrawSDFBatches(cmd, sdfSorted, corrected, frameSlot);
 
     _device->EndRendering(cmd);
 

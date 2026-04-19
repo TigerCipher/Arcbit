@@ -4,6 +4,7 @@
 #include <arcbit/core/Math.h>
 #include <arcbit/input/InputTypes.h>
 #include <arcbit/render/RenderThread.h>
+#include <arcbit/render/Font.h>
 #include <arcbit/input/InputManager.h>
 #include <arcbit/assets/TextureManager.h>
 
@@ -11,7 +12,6 @@
 
 namespace Arcbit
 {
-
 class Window; // full type only needed in Application.cpp
 class Scene;  // full type only needed in Application.cpp
 
@@ -90,7 +90,7 @@ public:
 
     // Current window dimensions in physical pixels. Updated each frame on resize.
     // Use these when converting mouse coordinates or computing aspect ratios.
-    [[nodiscard]] u32 GetWindowWidth()  const;
+    [[nodiscard]] u32 GetWindowWidth() const;
     [[nodiscard]] u32 GetWindowHeight() const;
 
     // Toggle between windowed and borderless fullscreen. F11 triggers this
@@ -136,11 +136,17 @@ protected:
     // -----------------------------------------------------------------------
 
     // Background clear color used to pre-fill each FramePacket.
-    Color _clearColor = { 0.05f, 0.05f, 0.15f, 1.0f };
+    Color _clearColor = {0.05f, 0.05f, 0.15f, 1.0f};
 
     // Target rate for OnUpdate calls. Defaults to 60 Hz.
     // Change before Run() is called; modifying mid-loop is not recommended.
     f32 _fixedTimestep = 1.0f / 60.0f;
+
+    // Show or hide the engine's built-in debug overlay (FPS counter).
+    bool _showDebugOverlay = true;
+
+    // The engine's built-in SDF debug font — Roboto loaded at engine startup.
+    [[nodiscard]] const FontAtlas& GetDebugFont() const { return _debugFont; }
 
 private:
     ApplicationConfig _config;
@@ -163,6 +169,9 @@ private:
 
     bool _shouldQuit = false;
 
+    FontAtlas   _debugFont;
+    RenderStats _renderStats{};
+
     std::unique_ptr<Scene>          _scene;
     RenderDevice*                   _device = nullptr;
     std::unique_ptr<TextureManager> _textures;
@@ -174,5 +183,4 @@ private:
     // Accumulates real time to rate-limit hot-reload checks to once per second.
     f64 _hotReloadAccumulator = 0.0;
 };
-
 } // namespace Arcbit

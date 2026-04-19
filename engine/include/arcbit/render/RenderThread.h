@@ -12,8 +12,8 @@
 #include <thread>
 #include <vector>
 
-namespace Arcbit {
-
+namespace Arcbit
+{
 // ---------------------------------------------------------------------------
 // PointLight
 //
@@ -54,8 +54,8 @@ static constexpr u32 MaxShadowLights  = 8;
 // to the light's Radius means no occluder was found in that direction.
 struct ShadowMapData
 {
-    u32 LightIndex;                    // index into FramePacket::Lights[]
-    f32 Distances[ShadowResolution];   // one entry per angle bucket
+    u32 LightIndex;                  // index into FramePacket::Lights[]
+    f32 Distances[ShadowResolution]; // one entry per angle bucket
 };
 
 // ---------------------------------------------------------------------------
@@ -74,15 +74,15 @@ struct ShadowMapData
 // ---------------------------------------------------------------------------
 struct Sprite
 {
-    TextureHandle Texture;                            // albedo / sprite texture (set 0, required)
-    TextureHandle NormalTexture;                      // normal map (set 1); leave invalid for flat-normal fallback
-    SamplerHandle Sampler;                            // filtering / addressing for albedo and normal
+    TextureHandle Texture;       // albedo / sprite texture (set 0, required)
+    TextureHandle NormalTexture; // normal map (set 1); leave invalid for flat-normal fallback
+    SamplerHandle Sampler;       // filtering / addressing for albedo and normal
 
-    Vec2   Position = { 0.0f, 0.0f };                // world-space center in pixels
-    Vec2   Size     = { 64.0f, 64.0f };              // full width × height in pixels
-    UVRect UV       = { 0.0f, 0.0f, 1.0f, 1.0f };   // normalized sub-region; defaults to whole texture
-    Color  Tint     = Color::White();                 // per-sprite RGBA tint multiplied against the albedo
-    f32    Rotation = 0.0f;                           // clockwise rotation in radians around the sprite center
+    Vec2   Position = {0.0f, 0.0f};             // world-space center in pixels
+    Vec2   Size     = {64.0f, 64.0f};           // full width × height in pixels
+    UVRect UV       = {0.0f, 0.0f, 1.0f, 1.0f}; // normalized sub-region; defaults to whole texture
+    Color  Tint     = Color::White();           // per-sprite RGBA tint multiplied against the albedo
+    f32    Rotation = 0.0f;                     // clockwise rotation in radians around the sprite center
 
     // Draw order. Sprites are rendered lower-layer-first (painter's algorithm).
     // Sprites on the same layer with the same texture are batched into one draw.
@@ -99,16 +99,16 @@ struct Sprite
 // ---------------------------------------------------------------------------
 struct DrawCall
 {
-    PipelineHandle Pipeline;        // pipeline to bind (must be a forward-compatible pipeline)
-    TextureHandle  Texture;         // albedo texture (set 0)
-    TextureHandle  NormalTexture;   // normal map (set 1); leave invalid for flat-normal fallback
+    PipelineHandle Pipeline;      // pipeline to bind (must be a forward-compatible pipeline)
+    TextureHandle  Texture;       // albedo texture (set 0)
+    TextureHandle  NormalTexture; // normal map (set 1); leave invalid for flat-normal fallback
     SamplerHandle  Sampler;
     u32            VertexCount = 0;
 
     // NDC-space position and half-size.  (0,0) = screen center; (1,1) = bottom-right.
-    Vec2   Position = { 0.0f, 0.0f };
-    Vec2   Scale    = { 1.0f, 1.0f };
-    UVRect UV       = { 0.0f, 0.0f, 1.0f, 1.0f };
+    Vec2   Position = {0.0f, 0.0f};
+    Vec2   Scale    = {1.0f, 1.0f};
+    UVRect UV       = {0.0f, 0.0f, 1.0f, 1.0f};
 };
 
 // ---------------------------------------------------------------------------
@@ -127,9 +127,9 @@ struct DrawCall
 // ---------------------------------------------------------------------------
 struct FramePacket
 {
-    SwapchainHandle Swapchain;         // which swapchain to present to
-    u32             Width     = 0;     // current backbuffer dimensions in pixels
-    u32             Height    = 0;
+    SwapchainHandle Swapchain;      // which swapchain to present to
+    u32             Width      = 0; // current backbuffer dimensions in pixels
+    u32             Height     = 0;
     Color           ClearColor = Color::Black(); // RGBA clear color for the color attachment
 
     // High-level sprite list. Sorted by layer then grouped by texture; the
@@ -138,7 +138,7 @@ struct FramePacket
 
     // World-space position that maps to the center of the screen.
     // Defaults to (0, 0) — a sprite at world (0, 0) renders at screen center.
-    Vec2 CameraPosition = { 0.0f, 0.0f };
+    Vec2 CameraPosition = {0.0f, 0.0f};
 
     // Zoom multiplier. >1 zooms in (world pixels appear larger), <1 zooms out.
     // Applied by dividing the effective viewport size before the NDC transform.
@@ -151,6 +151,11 @@ struct FramePacket
     // Requires the caller to own the pipeline and specify NDC coordinates.
     std::vector<DrawCall> DrawCalls;
 
+    // Screen-space SDF text quads. Rendered with the SDF pipeline after all sprites.
+    // Position and Size are in window pixels (0,0 = top-left). No camera transform or lighting.
+    // Populated by DrawText() with a FontAtlas in SDF mode.
+    std::vector<Sprite> SDFSprites;
+
     // Dynamic point light list. Uploaded to a per-frame SSBO each tick.
     // The forward+ fragment shader loops over all entries.
     std::vector<PointLight> Lights;
@@ -162,7 +167,7 @@ struct FramePacket
     std::vector<ShadowMapData> ShadowMaps;
 
     // Additive ambient light applied to every pixel regardless of light proximity.
-    Color AmbientColor = Color{ 0.1f, 0.1f, 0.1f, 1.0f };
+    Color AmbientColor = Color{0.1f, 0.1f, 0.1f, 1.0f};
 
     // The game's logical design resolution in world pixels.
     // When set, the NDC transform always exposes exactly this many world pixels
@@ -195,10 +200,11 @@ struct FramePacket
 // ---------------------------------------------------------------------------
 struct RenderStats
 {
-    u32 SpritesSubmitted = 0;  // total sprites in packet.Sprites
-    u32 SpriteBatches    = 0;  // instanced GPU draw calls emitted by the batcher
-    u32 LegacyDrawCalls  = 0;  // GPU draw calls from packet.DrawCalls
-    u32 LightsActive     = 0;  // point lights uploaded to the SSBO
+    f32 FPS              = 0; // Tracked by application game loop
+    u32 SpritesSubmitted = 0; // total sprites in packet.Sprites
+    u32 SpriteBatches    = 0; // instanced GPU draw calls emitted by the batcher
+    u32 LegacyDrawCalls  = 0; // GPU draw calls from packet.DrawCalls
+    u32 LightsActive     = 0; // point lights uploaded to the SSBO
 };
 
 // ---------------------------------------------------------------------------
@@ -257,7 +263,6 @@ public:
     // Safe to call from any thread — values are written with relaxed atomics.
     [[nodiscard]] RenderStats GetStats() const;
 
-
 private:
     // Thread entry point — loops calling RenderFrame until Stop() is called.
     void Run();
@@ -272,13 +277,22 @@ private:
     void CreateInstanceBuffers();
     void CreateLightSSBOs();
     void CreateShadowSSBOs();
+    void CreateSDFPipeline(Format swapchainFormat);
+    void CreateSDFInstanceBuffers();
 
     // ----- RenderFrame() helpers (called once per frame) ---------------------
+
+    void UploadSDFInstances(const std::vector<const Sprite*>& sorted, u32 frameSlot);
+    void DrawSDFBatches(CommandListHandle  cmd, const std::vector<const Sprite*>& sorted,
+                        const FramePacket& packet, u32                            frameSlot) const;
 
     // Pixel-space rect of the rendered game area within the actual framebuffer.
     // When ReferenceSize is set and the window aspect differs from the design
     // aspect, this rect is inset to preserve the design ratio (letterbox / pillarbox).
-    struct LetterboxRect { f32 X = 0, Y = 0, W = 0, H = 0; };
+    struct LetterboxRect
+    {
+        f32 X = 0, Y = 0, W = 0, H = 0;
+    };
 
     // Computes the LetterboxRect for the current packet.
     [[nodiscard]] static LetterboxRect ComputeLetterbox(const FramePacket& packet);
@@ -303,22 +317,21 @@ private:
 
     // Clears the full framebuffer to LetterboxColor, then clears the letterbox
     // rect interior to ClearColor. Draws the LetterboxTexture if one is set.
-    void BeginRenderPass(CommandListHandle cmd, TextureHandle backBuffer,
+    void BeginRenderPass(CommandListHandle  cmd, TextureHandle           backBuffer,
                          const FramePacket& packet, const LetterboxRect& lb) const;
 
     // Binds the sprite pipeline, uploads push constants, and issues one
     // instanced draw call per texture group. Returns the batch count.
-    [[nodiscard]] u32 DrawSpriteBatches(CommandListHandle cmd,
+    [[nodiscard]] u32 DrawSpriteBatches(CommandListHandle                 cmd,
                                         const std::vector<const Sprite*>& sorted,
-                                        u32 frameSlot, const FramePacket& packet,
-                                        u32 lightCount, const LetterboxRect& lb) const;
+                                        u32                               frameSlot, const FramePacket&    packet,
+                                        u32                               lightCount, const LetterboxRect& lb) const;
 
     // Issues legacy DrawCall entries in submission order, after all sprites.
     void DrawLegacyCalls(CommandListHandle cmd, const FramePacket& packet,
-                         u32 frameSlot, u32 lightCount, const LetterboxRect& lb) const;
+                         u32               frameSlot, u32          lightCount, const LetterboxRect& lb) const;
 
 private:
-    
     RenderDevice* _device = nullptr;
     std::thread   _thread;
 
@@ -367,11 +380,20 @@ private:
     // Allocated capacity in each instance buffer (number of sprites).
     u32 _instanceBufferCapacity = 0;
 
+    // ----- SDF text pipeline resources -------------------------------------
+
+    // Pipeline created from sdf.vert + sdf.frag. Screen-space, no lighting.
+    PipelineHandle _sdfPipeline;
+
+    // Separate per-frame instance buffers for SDF text quads.
+    std::array<BufferHandle, FrameSlots> _sdfInstanceBuffers        = {};
+    u32                                  _sdfInstanceBufferCapacity = 0;
+
     // ----- Forward+ light SSBO resources -----------------------------------
 
     // One SSBO per frame-in-flight slot — same cycling rationale as instance buffers.
-    std::array<BufferHandle, FrameSlots> _lightSSBO = {};
-    u32 _lightSSBOCapacity = 0;
+    std::array<BufferHandle, FrameSlots> _lightSSBO         = {};
+    u32                                  _lightSSBOCapacity = 0;
 
     // ----- Shadow map SSBO resources ----------------------------------------
 
@@ -380,5 +402,4 @@ private:
     // the previous frame's data. Never resized — the capacity is fixed at allocation.
     std::array<BufferHandle, FrameSlots> _shadowSSBO = {};
 };
-
 } // namespace Arcbit

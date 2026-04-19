@@ -21,6 +21,7 @@ add_library(arcbit-engine STATIC
     src/AudioManager.cpp
     src/TileAtlas.cpp
     src/TileMap.cpp
+    src/Font.cpp
 )
 
 target_include_directories(arcbit-engine
@@ -37,7 +38,7 @@ target_link_libraries(arcbit-engine
 )
 
 # stb is header-only; vcpkg exposes it as an include directory, not a CMake target.
-# Only TextureManager.cpp needs it (STB_IMAGE_IMPLEMENTATION defined there).
+# TextureManager.cpp uses STB_IMAGE_IMPLEMENTATION; Font.cpp uses STB_TRUETYPE_IMPLEMENTATION.
 target_include_directories(arcbit-engine PRIVATE ${Stb_INCLUDE_DIR})
 
 # Engine does NOT link Vulkan directly — its render interfaces are

@@ -142,7 +142,7 @@ Checkbox list of every major milestone. Check off items as they are completed.
 - [x] Screen shake (trauma-based decay; add trauma on hit, explosion, etc.)
 - [x] World-to-screen and screen-to-world conversion helpers
 - [x] Camera push constant integrated into Sprite Batch renderer
-- [ ] Camera push constant integrated into Tilemap renderer (deferred to Phase 19)
+- [x] Camera push constant integrated into Tilemap renderer (deferred to Phase 19)
 
 ---
 
@@ -162,7 +162,7 @@ define *how* it gets there. Any controller pairs with any style.
 - [ ] `AIMovement` — driven by pathfinding / behavior system; pushes movement requests programmatically (Phase 30)
 
 **Style components** (how the entity actually moves):
-- [ ] `SmoothTileMovement` — lerps from tile center to tile center; plays a walk animation mid-transit; next input queued but not consumed until landing
+- [x] `SmoothTileMovement` — lerps from tile center to tile center; plays a walk animation mid-transit; next input queued but not consumed until landing
 - [ ] `SnapTileMovement` — jumps instantly to the destination tile; no interpolation; useful for puzzle / grid games
 - [x] `FreeMovement` — pixel-perfect world-space velocity; not tile-aligned; intended for live-combat sections where precise sub-tile positioning matters
 
@@ -195,15 +195,15 @@ define *how* it gets there. Any controller pairs with any style.
 ---
 
 ## Phase 19: Tilemap System
-- [ ] Tile definition (ID, solid flag, light-blocking, interactable, custom properties)
-- [ ] Chunk-based map storage (16×16 tile chunks)
-- [ ] Tile atlas texture + UV lookup
-- [ ] Tilemap renderer (batched instanced quads via Phase 14 sprite batcher)
-- [ ] Camera / viewport culling (only submit visible chunks)
-- [ ] Multiple layers (ground, objects, overlay; each layer rendered in order)
+- [x] Tile definition (ID, solid flag, light-blocking, flat, uv_scroll, flip-book animation)
+- [x] Chunk-based map storage (16×16 tile chunks)
+- [x] Tile atlas texture + UV lookup
+- [x] Tilemap renderer (batched instanced quads via Phase 14 sprite batcher)
+- [x] Camera / viewport culling (only submit visible chunks)
+- [x] Multiple layers (ground, objects, overlay; each layer rendered in order with Y-sort and flat-object support)
 - [ ] **Two point light layers** — add `LightLayer` enum to `PointLight`: `World` (affected by tile occlusion) and `Overhead` (bypasses occlusion entirely); overhead lights are used for sunlight, moonlight, magical sky effects, and UI indicators
 - [ ] **Tile occlusion grid** — pack `light-blocking` flags for the visible map area into a GPU texture; updated incrementally when tiles change; uploaded to the sprite shader as a new descriptor binding
-- [ ] **Shadow casting** — for each `World`-layer light, the fragment shader ray-marches from the fragment position toward the light through the occlusion grid; hard shadow on occluder hit; `Overhead` lights skip the march entirely
+- [x] **Shadow casting** — CPU DDA raycaster builds a 1D polar shadow map per light; sampled in the sprite fragment shader with 3-tap PCF; `BlocksLight` tile flag drives occlusion
 - [ ] Soft shadow quality option: configurable penumbra sample count in `project.arcbit` (default: hard shadows; higher counts add a blur fringe for performance/quality tradeoff)
 
 ---

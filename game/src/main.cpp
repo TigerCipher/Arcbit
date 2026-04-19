@@ -49,7 +49,7 @@ constexpr u32 TileTallGrass  = 293; // (17,11)
 // constexpr u32 TileWaterFoam  = 405; // (4,0)
 // constexpr u32 TileWaterFoam  = 406; // (5,0)
 // constexpr u32 TileWaterFoam  = 407; // (6,0)
-constexpr u32 TileWaterLight  = 569; // light_water.png (single tile atlas)
+constexpr u32 TileWaterLight = 569; // light_water.png (single tile atlas)
 // WATER+.png object tiles
 constexpr u32 TileWaterRock  = 509; // (0,9)
 constexpr u32 TileWaterStone = 512; // (3,9)
@@ -391,11 +391,17 @@ private:
         world.AddComponent<SmoothTileMovement>(_playerEntity, SmoothTileMovement{
                                                    .Speed = WalkTileSpeed,
                                                });
-        
+
         world.AddComponent<AudioSource>(_playerEntity, AudioSource{
                                             .Path = "assets/sfx/footsteps.mp3", .Volume = 0.6f,
                                             .Loop = true, .Playing                      = false,
                                         });
+
+        world.AddComponent<LightEmitter>(_playerEntity, LightEmitter{
+                                             .Radius       = 150.0f,
+                                             .Intensity    = 1.5f,
+                                             .CastsShadows = true
+                                         });
     }
 
     Entity MakeShip(const Vec2 pos, const Vec2 vel, const Vec2 bMin, const Vec2 bMax)
@@ -482,13 +488,13 @@ private:
 
     void CreateMouseLight()
     {
-        auto& world                                                  = GetScene().GetWorld();
-        _mouseLightEntity                                            = world.CreateEntity();
-        world.GetComponent<Transform2D>(_mouseLightEntity)->Position = {};
+        auto& world                                     = GetScene().GetWorld();
+        _mouseLightEntity                               = world.CreateEntity();
+        world.GetTransform(_mouseLightEntity)->Position = {};
         world.AddComponent<LightEmitter>(_mouseLightEntity, LightEmitter{
-                                             .Radius       = 150.0f,
+                                             .Radius       = 75.0f,
                                              .Intensity    = 2.0f,
-                                             .CastsShadows = true
+                                             .LightColor   = Color::Cyan()
                                          });
     }
 
@@ -588,10 +594,10 @@ private:
         if (!stm) return;
 
         Vec2 dir = {};
-        if (GetInput().IsPressed(ActionMoveLeft))  dir.X -= 1.0f;
-        if (GetInput().IsPressed(ActionMoveRight))  dir.X += 1.0f;
-        if (GetInput().IsPressed(ActionMoveUp))    dir.Y -= 1.0f;
-        if (GetInput().IsPressed(ActionMoveDown))   dir.Y += 1.0f;
+        if (GetInput().IsPressed(ActionMoveLeft)) dir.X -= 1.0f;
+        if (GetInput().IsPressed(ActionMoveRight)) dir.X += 1.0f;
+        if (GetInput().IsPressed(ActionMoveUp)) dir.Y -= 1.0f;
+        if (GetInput().IsPressed(ActionMoveDown)) dir.Y += 1.0f;
 
         // Prefer cardinal movement — pick the dominant axis to stay tile-aligned.
         if (dir.X != 0.0f && dir.Y != 0.0f)
@@ -605,9 +611,8 @@ private:
                 _playerFacing = (dir.X < 0.0f) ? Facing::Left : Facing::Right;
             else
                 _playerFacing = (dir.Y < 0.0f) ? Facing::Up : Facing::Down;
-        } else {
-            stm->HasQueued = false;
         }
+        else { stm->HasQueued = false; }
 
         const bool isMoving = stm->Progress < 1.0f || moving;
         UpdatePlayerAnimation(isMoving);
@@ -709,16 +714,16 @@ private:
     static constexpr ActionID ActionSprint     = MakeAction("Sprint");
     static constexpr ActionID ActionAttack     = MakeAction("Player_Attack");
 
-    static constexpr f32 ViewportW    = 1920.0f;
-    static constexpr f32 ViewportH    = 1080.0f;
-    static constexpr f32 TileSize     = 64.0f;
-    static constexpr f32 InitialZoom  = 2.0f;
+    static constexpr f32 ViewportW     = 1920.0f;
+    static constexpr f32 ViewportH     = 1080.0f;
+    static constexpr f32 TileSize      = 64.0f;
+    static constexpr f32 InitialZoom   = 2.0f;
     static constexpr f32 WalkTileSpeed = 4.0f;   // tiles/sec for smooth tile movement
-    static constexpr f32 ShipSize     = 128.0f; // 2×2 tiles
-    static constexpr f32 ShipSpeed    = 24.0f;  // ~0.375 tiles/sec
-    static constexpr f32 ShipMaxSpeed = 36.0f;
-    static constexpr f32 BridgeW      = 160.0f; // 40px @ 16 PPU = 2.5 tiles
-    static constexpr f32 BridgeH      = 192.0f; // 48px @ 16 PPU = 3 tiles
+    static constexpr f32 ShipSize      = 128.0f; // 2×2 tiles
+    static constexpr f32 ShipSpeed     = 24.0f;  // ~0.375 tiles/sec
+    static constexpr f32 ShipMaxSpeed  = 36.0f;
+    static constexpr f32 BridgeW       = 160.0f; // 40px @ 16 PPU = 2.5 tiles
+    static constexpr f32 BridgeH       = 192.0f; // 48px @ 16 PPU = 3 tiles
 
     // PirateShip.png: 128×32, 4 × 32×32 sprites (right, left, down, up).
     static constexpr UVRect ShipUVRight = {0.00f, 0.0f, 0.25f, 1.0f};
