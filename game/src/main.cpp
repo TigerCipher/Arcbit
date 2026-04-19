@@ -49,7 +49,7 @@ constexpr u32 TileTallGrass  = 293; // (17,11)
 // constexpr u32 TileWaterFoam  = 405; // (4,0)
 // constexpr u32 TileWaterFoam  = 406; // (5,0)
 // constexpr u32 TileWaterFoam  = 407; // (6,0)
-constexpr u32 TileWaterLight  = 408; // (7,0)
+constexpr u32 TileWaterLight  = 569; // light_water.png (single tile atlas)
 // WATER+.png object tiles
 constexpr u32 TileWaterRock  = 509; // (0,9)
 constexpr u32 TileWaterStone = 512; // (3,9)
@@ -228,6 +228,9 @@ private:
                 tm.LoadAtlasJson(401, "assets/tilemaps/water.tileatlas.json", _sampler, "nearest", GetTextures()),
                 "Failed to load water atlas");
             ARCBIT_ASSERT(
+                tm.LoadAtlasJson(569, "assets/tilemaps/light_water.tileatlas.json", _sampler, "nearest", GetTextures()),
+                "Failed to load light_water atlas");
+            ARCBIT_ASSERT(
                 tm.LoadAtlasJson(601, "assets/tilemaps/floor.tileatlas.json", _linearSampler, "linear", GetTextures()),
                 "Failed to load floor atlas");
 
@@ -239,9 +242,8 @@ private:
             if (!tm.SaveMap("assets/tilemaps/demo.arcmap")) { LOG_WARN(Game, "Failed to save tilemap to disk"); }
         }
 
-        // Always resolve _waterTex from the loaded atlas so CreateWhirlpool has a valid handle
-        // regardless of whether the map was loaded from file or generated.
-        if (const auto* entry = tm.FindAtlas(TileWaterLight))
+        // Always resolve _waterTex from Water+.png (whirlpool frames live there).
+        if (const auto* entry = tm.FindAtlas(401))
             _waterTex = entry->Atlas.GetTexture();
         ARCBIT_ASSERT(_waterTex.IsValid(), "Failed to resolve water atlas texture");
 

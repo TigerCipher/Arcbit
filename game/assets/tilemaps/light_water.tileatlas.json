@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "texture": "assets/textures/light_water.png",
+  "tile_width": 16,
+  "tile_height": 16,
+  "tiles": [
+    { "local_id": 0, "uv_scroll": { "x": 0.08, "y": 0.04 } }
+  ]
+}
