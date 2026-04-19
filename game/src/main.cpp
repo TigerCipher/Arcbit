@@ -127,7 +127,7 @@ protected:
         packet.ReferenceSize = {ViewportW, ViewportH};
         if (_showGrid) SubmitDebugGrid(packet, {ViewportW, ViewportH});
         
-        DrawText(packet, _bitmapFont, "Hello, World!", {100.0f, 100.0f}, 1.0f, Color::Magenta());
+        DrawText(packet, _bitmapFont, "Hello, World!\nThis is a test of a longer string", {100.0f, 100.0f}, 1.0f, Color::Magenta(), 0, TextAlign::Center);
     }
 
     void OnShutdown() override

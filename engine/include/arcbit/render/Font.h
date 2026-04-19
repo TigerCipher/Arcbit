@@ -58,6 +58,13 @@ private:
     f32           _ascent     = 0.0f;
 };
 
+enum class TextAlign
+{
+    Left,    // position.X is the left edge of each line (default)
+    Center,  // position.X is the horizontal center of each line
+    Right,   // position.X is the right edge of each line
+};
+
 // Submit a string as textured quads into the frame packet.
 //
 // Bitmap FontAtlas: position is a world-space coordinate; quads land in
@@ -69,8 +76,12 @@ private:
 //   debug overlays.
 //
 // scale multiplies the baked pixelSize: 1.0 = original size, 2.0 = doubled.
+// align controls horizontal alignment relative to position.X — Left keeps
+//   the default behavior; Center/Right shift each line so it anchors at
+//   position.X rather than starting from it.
 // layer controls draw order within the same packet list.
 void DrawText(FramePacket& packet, const FontAtlas& font, std::string_view text,
-              Vec2 position, f32 scale, Color color, i32 layer = 0);
+              Vec2 position, f32 scale, Color color,
+              i32 layer = 0, TextAlign align = TextAlign::Left);
 
 } // namespace Arcbit

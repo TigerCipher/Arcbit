@@ -153,46 +153,79 @@ const GlyphInfo* FontAtlas::GetGlyph(const u32 codepoint) const
     return it != _glyphs.end() ? &it->second : nullptr;
 }
 
+// Returns the total advance width of a single line (no newlines).
+static f32 MeasureLineWidth(const FontAtlas& font, const std::string_view line, const f32 scale)
+{
+    f32 width = 0.0f;
+    for (const char c : line) {
+        if (c == '\t') {
+            if (const GlyphInfo* sp = font.GetGlyph(' ')) width += sp->Advance * scale * 4.0f;
+            continue;
+        }
+        if (const GlyphInfo* g = font.GetGlyph(static_cast<u32>(c))) width += g->Advance * scale;
+    }
+    return width;
+}
+
+static f32 LineStartX(const f32 anchorX, const f32 lineWidth, const TextAlign align)
+{
+    switch (align) {
+        case TextAlign::Center: return anchorX - lineWidth * 0.5f;
+        case TextAlign::Right:  return anchorX - lineWidth;
+        default:                return anchorX;
+    }
+}
+
 void DrawText(FramePacket& packet, const FontAtlas& font, const std::string_view text,
-              const Vec2 position, const f32 scale, const Color color, const i32 layer)
+              const Vec2 position, const f32 scale, const Color color,
+              const i32 layer, const TextAlign align)
 {
     if (!font.IsValid() || text.empty()) return;
 
-    // Start the cursor at the baseline so position.Y is the top of the line.
-    Vec2 cursor = { position.X, position.Y + font.GetAscent() * scale };
+    const bool       sdf      = (font.GetMode() == FontMode::SDF);
+    const f32        baselineY = position.Y + font.GetAscent() * scale;
+    std::string_view remaining = text;
+    f32              cursorY   = baselineY;
 
-    for (const char c : text) {
-        if (c == '\n') {
-            cursor.X  = position.X;
-            cursor.Y += font.GetLineHeight() * scale;
-            continue;
+    while (true)
+    {
+        const auto       nl     = remaining.find('\n');
+        const auto       line   = remaining.substr(0, nl);
+        const f32        lineW  = (align != TextAlign::Left) ? MeasureLineWidth(font, line, scale) : 0.0f;
+        f32              cursorX = LineStartX(position.X, lineW, align);
+
+        for (const char c : line) {
+            if (c == '\t') {
+                if (const GlyphInfo* sp = font.GetGlyph(' '))
+                    cursorX += sp->Advance * scale * 4.0f;
+                continue;
+            }
+
+            const GlyphInfo* g = font.GetGlyph(static_cast<u32>(c));
+            if (!g) continue;
+            if (g->BitmapSize.X == 0.0f) { cursorX += g->Advance * scale; continue; }
+
+            const Vec2 size    = { g->BitmapSize.X * scale, g->BitmapSize.Y * scale };
+            const Vec2 topLeft = { cursorX + g->Bearing.X * scale, cursorY + g->Bearing.Y * scale };
+
+            Sprite s{};
+            s.Texture  = font.GetTexture();
+            s.Sampler  = font.GetSampler();
+            s.Position = { topLeft.X + size.X * 0.5f, topLeft.Y + size.Y * 0.5f };
+            s.Size     = size;
+            s.UV       = g->UV;
+            s.Tint     = color;
+            s.Layer    = layer;
+
+            if (sdf) packet.SDFSprites.push_back(s);
+            else     packet.Sprites.push_back(s);
+
+            cursorX += g->Advance * scale;
         }
 
-        const GlyphInfo* g = font.GetGlyph(static_cast<u32>(c));
-        if (!g) continue;
-        if (g->BitmapSize.X == 0.0f) {
-            cursor.X += g->Advance * scale;
-            continue;
-        }
-
-        const Vec2 size    = { g->BitmapSize.X * scale, g->BitmapSize.Y * scale };
-        const Vec2 topLeft = { cursor.X + g->Bearing.X * scale, cursor.Y + g->Bearing.Y * scale };
-
-        Sprite s{};
-        s.Texture  = font.GetTexture();
-        s.Sampler  = font.GetSampler();
-        s.Position = { topLeft.X + size.X * 0.5f, topLeft.Y + size.Y * 0.5f };
-        s.Size     = size;
-        s.UV       = g->UV;
-        s.Tint     = color;
-        s.Layer    = layer;
-
-        if (font.GetMode() == FontMode::SDF)
-            packet.SDFSprites.push_back(s);
-        else
-            packet.Sprites.push_back(s);
-
-        cursor.X += g->Advance * scale;
+        if (nl == std::string_view::npos) break;
+        cursorY   += font.GetLineHeight() * scale;
+        remaining  = remaining.substr(nl + 1);
     }
 }
 

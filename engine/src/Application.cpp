@@ -194,18 +194,13 @@ void Application::Run()
         if (_scene) _scene->CollectRenderData(packet);
 
         if (_showDebugOverlay && _debugFont.IsValid()) {
-            const std::string fpsText = std::format("FPS: {:.0f}", _renderStats.FPS);
-            const std::string numSpritesText = std::format("Sprites: {}", _renderStats.SpritesSubmitted);
-            const std::string drawCallsText = std::format("DrawCalls: {}", _renderStats.LegacyDrawCalls);
-            const std::string lightsText = std::format("Lights: {}", _renderStats.LightsActive);
+            const std::string fpsText = std::format("FPS: {:.0f}\nSprites: {}\nDraw Calls: {}\nLights: {}", 
+                _renderStats.FPS, 
+                _renderStats.SpritesSubmitted, 
+                _renderStats.LegacyDrawCalls, 
+                _renderStats.LightsActive);
             
             DrawText(packet, _debugFont, fpsText, {8.0f, 8.0f}, 2.0f,
-                     Color::Yellow());
-            DrawText(packet, _debugFont, numSpritesText, {8.0f, 48.0f}, 2.0f,
-                     Color::Yellow());
-            DrawText(packet, _debugFont, drawCallsText, {8.0f, 88.0f}, 2.0f,
-                     Color::Yellow());
-            DrawText(packet, _debugFont, lightsText, {8.0f, 128.0f}, 2.0f,
                      Color::Yellow());
         }
 
