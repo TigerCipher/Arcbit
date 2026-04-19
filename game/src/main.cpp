@@ -108,6 +108,8 @@ protected:
         RegisterShipAI();
         RegisterWhirlpoolAI();
         CreateMouseLight();
+        
+        _bitmapFont.Load("assets/fonts/Roboto-Regular.ttf", 32.0f, FontMode::Bitmap, GetDevice());
     }
 
     void OnUpdate(const f32 dt) override
@@ -124,6 +126,8 @@ protected:
         packet.AmbientColor  = Color{0.018f, 0.022f, 0.03f, 1.0f};
         packet.ReferenceSize = {ViewportW, ViewportH};
         if (_showGrid) SubmitDebugGrid(packet, {ViewportW, ViewportH});
+        
+        DrawText(packet, _bitmapFont, "Hello, World!", {100.0f, 100.0f}, 1.0f, Color::Magenta());
     }
 
     void OnShutdown() override
@@ -132,6 +136,11 @@ protected:
         GetDevice().DestroySampler(_gridSampler);
         GetDevice().DestroySampler(_linearSampler);
         GetDevice().DestroySampler(_sampler);
+        
+        if (_bitmapFont.IsValid()) {
+            GetDevice().DestroyTexture(_bitmapFont.GetTexture());
+            GetDevice().DestroySampler(_bitmapFont.GetSampler());
+        }
     }
 
 private:
@@ -754,6 +763,8 @@ private:
     TextureHandle _waterTex;
 
     SpriteSheet _playerSheet;
+    
+    FontAtlas _bitmapFont;
 };
 
 int main(int /*argc*/, char* /*argv*/[])

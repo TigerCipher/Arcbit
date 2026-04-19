@@ -30,10 +30,6 @@ set(SHADER_SOURCES
     quad.frag
     forward.vert
     forward.frag
-    sprite.vert
-    sprite.frag
-    sdf.vert
-    sdf.frag
 )
 
 set(SHADER_OUTPUTS)
@@ -72,20 +68,8 @@ add_custom_target(arcbit-assets ALL
 )
 add_dependencies(arcbit-game arcbit-assets)
 
-# ---------------------------------------------------------------------------
-# Engine fonts — copy engine/fonts/ into bin/assets/fonts/ so the runtime
-# can find Roboto-Regular.ttf for the built-in debug overlay.
-# ---------------------------------------------------------------------------
-add_custom_target(arcbit-engine-fonts ALL
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/fonts"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/engine/fonts/Roboto-Regular.ttf"
-        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/fonts/Roboto-Regular.ttf"
-    COMMENT "Copying engine fonts to bin/assets/fonts/"
-    VERBATIM
-)
-add_dependencies(arcbit-game arcbit-engine-fonts)
+# arcbit-engine-shaders and arcbit-engine-fonts are defined in engine/CMakeLists.txt.
+add_dependencies(arcbit-game arcbit-engine-shaders arcbit-engine-fonts)
 
 # Windows: suppress the console window in Release builds.
 if(WIN32)

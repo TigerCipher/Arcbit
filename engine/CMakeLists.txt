@@ -43,3 +43,54 @@ target_include_directories(arcbit-engine PRIVATE ${Stb_INCLUDE_DIR})
 
 # Engine does NOT link Vulkan directly — its render interfaces are
 # graphics-agnostic. Backends link Vulkan; the game links the backend DLL.
+
+# ---------------------------------------------------------------------------
+# Engine shader compilation — sprite and SDF shaders are owned by the engine
+# (loaded by RenderThread) and must ship alongside any game built on Arcbit.
+# ---------------------------------------------------------------------------
+
+if(NOT Vulkan_GLSLC_EXECUTABLE)
+    find_program(Vulkan_GLSLC_EXECUTABLE glslc HINTS "$ENV{VULKAN_SDK}/Bin" REQUIRED)
+endif()
+
+set(ENGINE_SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
+set(ENGINE_SHADER_OUT_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders")
+
+set(ENGINE_SHADER_SOURCES
+    sprite.vert
+    sprite.frag
+    sdf.vert
+    sdf.frag
+)
+
+set(ENGINE_SHADER_OUTPUTS)
+foreach(SRC IN LISTS ENGINE_SHADER_SOURCES)
+    set(IN_FILE  "${ENGINE_SHADER_SRC_DIR}/${SRC}")
+    set(OUT_FILE "${ENGINE_SHADER_OUT_DIR}/${SRC}.spv")
+
+    add_custom_command(
+        OUTPUT  "${OUT_FILE}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${ENGINE_SHADER_OUT_DIR}"
+        COMMAND "${Vulkan_GLSLC_EXECUTABLE}" "${IN_FILE}" -o "${OUT_FILE}"
+        DEPENDS "${IN_FILE}"
+        COMMENT "Compiling engine shader: ${SRC}"
+        VERBATIM
+    )
+    list(APPEND ENGINE_SHADER_OUTPUTS "${OUT_FILE}")
+endforeach()
+
+add_custom_target(arcbit-engine-shaders ALL DEPENDS ${ENGINE_SHADER_OUTPUTS})
+
+# ---------------------------------------------------------------------------
+# Engine fonts — Roboto-Regular.ttf ships with the engine for the debug overlay.
+# ---------------------------------------------------------------------------
+
+add_custom_target(arcbit-engine-fonts ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/fonts"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/fonts/Roboto-Regular.ttf"
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/fonts/Roboto-Regular.ttf"
+    COMMENT "Copying engine fonts to bin/assets/fonts/"
+    VERBATIM
+)
