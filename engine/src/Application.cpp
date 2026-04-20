@@ -105,9 +105,7 @@ void Application::Run()
     // Register engine system actions with defaults before OnStart so that:
     //   a) settings can rebind them (LoadInputBindings runs after OnStart), and
     //   b) game code cannot accidentally stomp the same ActionID before they exist.
-    _input.RegisterAction(ActionEngineQuit, "Engine_Quit");
     _input.RegisterAction(ActionEngineFullscreen, "Engine_Fullscreen");
-    _input.BindKey(ActionEngineQuit, Key::Escape);
     _input.BindKey(ActionEngineFullscreen, Key::F11);
 
     // Create the scene before OnStart so game code can use GetScene() immediately.
@@ -155,7 +153,7 @@ void Application::Run()
 
     LOG_INFO(Engine, "Entering game loop");
 
-    while (_window->PollEvents() && !_shouldQuit) {
+    while (_window->PollEvents()) {
         // Record the frame start time before any work so the FPS limiter can
         // measure the total cost of this frame (including SubmitFrame's back-
         // pressure wait) and sleep only the time that remains.
@@ -180,7 +178,6 @@ void Application::Run()
             // the pending sets until ProcessEdges() runs, so they survive frames
             // where the accumulator doesn't reach the threshold.
             _input.ProcessEdges();
-            if (_input.JustPressed(ActionEngineQuit)) _shouldQuit = true;
             if (_input.JustPressed(ActionEngineFullscreen)) ToggleFullscreen();
             OnUpdate(_fixedTimestep);
             if (_scene) _scene->Update(_fixedTimestep);

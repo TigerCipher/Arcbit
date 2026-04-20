@@ -42,6 +42,10 @@ public:
     [[nodiscard]] UIScreen* Top()   const;
     [[nodiscard]] bool      Empty() const { return _stack.empty(); }
 
+    // Returns true if any screen on the stack has BlocksInput = true.
+    // Use this in OnUpdate to suppress game input when a menu is open.
+    [[nodiscard]] bool HasBlockingScreen() const;
+
     void Update(f32 dt, Vec2 windowSize, const InputManager& input);
     void CollectRenderData(FramePacket& packet, Vec2 windowSize);
 

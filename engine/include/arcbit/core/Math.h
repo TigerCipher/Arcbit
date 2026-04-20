@@ -230,5 +230,11 @@ struct Color
     static constexpr Color CornflowerBlue() { return { 0.392f, 0.584f, 0.929f, 1.0f }; }
     static constexpr Color NaturalLight() { return { 1.0f, 0.8f, 0.4f, 1.0f }; }
     static constexpr Color WarmOrange() { return NaturalLight(); } // alias for natural light
+    static constexpr Color NaturalDark() { return { 0.1f, 0.1f, 0.1f, 1.0f }; }
+    static constexpr Color Gray() { return { 0.5f, 0.5f, 0.5f, 1.0f }; }
+    static constexpr Color LightGray() { return { 0.75f, 0.75f, 0.75f, 1.0f }; }
+    static constexpr Color DarkGray() { return { 0.25f, 0.25f, 0.25f, 1.0f }; }
+    static constexpr Color Gold() { return { 1.0f, 0.84f, 0.0f, 1.0f }; }
+    static constexpr Color WarmGold() {return {1.0f, 0.9f, 0.6f, 1.0f}; }
 };
 } // namespace Arcbit

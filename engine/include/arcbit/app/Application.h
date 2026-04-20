@@ -168,10 +168,8 @@ private:
     //
     // So declaration order is the reverse of that (destructor fires bottom-up):
     // Engine system actions — registered before OnStart so settings can rebind them.
-    static constexpr ActionID ActionEngineQuit       = MakeAction("Engine_Quit");
     static constexpr ActionID ActionEngineFullscreen = MakeAction("Engine_Fullscreen");
 
-    bool _shouldQuit = false;
 
     FontAtlas   _debugFont;
     RenderStats _renderStats{};

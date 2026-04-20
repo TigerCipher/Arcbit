@@ -184,7 +184,10 @@ void Button::OnCollect(FramePacket&        packet, const UIRect          myRect,
              whiteTex, whiteSampler, BgLayer(*this));
 
     if (skin.Font && !Text.empty()) {
-        const Color col = WithAlpha(Enabled ? skin.TextNormal : skin.TextDisabled, effectiveOpacity);
+        const Color base = (TextColor.A > 0.0f) ? TextColor
+                                             : (Enabled ? skin.TextLabel : skin.TextDisabled);
+        const Color col  = WithAlpha(base, effectiveOpacity);
+        
         const Vec2  pos = {
             myRect.X + myRect.W * 0.5f, myRect.Y + myRect.H * 0.5f
             - skin.Font->GetAscent() * skin.FontScale * 0.5f

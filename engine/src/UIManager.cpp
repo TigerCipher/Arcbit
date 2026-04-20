@@ -65,6 +65,13 @@ UIScreen* UIManager::Top() const
     return _stack.empty() ? nullptr : _stack.back().get();
 }
 
+bool UIManager::HasBlockingScreen() const
+{
+    for (const auto& s : _stack)
+        if (s->BlocksInput) return true;
+    return false;
+}
+
 // ---------------------------------------------------------------------------
 // Update
 // ---------------------------------------------------------------------------

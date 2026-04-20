@@ -7,8 +7,8 @@
 #include <functional>
 #include <string>
 
-namespace Arcbit {
-
+namespace Arcbit
+{
 // ---------------------------------------------------------------------------
 // Panel — solid background rect; can hold any child widgets.
 // ---------------------------------------------------------------------------
@@ -18,7 +18,7 @@ public:
     bool DrawBorder = false;
 
 protected:
-    void OnCollect(FramePacket& packet, UIRect myRect, f32 effectiveOpacity,
+    void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
                    TextureHandle whiteTex, SamplerHandle whiteSampler,
                    const UISkin& skin) override;
 };
@@ -31,12 +31,12 @@ class Label : public UIWidget
 public:
     std::string Text;
     TextAlign   Align      = TextAlign::Left;
-    bool        WordWrap   = false;  // wrap lines at word boundaries to fit myRect.W
+    bool        WordWrap   = false; // wrap lines at word boundaries to fit myRect.W
     bool        AutoCenter = false;
-    Color       TextColor  = {0, 0, 0, 0};  // {0,0,0,0} = use skin default
+    Color       TextColor  = {0, 0, 0, 0}; // {0,0,0,0} = use skin default
 
 protected:
-    void OnCollect(FramePacket& packet, UIRect myRect, f32 effectiveOpacity,
+    void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
                    TextureHandle whiteTex, SamplerHandle whiteSampler,
                    const UISkin& skin) override;
 };
@@ -47,15 +47,16 @@ protected:
 class Button : public UIWidget
 {
 public:
-    std::string            Text;
-    std::function<void()>  OnClick;
+    std::string           Text;
+    std::function<void()> OnClick;
+    Color                 TextColor = {0, 0, 0, 0}; // {0,0,0,0} = use skin default
 
 protected:
-    void OnUpdate(f32 dt, UIRect myRect, Vec2 mousePos,
-                  bool mouseDown, bool mouseJustDown, bool mouseJustUp,
+    void OnUpdate(f32   dt, UIRect      myRect, Vec2        mousePos,
+                  bool  mouseDown, bool mouseJustDown, bool mouseJustUp,
                   bool& consumed) override;
 
-    void OnCollect(FramePacket& packet, UIRect myRect, f32 effectiveOpacity,
+    void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
                    TextureHandle whiteTex, SamplerHandle whiteSampler,
                    const UISkin& skin) override;
 
@@ -79,7 +80,7 @@ public:
     UVRect        UV   = {0, 0, 1, 1};
 
 protected:
-    void OnCollect(FramePacket& packet, UIRect myRect, f32 effectiveOpacity,
+    void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
                    TextureHandle whiteTex, SamplerHandle whiteSampler,
                    const UISkin& skin) override;
 };
@@ -110,7 +111,7 @@ public:
     f32 PixelBottom = 16.0f;
 
 protected:
-    void OnCollect(FramePacket& packet, UIRect myRect, f32 effectiveOpacity,
+    void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
                    TextureHandle whiteTex, SamplerHandle whiteSampler,
                    const UISkin& skin) override;
 };
@@ -121,13 +122,12 @@ protected:
 class ProgressBar : public UIWidget
 {
 public:
-    f32   Value      = 0.5f;  // 0 = empty, 1 = full
-    Color FillColor  = {0, 0, 0, 0};  // {0,0,0,0} = use skin default
+    f32   Value     = 0.5f;         // 0 = empty, 1 = full
+    Color FillColor = {0, 0, 0, 0}; // {0,0,0,0} = use skin default
 
 protected:
-    void OnCollect(FramePacket& packet, UIRect myRect, f32 effectiveOpacity,
+    void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
                    TextureHandle whiteTex, SamplerHandle whiteSampler,
                    const UISkin& skin) override;
 };
-
 } // namespace Arcbit

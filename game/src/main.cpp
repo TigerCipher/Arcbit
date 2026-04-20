@@ -85,6 +85,76 @@ struct ShipInfo
     Vec2   boundsMax;
 };
 
+class DialogWindow : public UIScreen
+{
+public:
+    // Set these before Push()-ing.
+    TextureHandle         PanelTexture;
+    SamplerHandle         PanelSampler;
+    std::function<void()> OnConfirm;
+    std::function<void()> OnCancel;
+
+    DialogWindow() { BlocksInput = true; }
+
+    void OnEnter() override
+    {
+        _roots.clear();
+
+        auto* panel         = Add<NineSlice>();
+        panel->Size         = {340.0f, 260.0f};
+        panel->Anchor       = {0.5f, 0.5f};
+        panel->Pivot        = {0.5f, 0.5f};
+        panel->Texture      = PanelTexture;
+        panel->Sampler      = PanelSampler;
+        panel->UVBorderLeft = panel->UVBorderRight  = 0.125f;
+        panel->UVBorderTop  = panel->UVBorderBottom = 0.125f;
+        panel->PixelLeft    = panel->PixelRight     = 12.0f;
+        panel->PixelTop     = panel->PixelBottom    = 12.0f;
+        panel->ZOrder       = 0;
+
+        auto* title      = panel->AddChild<Label>();
+        title->Text      = "Confirm Action";
+        title->Align     = TextAlign::Center;
+        title->Size      = {340.0f, 30.0f};
+        title->Anchor    = {0.5f, 0.0f};
+        title->Pivot     = {0.5f, 0.0f};
+        title->Offset    = {0.0f, 16.0f};
+        title->ZOrder    = 1;
+        title->TextColor = Color::DarkGray();
+
+        auto* desc      = panel->AddChild<Label>();
+        desc->Text      = "Some confirmation window dialog thing that goes on long enough to need wrapping across multiple lines.";
+        desc->WordWrap  = true;
+        desc->Size      = {300.0f, 80.0f};
+        desc->Anchor    = {0.5f, 0.0f};
+        desc->Pivot     = {0.5f, 0.0f};
+        desc->Offset    = {0.0f, 56.0f};
+        desc->ZOrder    = 1;
+        desc->TextColor = Color::Gray();
+
+        auto* btnConfirm      = panel->AddChild<Button>();
+        btnConfirm->Text      = "Confirm";
+        btnConfirm->Size      = {120.0f, 36.0f};
+        btnConfirm->Anchor    = {0.5f, 1.0f};
+        btnConfirm->Pivot     = {1.0f, 1.0f};
+        btnConfirm->Offset    = {-10.0f, -20.0f};
+        btnConfirm->Focusable = true;
+        btnConfirm->ZOrder    = 1;
+        btnConfirm->OnClick   = OnConfirm; // copy the std::function by value
+
+        auto* btnCancel      = panel->AddChild<Button>();
+        btnCancel->Text      = "Cancel";
+        btnCancel->Size      = {120.0f, 36.0f};
+        btnCancel->Anchor    = {0.5f, 1.0f};
+        btnCancel->Pivot     = {0.0f, 1.0f};
+        btnCancel->Offset    = {10.0f, -20.0f};
+        btnCancel->Focusable = true;
+        btnCancel->ZOrder    = 1;
+        btnCancel->TextColor = Color::Red();
+        btnCancel->OnClick   = OnCancel;
+    }
+};
+
 // ---------------------------------------------------------------------------
 // ArcbitGame
 // ---------------------------------------------------------------------------
@@ -113,77 +183,27 @@ protected:
 
         _bitmapFont.Load("assets/fonts/Roboto-Regular.ttf", 32.0f, FontMode::Bitmap, GetDevice());
 
+        // Preload UI textures here so they are uploaded before the render thread
+        // starts processing frames — loading during OnUpdate causes a queue race.
         _uiPanelTex = GetTextures().Load("assets/textures/ui_panel.png");
-
-        // Screen fades in automatically (TransitionSpeed defaults to 3.0f)
-        auto screen = std::make_unique<UIScreen>();
-
-        // NineSlice panel — 64×64 source, ~8px border each side → UV = 8/64 = 0.125
-        auto* panel         = screen->Add<NineSlice>();
-        panel->Size         = {340.0f, 260.0f};
-        panel->Anchor       = {0.5f, 0.5f};
-        panel->Pivot        = {0.5f, 0.5f};
-        panel->Texture      = _uiPanelTex;
-        panel->Sampler      = _linearSampler;
-        panel->UVBorderLeft = panel->UVBorderRight  = 0.125f;
-        panel->UVBorderTop  = panel->UVBorderBottom = 0.125f;
-        panel->PixelLeft    = panel->PixelRight     = 12.0f;
-        panel->PixelTop     = panel->PixelBottom    = 12.0f;
-        panel->ZOrder       = 0;
-
-        // Title
-        auto* title   = panel->AddChild<Label>();
-        title->Text   = "Confirm Action";
-        title->Align  = TextAlign::Center;
-        title->Size   = {340.0f, 30.0f}; // matches panel width so Center alignment works
-        title->Anchor = {0.5f, 0.0f};
-        title->Pivot  = {0.5f, 0.0f};
-        title->Offset = {0.0f, 16.0f};
-        title->ZOrder = 1;
-        title->TextColor = Color::Black();
-
-        // Word-wrapped body — key: Size.X must match available width, not the default 100px
-        auto* desc = panel->AddChild<Label>();
-        desc->Text =
-                "Some confirmation window dialog thing that goes on long enough to need wrapping across multiple lines.";
-        desc->WordWrap = true;
-        desc->Size     = {300.0f, 80.0f}; // 300 = panel (340) minus 20px padding each side
-        desc->Anchor   = {0.5f, 0.0f};
-        desc->Pivot    = {0.5f, 0.0f};
-        desc->Offset   = {0.0f, 56.0f};
-        desc->ZOrder   = 1;
-        desc->TextColor = Color::Black();
-
-        // Two focusable buttons — Tab / arrow keys / D-pad cycle between them
-        // Enter / gamepad-A fires OnClick on the focused one
-        auto* btnConfirm      = panel->AddChild<Button>();
-        btnConfirm->Text      = "Confirm";
-        btnConfirm->Size      = {120.0f, 36.0f};
-        btnConfirm->Anchor    = {0.5f, 1.0f};
-        btnConfirm->Pivot     = {1.0f, 1.0f};
-        btnConfirm->Offset    = {-10.0f, -20.0f};
-        btnConfirm->Focusable = true;
-        btnConfirm->ZOrder    = 1;
-        btnConfirm->OnClick   = [&] {
-            LOG_INFO(Game, "Confirmed!");
-            _showDebugOverlay = !_showDebugOverlay;
-        };
-
-        auto* btnCancel      = panel->AddChild<Button>();
-        btnCancel->Text      = "Cancel";
-        btnCancel->Size      = {120.0f, 36.0f};
-        btnCancel->Anchor    = {0.5f, 1.0f};
-        btnCancel->Pivot     = {0.0f, 1.0f};
-        btnCancel->Offset    = {10.0f, -20.0f};
-        btnCancel->Focusable = true;
-        btnCancel->ZOrder    = 1;
-        btnCancel->OnClick   = [this] { GetUI().Pop(); };
-
-        GetUI().Push(std::move(screen));
     }
 
     void OnUpdate(const f32 dt) override
     {
+        if (GetInput().JustPressed(ShowDialog)) {
+            if (GetUI().HasBlockingScreen()) {
+                GetUI().Pop();
+            } else {
+                auto dlg          = std::make_unique<DialogWindow>();
+                dlg->PanelTexture = _uiPanelTex;
+                dlg->PanelSampler = _linearSampler;
+                dlg->OnConfirm    = [this] { _showDebugOverlay = !_showDebugOverlay; };
+                dlg->OnCancel     = [this] { GetUI().Pop(); };
+                GetUI().Push(std::move(dlg));
+            }
+        }
+        if (GetUI().HasBlockingScreen()) return;
+
         if (GetInput().JustPressed(ActionToggleGrid)) _showGrid = !_showGrid;
         if (GetInput().JustPressed(ActionInteract)) GetScene().GetCamera().AddTrauma(0.6f);
         if (GetInput().JustPressed(ActionAttack) && !_isAttacking) _isAttacking = true;
@@ -229,6 +249,7 @@ private:
         GetInput().RegisterAction(ActionInteract, "Interact");
         GetInput().RegisterAction(ActionSprint, "Sprint");
         GetInput().RegisterAction(ActionAttack, "Player_Attack");
+        GetInput().RegisterAction(ShowDialog, "Show_Dialog");
 
         GetInput().BindKey(ActionToggleGrid, Key::G);
         GetInput().BindKey(ActionMoveLeft, Key::A);
@@ -243,6 +264,7 @@ private:
         GetInput().BindKey(ActionInteract, Key::Enter);
         GetInput().BindKey(ActionSprint, Key::LeftShift);
         GetInput().BindKey(ActionAttack, Key::Space);
+        GetInput().BindKey(ShowDialog, Key::F1);
 
         GetInput().BindGamepadButton(ActionInteract, GamepadButton::South);
         GetInput().BindGamepadButton(ActionSprint, GamepadButton::RightShoulder);
@@ -793,6 +815,7 @@ private:
     static constexpr ActionID ActionInteract   = MakeAction("Interact");
     static constexpr ActionID ActionSprint     = MakeAction("Sprint");
     static constexpr ActionID ActionAttack     = MakeAction("Player_Attack");
+    static constexpr ActionID ShowDialog       = MakeAction("Show_Dialog");
 
     static constexpr f32 ViewportW     = 1920.0f;
     static constexpr f32 ViewportH     = 1080.0f;

@@ -28,6 +28,10 @@ public:
     // Rate at which transition opacity changes (units/second). 0 = instant.
     f32 TransitionSpeed = 3.0f;
 
+    // When true, UIManager::HasBlockingScreen() returns true while this screen
+    // is on the stack. Use for pause menus / dialogs; leave false for HUDs.
+    bool BlocksInput = false;
+
     // Add a root-level widget. Returns raw ptr; ownership stays here.
     template<typename T, typename... Args>
     T* Add(Args&&... args)
