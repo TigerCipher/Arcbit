@@ -113,6 +113,9 @@ public:
     // pipelines match the actual surface format chosen by the driver.
     [[nodiscard]] Format GetSwapchainFormat() const;
 
+    // Frames per second measured by the application loop (smoothed).
+    [[nodiscard]] f32 GetFPS() const { return _renderStats.FPS; }
+
 protected:
     // -----------------------------------------------------------------------
     // Game hooks — override these in your Application subclass.

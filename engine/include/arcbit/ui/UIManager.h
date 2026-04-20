@@ -33,7 +33,14 @@ public:
     // Registers navigation actions and binds their default keys.
     void Init(const RenderThread& rt, const FontAtlas& font, InputManager& input);
 
-    void SetSkin(const UISkin& skin) { _skin = skin; }
+    // Preserves the current font pointer when the incoming skin has none,
+    // since JSON skins cannot serialize FontAtlas pointers.
+    void SetSkin(const UISkin& skin)
+    {
+        const FontAtlas* prev = _skin.Font;
+        _skin = skin;
+        if (!_skin.Font) _skin.Font = prev;
+    }
     [[nodiscard]] const UISkin& GetSkin() const { return _skin; }
 
     void Push(std::unique_ptr<UIScreen> screen);

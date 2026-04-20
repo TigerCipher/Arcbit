@@ -9,6 +9,7 @@
 namespace Arcbit {
 
 struct FramePacket;
+class  InputManager;
 
 // ---------------------------------------------------------------------------
 // UIScreen — a full-screen root widget container.
@@ -24,6 +25,10 @@ public:
 
     virtual void OnEnter() {}
     virtual void OnExit()  {}
+
+    // Called once per game tick before widget UpdateTree.
+    // Override in screens that need direct input access (e.g. InputRebindScreen).
+    virtual void OnTick(f32 /*dt*/, const InputManager& /*input*/) {}
 
     // Rate at which transition opacity changes (units/second). 0 = instant.
     f32 TransitionSpeed = 3.0f;
@@ -43,7 +48,7 @@ public:
     }
 
     void Update(f32 dt, UIRect screenRect, Vec2 mousePos,
-                bool mouseDown, bool mouseJustDown, bool mouseJustUp);
+                bool mouseDown, bool mouseJustDown, bool mouseJustUp, f32 scrollDelta = 0.0f);
 
     void Collect(FramePacket& packet, UIRect screenRect, const UISkin& skin,
                  TextureHandle whiteTex, SamplerHandle whiteSampler);

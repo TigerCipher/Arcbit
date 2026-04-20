@@ -23,7 +23,7 @@ UIRect UIWidget::ComputeRect(const UIRect parent) const
 
 void UIWidget::UpdateTree(const f32  dt, const UIRect      parent, const Vec2        mousePos,
                           const bool mouseDown, const bool mouseJustDown, const bool mouseJustUp,
-                          bool&      consumed)
+                          bool&      consumed, const f32 scrollDelta)
 {
     if (!Visible) return;
 
@@ -37,7 +37,7 @@ void UIWidget::UpdateTree(const f32  dt, const UIRect      parent, const Vec2   
               [](const UIWidget* a, const UIWidget* b) { return a->ZOrder > b->ZOrder; });
 
     for (UIWidget* child : sorted)
-        child->UpdateTree(dt, myRect, mousePos, mouseDown, mouseJustDown, mouseJustUp, consumed);
+        child->UpdateTree(dt, myRect, mousePos, mouseDown, mouseJustDown, mouseJustUp, consumed, scrollDelta);
 
     if (Enabled)
         OnUpdate(dt, myRect, mousePos, mouseDown, mouseJustDown, mouseJustUp, consumed);

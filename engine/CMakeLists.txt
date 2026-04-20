@@ -26,6 +26,10 @@ add_library(arcbit-engine STATIC
     src/UIScreen.cpp
     src/Widgets.cpp
     src/UIManager.cpp
+    src/UISkin.cpp
+    src/HudScreen.cpp
+    src/PauseMenuScreen.cpp
+    src/InputRebindScreen.cpp
 )
 
 target_include_directories(arcbit-engine

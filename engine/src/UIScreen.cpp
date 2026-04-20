@@ -10,7 +10,8 @@ namespace Arcbit {
 // ---------------------------------------------------------------------------
 
 void UIScreen::Update(const f32 dt, const UIRect screenRect, const Vec2 mousePos,
-                      const bool mouseDown, const bool mouseJustDown, const bool mouseJustUp)
+                      const bool mouseDown, const bool mouseJustDown, const bool mouseJustUp,
+                      const f32 scrollDelta)
 {
     if (!_visible) return;
 
@@ -22,7 +23,7 @@ void UIScreen::Update(const f32 dt, const UIRect screenRect, const Vec2 mousePos
 
     bool consumed = false;
     for (UIWidget* w : sorted)
-        w->UpdateTree(dt, screenRect, mousePos, mouseDown, mouseJustDown, mouseJustUp, consumed);
+        w->UpdateTree(dt, screenRect, mousePos, mouseDown, mouseJustDown, mouseJustUp, consumed, scrollDelta);
 }
 
 void UIScreen::Collect(FramePacket& packet, const UIRect screenRect, const UISkin& skin,

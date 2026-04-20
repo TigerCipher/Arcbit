@@ -15,7 +15,8 @@ namespace Arcbit
 class Panel : public UIWidget
 {
 public:
-    bool DrawBorder = false;
+    bool  DrawBorder      = false;
+    Color BackgroundColor = {0, 0, 0, 0}; // overrides skin.PanelBg when alpha > 0
 
 protected:
     void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
@@ -129,5 +130,46 @@ protected:
     void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
                    TextureHandle whiteTex, SamplerHandle whiteSampler,
                    const UISkin& skin) override;
+};
+
+// ---------------------------------------------------------------------------
+// ScrollPanel — clipped container with a scrollable content area.
+//
+// Children are positioned in a content rect that scrolls vertically.
+// A scrollbar on the right side appears when ContentHeight > the panel height.
+// Set ContentHeight to the total height of all children before pushing.
+// ---------------------------------------------------------------------------
+class ScrollPanel : public UIWidget
+{
+public:
+    f32 ContentHeight  = 0.0f; // total logical height of all children; set by the caller
+    f32 ScrollOffset   = 0.0f; // current scroll position in pixels (clamped on use)
+    f32 ScrollbarWidth = 6.0f; // width of the scrollbar gutter in pixels
+
+protected:
+    void UpdateTree(f32   dt, UIRect      parent, Vec2        mousePos,
+                    bool  mouseDown, bool mouseJustDown, bool mouseJustUp,
+                    bool& consumed, f32 scrollDelta = 0.0f) override;
+
+    void CollectTree(FramePacket&  packet, UIRect          parent, f32 parentOpacity,
+                     TextureHandle whiteTex, SamplerHandle whiteSampler,
+                     const UISkin& skin) override;
+
+    void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
+                   TextureHandle whiteTex, SamplerHandle whiteSampler,
+                   const UISkin& skin) override;
+
+private:
+    bool _dragging        = false;
+    bool _thumbHovered    = false;
+    f32  _dragStartY      = 0.0f;
+    f32  _dragStartOffset = 0.0f;
+    bool _needsScrollbar  = false; // set in CollectTree / UpdateTree before OnCollect
+
+    [[nodiscard]] f32 MaxScroll(f32 panelH) const
+    {
+        return std::max(0.0f, ContentHeight - panelH);
+    }
+    [[nodiscard]] UIRect ThumbRect(UIRect track, f32 panelH) const;
 };
 } // namespace Arcbit

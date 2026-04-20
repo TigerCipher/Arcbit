@@ -194,6 +194,98 @@ f32 NormalizeAxis(const i16 raw)
 } // anonymous namespace
 
 // ---------------------------------------------------------------------------
+// Display helpers (static, no SDL headers needed in the header)
+// ---------------------------------------------------------------------------
+
+std::string_view InputManager::KeyToString(const Key key)
+{
+    switch (key)
+    {
+        case Key::A: return "A"; case Key::B: return "B"; case Key::C: return "C";
+        case Key::D: return "D"; case Key::E: return "E"; case Key::F: return "F";
+        case Key::G: return "G"; case Key::H: return "H"; case Key::I: return "I";
+        case Key::J: return "J"; case Key::K: return "K"; case Key::L: return "L";
+        case Key::M: return "M"; case Key::N: return "N"; case Key::O: return "O";
+        case Key::P: return "P"; case Key::Q: return "Q"; case Key::R: return "R";
+        case Key::S: return "S"; case Key::T: return "T"; case Key::U: return "U";
+        case Key::V: return "V"; case Key::W: return "W"; case Key::X: return "X";
+        case Key::Y: return "Y"; case Key::Z: return "Z";
+        case Key::Num0: return "0"; case Key::Num1: return "1"; case Key::Num2: return "2";
+        case Key::Num3: return "3"; case Key::Num4: return "4"; case Key::Num5: return "5";
+        case Key::Num6: return "6"; case Key::Num7: return "7"; case Key::Num8: return "8";
+        case Key::Num9: return "9";
+        case Key::F1:  return "F1";  case Key::F2:  return "F2";  case Key::F3:  return "F3";
+        case Key::F4:  return "F4";  case Key::F5:  return "F5";  case Key::F6:  return "F6";
+        case Key::F7:  return "F7";  case Key::F8:  return "F8";  case Key::F9:  return "F9";
+        case Key::F10: return "F10"; case Key::F11: return "F11"; case Key::F12: return "F12";
+        case Key::Left:  return "Left";  case Key::Right: return "Right";
+        case Key::Up:    return "Up";    case Key::Down:  return "Down";
+        case Key::Home:  return "Home";  case Key::End:   return "End";
+        case Key::PageUp:   return "PgUp"; case Key::PageDown: return "PgDn";
+        case Key::Insert:   return "Ins";  case Key::Delete:   return "Del";
+        case Key::LeftShift:  return "LShift";  case Key::RightShift: return "RShift";
+        case Key::LeftCtrl:   return "LCtrl";   case Key::RightCtrl:  return "RCtrl";
+        case Key::LeftAlt:    return "LAlt";     case Key::RightAlt:   return "RAlt";
+        case Key::LeftSuper:  return "LSuper";   case Key::RightSuper: return "RSuper";
+        case Key::Space:     return "Space";  case Key::Enter:     return "Enter";
+        case Key::Escape:    return "Escape"; case Key::Tab:       return "Tab";
+        case Key::Backspace: return "Bksp";   case Key::CapsLock:  return "Caps";
+        case Key::Comma:     return ",";      case Key::Period:    return ".";
+        case Key::Slash:     return "/";      case Key::Backslash: return "\\";
+        case Key::Semicolon: return ";";      case Key::Apostrophe:return "'";
+        case Key::Grave:     return "`";      case Key::Minus:     return "-";
+        case Key::Equals:    return "=";
+        case Key::Kp0: return "Kp0"; case Key::Kp1: return "Kp1"; case Key::Kp2: return "Kp2";
+        case Key::Kp3: return "Kp3"; case Key::Kp4: return "Kp4"; case Key::Kp5: return "Kp5";
+        case Key::Kp6: return "Kp6"; case Key::Kp7: return "Kp7"; case Key::Kp8: return "Kp8";
+        case Key::Kp9: return "Kp9"; case Key::KpPlus: return "Kp+"; case Key::KpMinus: return "Kp-";
+        case Key::KpMultiply: return "Kp*"; case Key::KpDivide: return "Kp/";
+        case Key::KpEnter: return "KpEnter"; case Key::KpPeriod: return "Kp.";
+        default: return "---";
+    }
+}
+
+std::string InputManager::BindingToString(const Binding& b)
+{
+    switch (b.BindingType)
+    {
+        case Binding::Type::Key:
+            return std::string(KeyToString(b.BoundKey));
+        case Binding::Type::MouseButton:
+            switch (b.BoundMouse) {
+                case MouseButton::Left:   return "LMB";
+                case MouseButton::Right:  return "RMB";
+                case MouseButton::Middle: return "MMB";
+                default: return "Mouse?";
+            }
+        case Binding::Type::GamepadButton:
+            switch (b.BoundButton) {
+                case GamepadButton::South:         return "Pad A";
+                case GamepadButton::East:          return "Pad B";
+                case GamepadButton::West:          return "Pad X";
+                case GamepadButton::North:         return "Pad Y";
+                case GamepadButton::LeftShoulder:  return "LB";
+                case GamepadButton::RightShoulder: return "RB";
+                case GamepadButton::DPadUp:        return "D-Up";
+                case GamepadButton::DPadDown:      return "D-Dn";
+                case GamepadButton::DPadLeft:      return "D-Lt";
+                case GamepadButton::DPadRight:     return "D-Rt";
+                case GamepadButton::Start:         return "Start";
+                default: return "Pad?";
+            }
+        case Binding::Type::GamepadAxis:
+            switch (b.BoundAxis) {
+                case GamepadAxis::LeftX:  return "LS-X";
+                case GamepadAxis::LeftY:  return "LS-Y";
+                case GamepadAxis::RightX: return "RS-X";
+                case GamepadAxis::RightY: return "RS-Y";
+                default: return "Axis?";
+            }
+        default: return "---";
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Lifetime
 // ---------------------------------------------------------------------------
 
@@ -210,10 +302,14 @@ InputManager::~InputManager()
 // Registration
 // ---------------------------------------------------------------------------
 
-void InputManager::RegisterAction(const ActionID action, const std::string_view name)
+void InputManager::RegisterAction(const ActionID action, const std::string_view name,
+                                   const std::string_view displayName,
+                                   const std::string_view category)
 {
-    auto& entry = GetOrCreate(action);
-    entry.Name  = std::string(name);
+    auto& entry       = GetOrCreate(action);
+    entry.Name        = std::string(name);
+    entry.DisplayName = std::string(displayName.empty() ? name : displayName);
+    entry.Category    = std::string(category);
 }
 
 // ---------------------------------------------------------------------------
@@ -364,6 +460,46 @@ void InputManager::ProcessEdges()
     for (const i32 btn : _pendingMouseDown) _mouseJustDownMask |= SDL_BUTTON_MASK(btn);
     for (const i32 btn : _pendingMouseUp)   _mouseJustUpMask   |= SDL_BUTTON_MASK(btn);
 
+    // Capture the first mouse button pressed this tick for the rebind screen.
+    _anyJustPressedMouseButton = MouseButton::Count;
+    if (!_pendingMouseDown.empty()) {
+        const i32 sdlBtn = *_pendingMouseDown.begin();
+        for (u32 i = 0; i < static_cast<u32>(MouseButton::Count); ++i) {
+            if (ToSDLMouseButton(static_cast<MouseButton>(i)) == sdlBtn) {
+                _anyJustPressedMouseButton = static_cast<MouseButton>(i);
+                break;
+            }
+        }
+    }
+
+    // Publish accumulated scroll delta for this tick, then reset the accumulator.
+    _scrollDelta        = _pendingScrollDelta;
+    _pendingScrollDelta = 0.0f;
+
+    // Capture the first raw key-down this tick for the rebind screen.
+    _anyJustPressedKey = Key::Unknown;
+    if (!_pendingKeyDown.empty()) {
+        const SDL_Scancode sc = static_cast<SDL_Scancode>(*_pendingKeyDown.begin());
+        for (u32 i = 0; i < static_cast<u32>(Key::Count); ++i) {
+            if (ToScancode(static_cast<Key>(i)) == sc) {
+                _anyJustPressedKey = static_cast<Key>(i);
+                break;
+            }
+        }
+    }
+
+    // Capture the first gamepad button pressed this tick for the rebind screen.
+    _anyJustPressedGamepadButton = GamepadButton::Count;
+    if (!_pendingGamepadDown.empty()) {
+        const i32 sdlBtn = _pendingGamepadDown.front().Button;
+        for (u32 i = 0; i < static_cast<u32>(GamepadButton::Count); ++i) {
+            if (static_cast<i32>(ToSDLGamepadButton(static_cast<GamepadButton>(i))) == sdlBtn) {
+                _anyJustPressedGamepadButton = static_cast<GamepadButton>(i);
+                break;
+            }
+        }
+    }
+
     for (auto& entry : _actions | std::views::values)
     {
         bool anyJustPressed  = false;
@@ -462,6 +598,59 @@ std::string_view InputManager::GetActionName(const ActionID action) const
 {
     const auto it = _actions.find(action);
     return it != _actions.end() ? std::string_view(it->second.Name) : std::string_view{};
+}
+
+std::string_view InputManager::GetActionDisplayName(const ActionID action) const
+{
+    const auto it = _actions.find(action);
+    return it != _actions.end() ? std::string_view(it->second.DisplayName) : std::string_view{};
+}
+
+std::string_view InputManager::GetActionCategory(const ActionID action) const
+{
+    const auto it = _actions.find(action);
+    return it != _actions.end() ? std::string_view(it->second.Category) : std::string_view{};
+}
+
+void InputManager::UnbindKey(const Key key)
+{
+    for (auto& [id, entry] : _actions)
+        std::erase_if(entry.Bindings, [key](const Binding& b) {
+            return b.BindingType == Binding::Type::Key && b.BoundKey == key;
+        });
+}
+
+void InputManager::ClearKBMBindings(const ActionID action)
+{
+    if (const auto it = _actions.find(action); it != _actions.end())
+        std::erase_if(it->second.Bindings, [](const Binding& b) {
+            return b.BindingType == Binding::Type::Key ||
+                   b.BindingType == Binding::Type::MouseButton;
+        });
+}
+
+void InputManager::ClearGamepadBindings(const ActionID action)
+{
+    if (const auto it = _actions.find(action); it != _actions.end())
+        std::erase_if(it->second.Bindings, [](const Binding& b) {
+            return b.BindingType == Binding::Type::GamepadButton;
+        });
+}
+
+void InputManager::UnbindMouseButton(const MouseButton button)
+{
+    for (auto& [id, entry] : _actions)
+        std::erase_if(entry.Bindings, [button](const Binding& b) {
+            return b.BindingType == Binding::Type::MouseButton && b.BoundMouse == button;
+        });
+}
+
+void InputManager::UnbindGamepadButton(const GamepadButton button)
+{
+    for (auto& [id, entry] : _actions)
+        std::erase_if(entry.Bindings, [button](const Binding& b) {
+            return b.BindingType == Binding::Type::GamepadButton && b.BoundButton == button;
+        });
 }
 
 const std::vector<Binding>& InputManager::GetBindings(const ActionID action) const

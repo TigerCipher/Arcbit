@@ -10,7 +10,11 @@
 #include <arcbit/render/RenderTypes.h>
 #include <arcbit/scene/Scene.h>
 #include <arcbit/tilemap/TileMap.h>
+#include <arcbit/ui/HudScreen.h>
+#include <arcbit/ui/InputRebindScreen.h>
+#include <arcbit/ui/PauseMenuScreen.h>
 #include <arcbit/ui/UIScreen.h>
+#include <arcbit/ui/UISkin.h>
 #include <arcbit/ui/Widgets.h>
 
 #include <cmath>
@@ -85,76 +89,6 @@ struct ShipInfo
     Vec2   boundsMax;
 };
 
-class DialogWindow : public UIScreen
-{
-public:
-    // Set these before Push()-ing.
-    TextureHandle         PanelTexture;
-    SamplerHandle         PanelSampler;
-    std::function<void()> OnConfirm;
-    std::function<void()> OnCancel;
-
-    DialogWindow() { BlocksInput = true; }
-
-    void OnEnter() override
-    {
-        _roots.clear();
-
-        auto* panel         = Add<NineSlice>();
-        panel->Size         = {340.0f, 260.0f};
-        panel->Anchor       = {0.5f, 0.5f};
-        panel->Pivot        = {0.5f, 0.5f};
-        panel->Texture      = PanelTexture;
-        panel->Sampler      = PanelSampler;
-        panel->UVBorderLeft = panel->UVBorderRight  = 0.125f;
-        panel->UVBorderTop  = panel->UVBorderBottom = 0.125f;
-        panel->PixelLeft    = panel->PixelRight     = 12.0f;
-        panel->PixelTop     = panel->PixelBottom    = 12.0f;
-        panel->ZOrder       = 0;
-
-        auto* title      = panel->AddChild<Label>();
-        title->Text      = "Confirm Action";
-        title->Align     = TextAlign::Center;
-        title->Size      = {340.0f, 30.0f};
-        title->Anchor    = {0.5f, 0.0f};
-        title->Pivot     = {0.5f, 0.0f};
-        title->Offset    = {0.0f, 16.0f};
-        title->ZOrder    = 1;
-        title->TextColor = Color::DarkGray();
-
-        auto* desc      = panel->AddChild<Label>();
-        desc->Text      = "Some confirmation window dialog thing that goes on long enough to need wrapping across multiple lines.";
-        desc->WordWrap  = true;
-        desc->Size      = {300.0f, 80.0f};
-        desc->Anchor    = {0.5f, 0.0f};
-        desc->Pivot     = {0.5f, 0.0f};
-        desc->Offset    = {0.0f, 56.0f};
-        desc->ZOrder    = 1;
-        desc->TextColor = Color::Gray();
-
-        auto* btnConfirm      = panel->AddChild<Button>();
-        btnConfirm->Text      = "Confirm";
-        btnConfirm->Size      = {120.0f, 36.0f};
-        btnConfirm->Anchor    = {0.5f, 1.0f};
-        btnConfirm->Pivot     = {1.0f, 1.0f};
-        btnConfirm->Offset    = {-10.0f, -20.0f};
-        btnConfirm->Focusable = true;
-        btnConfirm->ZOrder    = 1;
-        btnConfirm->OnClick   = OnConfirm; // copy the std::function by value
-
-        auto* btnCancel      = panel->AddChild<Button>();
-        btnCancel->Text      = "Cancel";
-        btnCancel->Size      = {120.0f, 36.0f};
-        btnCancel->Anchor    = {0.5f, 1.0f};
-        btnCancel->Pivot     = {0.0f, 1.0f};
-        btnCancel->Offset    = {10.0f, -20.0f};
-        btnCancel->Focusable = true;
-        btnCancel->ZOrder    = 1;
-        btnCancel->TextColor = Color::Red();
-        btnCancel->OnClick   = OnCancel;
-    }
-};
-
 // ---------------------------------------------------------------------------
 // ArcbitGame
 // ---------------------------------------------------------------------------
@@ -169,6 +103,7 @@ protected:
     {
         GetScene().GetConfig().TileSize = TileSize;
         GetScene().GetCamera().Zoom     = InitialZoom;
+        _showDebugOverlay               = false; // FPS shown in HUD instead
 
         RegisterInputActions();
         CreateSamplers();
@@ -183,25 +118,19 @@ protected:
 
         _bitmapFont.Load("assets/fonts/Roboto-Regular.ttf", 32.0f, FontMode::Bitmap, GetDevice());
 
-        // Preload UI textures here so they are uploaded before the render thread
-        // starts processing frames — loading during OnUpdate causes a queue race.
+        // Preload UI textures before the render thread starts (loading in OnUpdate races the queue).
         _uiPanelTex = GetTextures().Load("assets/textures/ui_panel.png");
+
+        InitScreens();
     }
 
     void OnUpdate(const f32 dt) override
     {
-        if (GetInput().JustPressed(ShowDialog)) {
-            if (GetUI().HasBlockingScreen()) {
-                GetUI().Pop();
-            } else {
-                auto dlg          = std::make_unique<DialogWindow>();
-                dlg->PanelTexture = _uiPanelTex;
-                dlg->PanelSampler = _linearSampler;
-                dlg->OnConfirm    = [this] { _showDebugOverlay = !_showDebugOverlay; };
-                dlg->OnCancel     = [this] { GetUI().Pop(); };
-                GetUI().Push(std::move(dlg));
-            }
-        }
+        UpdateHud(dt);
+
+        if (GetInput().JustPressed(ActionPause) && !GetUI().HasBlockingScreen())
+            ShowPauseMenu();
+
         if (GetUI().HasBlockingScreen()) return;
 
         if (GetInput().JustPressed(ActionToggleGrid)) _showGrid = !_showGrid;
@@ -241,15 +170,15 @@ private:
 
     void RegisterInputActions()
     {
-        GetInput().RegisterAction(ActionToggleGrid, "Debug_ToggleGrid");
-        GetInput().RegisterAction(ActionMoveLeft, "Move_Left");
-        GetInput().RegisterAction(ActionMoveRight, "Move_Right");
-        GetInput().RegisterAction(ActionMoveUp, "Move_Up");
-        GetInput().RegisterAction(ActionMoveDown, "Move_Down");
-        GetInput().RegisterAction(ActionInteract, "Interact");
-        GetInput().RegisterAction(ActionSprint, "Sprint");
-        GetInput().RegisterAction(ActionAttack, "Player_Attack");
-        GetInput().RegisterAction(ShowDialog, "Show_Dialog");
+        GetInput().RegisterAction(ActionToggleGrid, "Debug_ToggleGrid", "Toggle Grid",  "Debug");
+        GetInput().RegisterAction(ActionMoveLeft,   "Move_Left",        "Move Left",    "Movement");
+        GetInput().RegisterAction(ActionMoveRight,  "Move_Right",       "Move Right",   "Movement");
+        GetInput().RegisterAction(ActionMoveUp,     "Move_Up",          "Move Up",      "Movement");
+        GetInput().RegisterAction(ActionMoveDown,   "Move_Down",        "Move Down",    "Movement");
+        GetInput().RegisterAction(ActionInteract,   "Interact",         "Interact",     "Gameplay");
+        GetInput().RegisterAction(ActionSprint,     "Sprint",           "Sprint",       "Gameplay");
+        GetInput().RegisterAction(ActionAttack,     "Player_Attack",    "Attack",       "Gameplay");
+        GetInput().RegisterAction(ActionPause,      "Pause",            "Pause",        "System");
 
         GetInput().BindKey(ActionToggleGrid, Key::G);
         GetInput().BindKey(ActionMoveLeft, Key::A);
@@ -264,7 +193,8 @@ private:
         GetInput().BindKey(ActionInteract, Key::Enter);
         GetInput().BindKey(ActionSprint, Key::LeftShift);
         GetInput().BindKey(ActionAttack, Key::Space);
-        GetInput().BindKey(ShowDialog, Key::F1);
+        GetInput().BindKey(ActionPause, Key::Escape);
+        GetInput().BindKey(ActionPause, Key::F1);
 
         GetInput().BindGamepadButton(ActionInteract, GamepadButton::South);
         GetInput().BindGamepadButton(ActionSprint, GamepadButton::RightShoulder);
@@ -806,6 +736,52 @@ private:
         }
     }
 
+    // -----------------------------------------------------------------------
+    // UI screens
+    // -----------------------------------------------------------------------
+
+    void InitScreens()
+    {
+        GetUI().SetSkin(UISkin::LoadFromFile("assets/skins/default.skin.json"));
+
+        auto hud = std::make_unique<HudScreen>();
+        _hud = hud.get();
+        GetUI().Push(std::move(hud));
+
+        // Enable FPS label after Push so the widget pointer is valid.
+        _hud->GetFpsLabel()->Visible = true;
+    }
+
+    void UpdateHud(const f32 dt)
+    {
+        if (!_hud) return;
+        _simTime += dt;
+
+        // HP: slow 8-second oscillation between ~10% and 100%.
+        _hud->GetHealthBar()->Value = 0.55f + 0.45f * std::sin(_simTime * 0.785f);
+        // MP: slightly faster 12-second cycle, offset phase.
+        _hud->GetManaBar()->Value   = 0.425f + 0.375f * std::sin(_simTime * 0.524f + 1.0f);
+
+        _hud->GetFpsLabel()->Text = std::format("FPS: {:.0f}", GetFPS());
+    }
+
+    void ShowPauseMenu()
+    {
+        auto pause      = std::make_unique<PauseMenuScreen>();
+        pause->OnResume   = [this] { GetUI().Pop(); };
+        pause->OnQuit     = [this] { std::exit(0); };
+        pause->OnSettings = [this] { ShowInputRebind(); };
+        GetUI().Push(std::move(pause));
+    }
+
+    void ShowInputRebind()
+    {
+        auto rebind    = std::make_unique<InputRebindScreen>();
+        rebind->Input  = &GetInput();
+        rebind->OnBack = [this] { GetUI().Pop(); };
+        GetUI().Push(std::move(rebind));
+    }
+
 private:
     static constexpr ActionID ActionToggleGrid = MakeAction("Debug_ToggleGrid");
     static constexpr ActionID ActionMoveLeft   = MakeAction("Move_Left");
@@ -814,8 +790,8 @@ private:
     static constexpr ActionID ActionMoveDown   = MakeAction("Move_Down");
     static constexpr ActionID ActionInteract   = MakeAction("Interact");
     static constexpr ActionID ActionSprint     = MakeAction("Sprint");
-    static constexpr ActionID ActionAttack     = MakeAction("Player_Attack");
-    static constexpr ActionID ShowDialog       = MakeAction("Show_Dialog");
+    static constexpr ActionID ActionAttack = MakeAction("Player_Attack");
+    static constexpr ActionID ActionPause  = MakeAction("Pause");
 
     static constexpr f32 ViewportW     = 1920.0f;
     static constexpr f32 ViewportH     = 1080.0f;
@@ -859,7 +835,11 @@ private:
 
     SpriteSheet _playerSheet;
 
-    FontAtlas _bitmapFont;
+    FontAtlas  _bitmapFont;
+    HudScreen* _hud     = nullptr; // raw; owned by UIManager
+
+    // Simulated HP/MP for demo — oscillate via sine so the bars visibly animate.
+    f32 _simTime = 0.0f;
 };
 
 int main(int /*argc*/, char* /*argv*/[])

@@ -3,13 +3,16 @@
 #include <arcbit/core/Math.h>
 #include <arcbit/render/Font.h>
 
+#include <string_view>
+
 namespace Arcbit {
 
 // Shared visual theme passed to every widget during collect.
-// All colors are RGBA (0-1 range).
+// All colors are RGBA (0-1 range). Load from JSON with LoadFromFile().
 struct UISkin
 {
-    const FontAtlas* Font = nullptr;  // must be set before any widget collects
+    const FontAtlas* Font = nullptr; // must be set after loading; not serialized
+    f32 FontScale = 1.0f;
 
     // Panel
     Color PanelBg          = { 0.10f, 0.10f, 0.12f, 0.90f };
@@ -30,8 +33,27 @@ struct UISkin
     Color ProgressBg       = { 0.15f, 0.15f, 0.15f, 1.00f };
     Color ProgressFill     = { 0.20f, 0.65f, 0.25f, 1.00f };
 
-    // Font rendering scale (1.0 = baked pixel size).
-    f32 FontScale          = 1.0f;
+    // Scroll panel
+    Color ScrollTrack        = { 0.08f, 0.08f, 0.10f, 1.00f };
+    Color ScrollThumb        = { 0.30f, 0.30f, 0.38f, 1.00f };
+    Color ScrollThumbHovered = { 0.45f, 0.45f, 0.55f, 1.00f };
+
+    // Accent — used for focused/listening states (e.g. rebind screen row)
+    Color AccentColor      = { 0.38f, 0.60f, 0.90f, 1.00f };
+
+    // Per-screen layer base set by UIManager based on stack index.
+    // Ensures sprites from screens higher in the stack always sort above lower ones.
+    i32 ScreenLayerBase = 0;
+
+    // Load from a JSON file. Returns Default() if the file cannot be opened or parsed.
+    // Does not set Font — assign that separately after loading.
+    [[nodiscard]] static UISkin LoadFromFile(std::string_view path);
+
+    // Returns a skin with the default values above.
+    [[nodiscard]] static UISkin Default() { return {}; }
+
+    // Write to JSON. Returns false on failure.
+    bool SaveToFile(std::string_view path) const;
 };
 
 } // namespace Arcbit

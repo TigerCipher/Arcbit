@@ -596,6 +596,24 @@ std::vector<const Sprite*> RenderThread::SortSprites(const std::vector<Sprite>& 
     return sorted;
 }
 
+std::vector<const Sprite*> RenderThread::SortUISprites(const std::vector<Sprite>& sprites)
+{
+    std::vector<const Sprite*> sorted;
+    sorted.reserve(sprites.size());
+    for (const Sprite& s : sprites) sorted.push_back(&s);
+
+    std::ranges::stable_sort(sorted, [](const Sprite* a, const Sprite* b) {
+        if (a->Layer      != b->Layer)      return a->Layer      < b->Layer;
+        if (a->ClipIndex  != b->ClipIndex)  return a->ClipIndex  < b->ClipIndex;
+        if (a->Texture.Index() != b->Texture.Index())
+            return a->Texture.Index() < b->Texture.Index();
+        if (a->Sampler.Index() != b->Sampler.Index())
+            return a->Sampler.Index() < b->Sampler.Index();
+        return static_cast<int>(a->SDFMode) < static_cast<int>(b->SDFMode);
+    });
+    return sorted;
+}
+
 void RenderThread::UploadInstances(const std::vector<const Sprite*>& sorted, const u32 frameSlot)
 {
     const u32 spriteCount = static_cast<u32>(sorted.size());
@@ -916,21 +934,38 @@ void RenderThread::DrawUIBatches(const CommandListHandle cmd, const std::vector<
 
     _device->BindPipeline(cmd, _uiPipeline);
     _device->SetViewport(cmd, 0.0f, 0.0f, static_cast<f32>(packet.Width), static_cast<f32>(packet.Height));
-    _device->SetScissor(cmd, 0, 0, packet.Width, packet.Height);
 
     SDFPushConstants pc{ static_cast<f32>(packet.Width), static_cast<f32>(packet.Height) };
     _device->PushConstants(cmd, ShaderStage::Vertex | ShaderStage::Fragment, &pc, sizeof(pc));
 
-    const u32 count      = static_cast<u32>(sorted.size());
-    u32       groupStart = 0;
+    u16 activeClip = 0xFFFF; // sentinel — force scissor set on first batch
+    const u32 count = static_cast<u32>(sorted.size());
+    u32 groupStart  = 0;
+
     while (groupStart < count) {
         const Sprite* first    = sorted[groupStart];
         u32           groupEnd = groupStart + 1;
         while (groupEnd < count &&
-               sorted[groupEnd]->Texture.Index() == first->Texture.Index() &&
-               sorted[groupEnd]->Sampler.Index() == first->Sampler.Index() &&
-               sorted[groupEnd]->SDFMode          == first->SDFMode)
+               sorted[groupEnd]->Texture.Index()  == first->Texture.Index() &&
+               sorted[groupEnd]->Sampler.Index()  == first->Sampler.Index() &&
+               sorted[groupEnd]->SDFMode           == first->SDFMode        &&
+               sorted[groupEnd]->ClipIndex         == first->ClipIndex)
             ++groupEnd;
+
+        // Apply scissor rect when ClipIndex changes.
+        if (first->ClipIndex != activeClip) {
+            activeClip = first->ClipIndex;
+            if (activeClip == 0 || activeClip > static_cast<u16>(packet.UIClipRects.size())) {
+                _device->SetScissor(cmd, 0, 0, packet.Width, packet.Height);
+            } else {
+                const UIRect& cr = packet.UIClipRects[activeClip - 1]; // 1-based
+                const i32 cx = static_cast<i32>(cr.X);
+                const i32 cy = static_cast<i32>(cr.Y);
+                const u32 cw = static_cast<u32>(std::max(0.0f, cr.W));
+                const u32 ch = static_cast<u32>(std::max(0.0f, cr.H));
+                _device->SetScissor(cmd, cx, cy, cw, ch);
+            }
+        }
 
         _device->BindTexture(cmd, first->Texture, first->Sampler, 0);
         _device->BindVertexBuffer(cmd, _uiInstanceBuffers[frameSlot], 0,
@@ -970,7 +1005,7 @@ void RenderThread::RenderFrame(const FramePacket& packet)
 
     const auto sorted    = SortSprites(packet.Sprites);
     const auto sdfSorted = SortSprites(packet.SDFSprites);
-    const auto uiSorted  = SortSprites(packet.UISprites);
+    const auto uiSorted  = SortUISprites(packet.UISprites);
     UploadInstances(sorted, frameSlot);
     UploadSDFInstances(sdfSorted, frameSlot);
     UploadUIInstances(uiSorted, frameSlot);

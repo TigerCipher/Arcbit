@@ -3,6 +3,7 @@
 #include <arcbit/core/Types.h>
 #include <arcbit/core/Math.h>
 #include <arcbit/render/RenderHandle.h>
+#include <arcbit/ui/UIRect.h>
 
 #include <functional>
 #include <memory>
@@ -12,16 +13,6 @@ namespace Arcbit
 {
 struct FramePacket;
 struct UISkin;
-
-// ---------------------------------------------------------------------------
-// UIRect — axis-aligned screen-space rect in pixels (top-left origin).
-// ---------------------------------------------------------------------------
-struct UIRect
-{
-    f32 X = 0, Y = 0, W = 0, H = 0;
-
-    [[nodiscard]] bool Contains(const Vec2 p) const { return p.X >= X && p.X < X + W && p.Y >= Y && p.Y < Y + H; }
-};
 
 // Base layer offset for all UI quads.  Each widget ZOrder level uses 4
 // sublayers: 0=background, 1=fill/foreground, 2=text, 3=reserved.
@@ -92,6 +83,16 @@ public:
         _children.push_back(std::move(child));
         return ptr;
     }
+    
+    // Tree traversal — virtual so ScrollPanel and other containers can override
+    // child iteration to apply scroll offsets and clip rect registration.
+    virtual void UpdateTree(f32   dt, UIRect      parent, Vec2        mousePos,
+                            bool  mouseDown, bool mouseJustDown, bool mouseJustUp,
+                            bool& consumed, f32 scrollDelta = 0.0f);
+
+    virtual void CollectTree(FramePacket&  packet, UIRect          parent, f32 parentOpacity,
+                             TextureHandle whiteTex, SamplerHandle whiteSampler,
+                             const UISkin& skin);
 
 protected:
     // Called once per frame. Override to update interactive state.
@@ -121,13 +122,5 @@ protected:
 
 private:
     friend class UIScreen;
-
-    void UpdateTree(f32   dt, UIRect      parent, Vec2        mousePos,
-                    bool  mouseDown, bool mouseJustDown, bool mouseJustUp,
-                    bool& consumed);
-
-    void CollectTree(FramePacket&  packet, UIRect          parent, f32 parentOpacity,
-                     TextureHandle whiteTex, SamplerHandle whiteSampler,
-                     const UISkin& skin);
 };
 } // namespace Arcbit

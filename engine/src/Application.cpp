@@ -135,6 +135,7 @@ void Application::Run()
     _window->SetGamepadButtonCallback([this](u32 which, i32 btn, bool down) {
         _input.InjectGamepadButton(which, btn, down);
     });
+    _window->SetScrollCallback([this](f32 delta) { _input.InjectMouseScroll(delta); });
 
     // High-resolution wall-clock timer for accurate delta time.
     using Clock    = std::chrono::steady_clock;

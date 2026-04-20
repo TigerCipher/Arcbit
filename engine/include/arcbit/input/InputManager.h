@@ -76,7 +76,9 @@ public:
     // work without names, but the settings screen needs them to display and
     // save bindings.
     // -----------------------------------------------------------------------
-    void RegisterAction(ActionID action, std::string_view name);
+    void RegisterAction(ActionID action, std::string_view name,
+                        std::string_view displayName = {},
+                        std::string_view category    = {});
 
     // -----------------------------------------------------------------------
     // Binding
@@ -92,6 +94,21 @@ public:
 
     // Remove all bindings for an action without unregistering it.
     void ClearBindings(ActionID action);
+
+    // Remove all key bindings for a specific key across every action.
+    void UnbindKey(Key key);
+
+    // Remove all key/mouse bindings for a single action (leaves gamepad intact).
+    void ClearKBMBindings(ActionID action);
+
+    // Remove all gamepad-button bindings for a single action (leaves keys/mouse intact).
+    void ClearGamepadBindings(ActionID action);
+
+    // Remove a specific mouse button from every action.
+    void UnbindMouseButton(MouseButton button);
+
+    // Remove a specific gamepad button from every action.
+    void UnbindGamepadButton(GamepadButton button);
 
     // -----------------------------------------------------------------------
     // Input event injection
@@ -184,7 +201,9 @@ public:
     // -----------------------------------------------------------------------
 
     // Human-readable name registered for this action, or "" if unregistered.
-    [[nodiscard]] std::string_view GetActionName(ActionID action) const;
+    [[nodiscard]] std::string_view GetActionName(ActionID action)        const;
+    [[nodiscard]] std::string_view GetActionDisplayName(ActionID action) const;
+    [[nodiscard]] std::string_view GetActionCategory(ActionID action)    const;
 
     // Read-only view of all bindings for an action (for serialization/display).
     [[nodiscard]] const std::vector<Binding>& GetBindings(ActionID action) const;
@@ -193,11 +212,43 @@ public:
     // actions when saving/loading the input binding file.
     [[nodiscard]] std::vector<ActionID> GetAllActions() const;
 
+    // Returns the first key pressed this tick (from ProcessEdges), or Key::Unknown.
+    [[nodiscard]] Key GetAnyJustPressedKey() const { return _anyJustPressedKey; }
+
+    // Returns the first mouse button pressed this tick, or MouseButton::Count if none.
+    [[nodiscard]] MouseButton GetAnyJustPressedMouseButton() const
+    {
+        return _anyJustPressedMouseButton;
+    }
+
+    // Returns the first gamepad button pressed this tick, or GamepadButton::Count if none.
+    [[nodiscard]] GamepadButton GetAnyJustPressedGamepadButton() const
+    {
+        return _anyJustPressedGamepadButton;
+    }
+
+    // Accumulated mouse wheel delta this tick (positive = scroll up/away from user).
+    // ProcessEdges moves the pending value into the readable slot each tick.
+    void InjectMouseScroll(f32 delta) { _pendingScrollDelta += delta; }
+    [[nodiscard]] f32 GetScrollDelta() const { return _scrollDelta; }
+
+    // -----------------------------------------------------------------------
+    // Display helpers
+    // -----------------------------------------------------------------------
+
+    // Short human-readable name for a key: "A", "Space", "F1", "LShift", etc.
+    [[nodiscard]] static std::string_view KeyToString(Key key);
+
+    // Human-readable description of a binding: "A", "Space", "Ctrl A", etc.
+    [[nodiscard]] static std::string BindingToString(const Binding& b);
+
 private:
     // Per-action data stored in the registry.
     struct ActionEntry
     {
-        std::string       Name;
+        std::string Name;
+        std::string DisplayName; // human-friendly label for UI, e.g. "Toggle Grid"
+        std::string Category;    // grouping label for UI, e.g. "Debug"
         std::vector<Binding> Bindings;
 
         // State computed each frame.
@@ -221,9 +272,14 @@ private:
     const bool* _keyState = nullptr;
 
     // SDL mouse state bitmask and position.
-    u32 _mouseButtonMask  = 0;
+    u32 _mouseButtonMask   = 0;
     u32 _mouseJustDownMask = 0;  // set by ProcessEdges(), cleared at next ProcessEdges() call
     u32 _mouseJustUpMask   = 0;
+    Key           _anyJustPressedKey            = Key::Unknown;          // set by ProcessEdges()
+    MouseButton   _anyJustPressedMouseButton    = MouseButton::Count;    // set by ProcessEdges()
+    GamepadButton _anyJustPressedGamepadButton  = GamepadButton::Count;  // set by ProcessEdges()
+    f32           _pendingScrollDelta           = 0.0f;                  // accumulates via InjectMouseScroll
+    f32           _scrollDelta                  = 0.0f;                  // readable after ProcessEdges()
     i32 _mouseX = 0, _mouseY = 0;
     i32 _prevMouseX = 0, _prevMouseY = 0;
 

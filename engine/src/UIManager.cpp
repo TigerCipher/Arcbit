@@ -111,7 +111,9 @@ void UIManager::Update(const f32 dt, const Vec2 windowSize, const InputManager& 
     if (!active) return;
 
     const UIRect screenRect = { 0.0f, 0.0f, windowSize.X, windowSize.Y };
-    active->Update(dt, screenRect, _mousePos, _mouseDown, _mouseJustDown, _mouseJustUp);
+    active->OnTick(dt, input);
+    active->Update(dt, screenRect, _mousePos, _mouseDown, _mouseJustDown, _mouseJustUp,
+                   input.GetScrollDelta());
 
     if (input.JustPressed(ActionFocusNext)) active->FocusNext();
     if (input.JustPressed(ActionFocusPrev)) active->FocusPrev();
@@ -126,8 +128,11 @@ void UIManager::CollectRenderData(FramePacket& packet, const Vec2 windowSize)
 {
     if (_stack.empty()) return;
     const UIRect screenRect = { 0.0f, 0.0f, windowSize.X, windowSize.Y };
-    for (const auto& screen : _stack)
-        screen->Collect(packet, screenRect, _skin, _whiteTex, _whiteSampler);
+    for (i32 i = 0; i < static_cast<i32>(_stack.size()); ++i) {
+        UISkin screenSkin        = _skin;
+        screenSkin.ScreenLayerBase = i * 1000;
+        _stack[i]->Collect(packet, screenRect, screenSkin, _whiteTex, _whiteSampler);
+    }
 }
 
 } // namespace Arcbit

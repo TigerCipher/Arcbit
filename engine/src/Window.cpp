@@ -88,6 +88,11 @@ bool Window::PollEvents()
                                      static_cast<i32>(event.gbutton.button), false);
                 break;
 
+            case SDL_EVENT_MOUSE_WHEEL:
+                if (_scrollFn)
+                    _scrollFn(event.wheel.y);
+                break;
+
             case SDL_EVENT_WINDOW_RESIZED:
                 _width            = static_cast<u32>(event.window.data1);
                 _height           = static_cast<u32>(event.window.data2);
@@ -123,6 +128,11 @@ void Window::SetKeyEventCallback(std::function<void(i32, bool)> fn)
 void Window::SetMouseButtonCallback(std::function<void(i32, bool)> fn)
 {
     _mouseButtonFn = std::move(fn);
+}
+
+void Window::SetScrollCallback(std::function<void(f32)> fn)
+{
+    _scrollFn = std::move(fn);
 }
 
 void Window::SetGamepadButtonCallback(std::function<void(u32, i32, bool)> fn)

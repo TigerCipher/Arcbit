@@ -99,6 +99,7 @@ public:
     void SetKeyEventCallback     (std::function<void(i32 scancode, bool down)>           fn);
     void SetMouseButtonCallback  (std::function<void(i32 button,   bool down)>           fn);
     void SetGamepadButtonCallback(std::function<void(u32 joystickId, i32 button, bool down)> fn);
+    void SetScrollCallback       (std::function<void(f32 deltaY)>                        fn);
 
 private:
     // SDL_Window* stored as void* to avoid including SDL3/SDL.h in this header.
@@ -113,6 +114,7 @@ private:
     std::function<void(i32, bool)>            _keyEventFn;
     std::function<void(i32, bool)>            _mouseButtonFn;
     std::function<void(u32, i32, bool)>       _gamepadButtonFn;
+    std::function<void(f32)>                  _scrollFn;
 };
 
 } // namespace Arcbit

@@ -12,11 +12,20 @@ namespace Arcbit
 // Helpers
 // ---------------------------------------------------------------------------
 
-static i32 BgLayer(const UIWidget& w) { return UIBaseLayer + w.ZOrder * UILayerStride + UILayerBg; }
+static i32 BgLayer(const UIWidget& w, const UISkin& skin)
+{
+    return UIBaseLayer + (skin.ScreenLayerBase + w.ZOrder) * UILayerStride + UILayerBg;
+}
 
-static i32 FillLayer(const UIWidget& w) { return UIBaseLayer + w.ZOrder * UILayerStride + UILayerFill; }
+static i32 FillLayer(const UIWidget& w, const UISkin& skin)
+{
+    return UIBaseLayer + (skin.ScreenLayerBase + w.ZOrder) * UILayerStride + UILayerFill;
+}
 
-static i32 TextLayer(const UIWidget& w) { return UIBaseLayer + w.ZOrder * UILayerStride + UILayerText; }
+static i32 TextLayer(const UIWidget& w, const UISkin& skin)
+{
+    return UIBaseLayer + (skin.ScreenLayerBase + w.ZOrder) * UILayerStride + UILayerText;
+}
 
 // Push a solid-color quad into UISprites.
 static void PushRect(FramePacket&        packet, const UIRect&    r, const Color& c,
@@ -102,19 +111,20 @@ void Panel::OnCollect(FramePacket&        packet, const UIRect          myRect, 
                       const TextureHandle whiteTex, const SamplerHandle whiteSampler,
                       const UISkin&       skin)
 {
-    PushRect(packet, myRect, WithAlpha(skin.PanelBg, effectiveOpacity),
-             whiteTex, whiteSampler, BgLayer(*this));
+    const Color base = BackgroundColor.A > 0.0f ? BackgroundColor : skin.PanelBg;
+    PushRect(packet, myRect, WithAlpha(base, effectiveOpacity),
+             whiteTex, whiteSampler, BgLayer(*this, skin));
 
     if (DrawBorder) {
         // Simple 1px border — four thin rects around the edge.
         const Color bc = WithAlpha(skin.PanelBorder, effectiveOpacity);
         const f32   t  = 1.0f;
-        PushRect(packet, {myRect.X, myRect.Y, myRect.W, t}, bc, whiteTex, whiteSampler, FillLayer(*this));
+        PushRect(packet, {myRect.X, myRect.Y, myRect.W, t}, bc, whiteTex, whiteSampler, FillLayer(*this, skin));
         PushRect(packet, {myRect.X, myRect.Y + myRect.H - t, myRect.W, t}, bc, whiteTex, whiteSampler,
-                 FillLayer(*this));
-        PushRect(packet, {myRect.X, myRect.Y, t, myRect.H}, bc, whiteTex, whiteSampler, FillLayer(*this));
+                 FillLayer(*this, skin));
+        PushRect(packet, {myRect.X, myRect.Y, t, myRect.H}, bc, whiteTex, whiteSampler, FillLayer(*this, skin));
         PushRect(packet, {myRect.X + myRect.W - t, myRect.Y, t, myRect.H}, bc, whiteTex, whiteSampler,
-                 FillLayer(*this));
+                 FillLayer(*this, skin));
     }
 }
 
@@ -139,7 +149,7 @@ void Label::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effect
     const std::string& display = WordWrap ? WrapText(*skin.Font, Text, myRect.W, skin.FontScale)
                                           : Text;
     DrawTextUI(packet, *skin.Font, display, { textX, myRect.Y }, skin.FontScale, col,
-               TextLayer(*this), Align);
+               TextLayer(*this, skin), Align);
 }
 
 // ---------------------------------------------------------------------------
@@ -181,19 +191,19 @@ void Button::OnCollect(FramePacket&        packet, const UIRect          myRect,
     else                       bg = skin.ButtonNormal;
 
     PushRect(packet, myRect, WithAlpha(bg, effectiveOpacity),
-             whiteTex, whiteSampler, BgLayer(*this));
+             whiteTex, whiteSampler, BgLayer(*this, skin));
 
     if (skin.Font && !Text.empty()) {
         const Color base = (TextColor.A > 0.0f) ? TextColor
                                              : (Enabled ? skin.TextLabel : skin.TextDisabled);
         const Color col  = WithAlpha(base, effectiveOpacity);
-        
+
         const Vec2  pos = {
             myRect.X + myRect.W * 0.5f, myRect.Y + myRect.H * 0.5f
             - skin.Font->GetAscent() * skin.FontScale * 0.5f
         };
         DrawTextUI(packet, *skin.Font, Text, pos, skin.FontScale, col,
-                   TextLayer(*this), TextAlign::Center);
+                   TextLayer(*this, skin), TextAlign::Center);
     }
 }
 
@@ -214,7 +224,7 @@ void Image::OnCollect(FramePacket& packet, UIRect myRect, const f32 effectiveOpa
     s.Size     = {myRect.W, myRect.H};
     s.UV       = UV;
     s.Tint     = WithAlpha(Tint, effectiveOpacity);
-    s.Layer    = FillLayer(*this);
+    s.Layer    = FillLayer(*this, skin);
     packet.UISprites.push_back(s);
 }
 
@@ -224,11 +234,11 @@ void Image::OnCollect(FramePacket& packet, UIRect myRect, const f32 effectiveOpa
 
 void NineSlice::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity,
                            TextureHandle /*whiteTex*/, SamplerHandle /*whiteSampler*/,
-                           const UISkin& /*skin*/)
+                           const UISkin& skin)
 {
     if (!Texture.IsValid()) return;
     const Color tint  = WithAlpha(Tint, effectiveOpacity);
-    const i32   layer = FillLayer(*this);
+    const i32   layer = FillLayer(*this, skin);
 
     const f32 pL = std::min(PixelLeft,   myRect.W * 0.5f);
     const f32 pR = std::min(PixelRight,  myRect.W * 0.5f);
@@ -265,12 +275,129 @@ void ProgressBar::OnCollect(FramePacket&        packet, const UIRect          my
                             const UISkin&       skin)
 {
     PushRect(packet, myRect, WithAlpha(skin.ProgressBg, effectiveOpacity),
-             whiteTex, whiteSampler, BgLayer(*this));
+             whiteTex, whiteSampler, BgLayer(*this, skin));
 
     const f32    fillW = myRect.W * std::clamp(Value, 0.0f, 1.0f);
     const Color  fillC = (FillColor.A > 0.0f) ? FillColor : skin.ProgressFill;
     const UIRect fillR = {myRect.X, myRect.Y, fillW, myRect.H};
     PushRect(packet, fillR, WithAlpha(fillC, effectiveOpacity),
-             whiteTex, whiteSampler, FillLayer(*this));
+             whiteTex, whiteSampler, FillLayer(*this, skin));
+}
+
+// ---------------------------------------------------------------------------
+// ScrollPanel
+// ---------------------------------------------------------------------------
+
+UIRect ScrollPanel::ThumbRect(const UIRect track, const f32 panelH) const
+{
+    const f32 maxScroll = MaxScroll(panelH);
+    const f32 viewRatio = std::min(1.0f, panelH / ContentHeight);
+    const f32 thumbH    = std::max(20.0f, track.H * viewRatio);
+    const f32 thumbT    = (maxScroll > 0.0f)
+        ? (ScrollOffset / maxScroll) * (track.H - thumbH)
+        : 0.0f;
+    return { track.X, track.Y + thumbT, track.W, thumbH };
+}
+
+void ScrollPanel::UpdateTree(const f32 dt, const UIRect parent, const Vec2 mousePos,
+                              const bool mouseDown, const bool mouseJustDown, const bool mouseJustUp,
+                              bool& consumed, const f32 scrollDelta)
+{
+    if (!Visible) return;
+    const UIRect myRect = ComputeRect(parent);
+    _needsScrollbar     = ContentHeight > myRect.H && ScrollbarWidth > 0.0f;
+
+    // Children receive input only when the cursor is inside the content area.
+    const f32    sbW        = _needsScrollbar ? ScrollbarWidth : 0.0f;
+    const UIRect content    = {myRect.X, myRect.Y - ScrollOffset, myRect.W - sbW, ContentHeight};
+    const Vec2   childMouse = myRect.Contains(mousePos) ? mousePos : Vec2{-9999.0f, -9999.0f};
+    const f32    maxScroll  = MaxScroll(myRect.H);
+
+    std::vector<UIWidget*> sorted;
+    sorted.reserve(_children.size());
+    for (auto& c : _children) sorted.push_back(c.get());
+    std::ranges::sort(sorted, [](const UIWidget* a, const UIWidget* b) { return a->ZOrder > b->ZOrder; });
+
+    // Pass 0 scroll to children — only this panel reacts to the wheel.
+    for (UIWidget* child : sorted)
+        child->UpdateTree(dt, content, childMouse, mouseDown, mouseJustDown, mouseJustUp, consumed);
+
+    // Mouse wheel scroll — apply when cursor is over the panel.
+    if (scrollDelta != 0.0f && myRect.Contains(mousePos)) {
+        constexpr f32 ScrollSpeed = 48.0f;
+        ScrollOffset = std::clamp(ScrollOffset - scrollDelta * ScrollSpeed, 0.0f, maxScroll);
+    }
+
+    // Scrollbar interaction (inlined to avoid redundant rect recompute)
+    if (!_needsScrollbar) { _dragging = _thumbHovered = false; return; }
+    const UIRect track = {myRect.X + myRect.W - ScrollbarWidth, myRect.Y, ScrollbarWidth, myRect.H};
+    const UIRect thumb = ThumbRect(track, myRect.H);
+    _thumbHovered = thumb.Contains(mousePos);
+
+    if (mouseJustDown && _thumbHovered) {
+        _dragging = true; _dragStartY = mousePos.Y; _dragStartOffset = ScrollOffset;
+    }
+    if (mouseJustUp) _dragging = false;
+    if (_dragging && mouseDown) {
+        const f32 trackH = track.H - thumb.H;
+        const f32 ratio  = trackH > 0.0f ? maxScroll / trackH : 0.0f;
+        ScrollOffset = std::clamp(_dragStartOffset + (mousePos.Y - _dragStartY) * ratio, 0.0f, maxScroll);
+    }
+}
+
+void ScrollPanel::CollectTree(FramePacket& packet, const UIRect parent, const f32 parentOpacity,
+                               const TextureHandle whiteTex, const SamplerHandle whiteSampler,
+                               const UISkin& skin)
+{
+    if (!Visible) return;
+    const UIRect myRect = ComputeRect(parent);
+    const f32    alpha  = Opacity * parentOpacity;
+    _needsScrollbar     = ContentHeight > myRect.H && ScrollbarWidth > 0.0f;
+
+    OnCollect(packet, myRect, alpha, whiteTex, whiteSampler, skin);
+
+    if (_children.empty()) return;
+
+    const f32    sbW     = _needsScrollbar ? ScrollbarWidth : 0.0f;
+    const UIRect content = {myRect.X, myRect.Y - ScrollOffset, myRect.W - sbW, ContentHeight};
+
+    const u32 firstChildSprite = static_cast<u32>(packet.UISprites.size());
+
+    std::vector<UIWidget*> sorted;
+    sorted.reserve(_children.size());
+    for (auto& c : _children) sorted.push_back(c.get());
+    std::ranges::sort(sorted, [](const UIWidget* a, const UIWidget* b) { return a->ZOrder < b->ZOrder; });
+    for (UIWidget* child : sorted)
+        child->CollectTree(packet, content, alpha, whiteTex, whiteSampler, skin);
+
+    // Register the clip rect (content area only, excluding scrollbar gutter).
+    const UIRect clipRect = {myRect.X, myRect.Y, myRect.W - sbW, myRect.H};
+    packet.UIClipRects.push_back(clipRect);
+    const u16 clipIdx = static_cast<u16>(packet.UIClipRects.size()); // 1-based
+
+    for (u32 i = firstChildSprite; i < static_cast<u32>(packet.UISprites.size()); ++i)
+        if (packet.UISprites[i].ClipIndex == 0)
+            packet.UISprites[i].ClipIndex = clipIdx;
+}
+
+void ScrollPanel::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity,
+                             const TextureHandle whiteTex, const SamplerHandle whiteSampler,
+                             const UISkin& skin)
+{
+    PushRect(packet, myRect, WithAlpha(skin.PanelBg, effectiveOpacity),
+             whiteTex, whiteSampler, BgLayer(*this, skin));
+
+    if (!_needsScrollbar) return;
+
+    // Scrollbar track
+    const UIRect track = {myRect.X + myRect.W - ScrollbarWidth, myRect.Y, ScrollbarWidth, myRect.H};
+    PushRect(packet, track, WithAlpha(skin.ScrollTrack, effectiveOpacity),
+             whiteTex, whiteSampler, FillLayer(*this, skin));
+
+    // Scrollbar thumb
+    const UIRect thumb      = ThumbRect(track, myRect.H);
+    const Color  thumbColor = _thumbHovered ? skin.ScrollThumbHovered : skin.ScrollThumb;
+    PushRect(packet, thumb, WithAlpha(thumbColor, effectiveOpacity),
+             whiteTex, whiteSampler, FillLayer(*this, skin));
 }
 } // namespace Arcbit

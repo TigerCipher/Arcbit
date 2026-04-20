@@ -4,6 +4,7 @@
 #include <arcbit/render/RenderTypes.h>
 #include <arcbit/assets/AssetTypes.h>
 #include <arcbit/core/Math.h>
+#include <arcbit/ui/UIRect.h>
 
 #include <array>
 #include <atomic>
@@ -91,6 +92,11 @@ struct Sprite
     // UI pipeline only: set true for SDF text quads emitted by Label/Button widgets.
     // False = regular texture × tint; true = SDF distance-field decode.
     bool SDFMode = false;
+
+    // UI pipeline only: 0 = full-viewport scissor (no clipping).
+    // N > 0 = index into FramePacket::UIClipRects (1-based). Set by ScrollPanel
+    // on all quads it emits so the render thread applies the correct scissor rect.
+    u16 ClipIndex = 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -165,6 +171,11 @@ struct FramePacket
     // Rendered after sprites and legacy calls but before the SDF debug overlay.
     // Sprite::SDFMode controls rendering mode per quad (regular texture vs SDF text).
     std::vector<Sprite> UISprites;
+
+    // Scissor clip rects for UISprites. Indexed by Sprite::ClipIndex (1-based; 0 = no clip).
+    // Populated by ScrollPanel widgets during CollectRenderData. Each rect is in
+    // screen pixels (top-left origin), matching the window coordinate system.
+    std::vector<UIRect> UIClipRects;
 
     // Dynamic point light list. Uploaded to a per-frame SSBO each tick.
     // The forward+ fragment shader loops over all entries.
@@ -341,6 +352,10 @@ private:
 
     // Returns pointers into packet.Sprites sorted by (layer, texture, sampler).
     [[nodiscard]] static std::vector<const Sprite*> SortSprites(const std::vector<Sprite>& sprites);
+
+    // UI variant: sorts by (layer, ClipIndex, texture, sampler, SDFMode) so scissor
+    // rect changes can be applied per-batch without breaking Z order.
+    [[nodiscard]] static std::vector<const Sprite*> SortUISprites(const std::vector<Sprite>& sprites);
 
     // Grows the instance buffer if needed, uploads sorted sprite data.
     void UploadInstances(const std::vector<const Sprite*>& sorted, u32 frameSlot);

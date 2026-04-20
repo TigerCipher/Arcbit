@@ -374,30 +374,35 @@ engine/
 ## Implementation Phases
 
 ### Phase 21A — Foundation
-- [ ] `UIWidget` base class: anchor/pivot/offset/size layout, opacity, visibility, Z-order
-- [ ] `UIScreen`: widget tree, `CollectRenderData`, `Update`
-- [ ] `UIManager`: screen stack, `PushScreen`/`PopScreen`, render collection
-- [ ] `Panel` widget (solid color + optional texture)
-- [ ] `Label` widget (SDF text via existing `DrawText`)
-- [ ] `Button` widget (hover/pressed states, `OnClick` callback)
-- [ ] `Image` widget
-- [ ] `ProgressBar` widget
-- [ ] Mouse input routing (hover + click)
-- [ ] `UISkin` with JSON loader
-- [ ] Wire `UIManager` into `Application`
-- [ ] Simple HUD screen: health bar + FPS label
+- [x] `UIWidget` base class: anchor/pivot/offset/size layout, opacity, visibility, Z-order
+- [x] `UIScreen`: widget tree, `CollectRenderData`, `Update`
+- [x] `UIManager`: screen stack, `Push`/`Pop`, render collection, `HasBlockingScreen()`
+- [x] `Panel` widget (solid color + border)
+- [x] `Label` widget (SDF text via existing `DrawText`)
+- [x] `Button` widget (hover/pressed/disabled states, `OnClick` callback, `TextColor` override)
+- [x] `Image` widget
+- [x] `ProgressBar` widget (horizontal; `FillColor` override)
+- [x] Mouse input routing (hover + click)
+- [x] Wire `UIManager` into `Application`
+- [x] `UISkin` JSON loader (`LoadFromFile` / `SaveToFile` via nlohmann-json)
+- [x] Engine-provided HUD screen (`HudScreen` with HP/MP bars + optional FPS label)
 
 ### Phase 21B — Polish
-- [ ] `NineSlice` widget
-- [ ] Keyboard/gamepad focus navigation (tab order, confirm input)
-- [ ] `ScrollPanel` with clip rect
-- [ ] Word wrap in `Label`
-- [ ] Animated transitions: fade in/out per screen (lerp opacity on push/pop)
-- [ ] Input rebinding screen (reuses Phase 9 runtime rebind API)
-- [ ] Pause menu screen
+- [x] `NineSlice` widget
+- [x] Keyboard/gamepad focus navigation (tab order, confirm input, pre-registered actions)
+- [x] Word wrap in `Label`
+- [x] Animated transitions: fade in/out per screen (lerp opacity on push/pop)
+- [x] `UIScreen::BlocksInput` + `UIManager::HasBlockingScreen()` for input gating
+- [x] `ScrollPanel` with scissor-rect clip (`ClipIndex` in Sprite, `UIClipRects` in FramePacket, `SortUISprites`)
+- [x] Engine-provided pause menu screen (`PauseMenuScreen` — NineSlice or solid, OnResume/OnSettings/OnQuit)
+- [x] Engine-provided input rebinding screen (`InputRebindScreen` — scrollable action list, click-to-rebind)
 
-### Phase 21C — HUD & Menus
-- [ ] HUD screen: health bar, mana bar, hotbar slots, minimap placeholder
-- [ ] Dialog box screen (used by Phase 27 dialog system)
-- [ ] Splash screen system: ordered logo sequence before main menu
-- [ ] Main menu screen stub
+### Phase 21C — Engine Screens & HUD
+All screens in this phase ship with the engine as subclassable `UIScreen` types,
+skinnable via `UISkin` and configurable in the editor. Game devs extend or replace
+them; they do not reimplement them from scratch.
+
+- [ ] `HudScreen`: health bar, mana bar, hotbar slots, minimap placeholder; game subclasses to add custom elements
+- [ ] `DialogScreen`: portrait + speaker name + scrolling text + choice buttons; used by Phase 27 dialog system
+- [ ] `SplashScreen`: ordered logo/image sequence before main menu
+- [ ] `MainMenuScreen` stub: play, settings, quit
