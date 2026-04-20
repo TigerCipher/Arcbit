@@ -40,6 +40,8 @@ struct UISkin
 
     // Accent — used for focused/listening states (e.g. rebind screen row)
     Color AccentColor      = { 0.38f, 0.60f, 0.90f, 1.00f };
+    
+    Color OverlayColor     = { 0.10f, 0.10f, 0.12f, 0.20f };
 
     // Per-screen layer base set by UIManager based on stack index.
     // Ensures sprites from screens higher in the stack always sort above lower ones.

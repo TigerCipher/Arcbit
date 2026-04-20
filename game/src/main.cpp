@@ -769,7 +769,7 @@ private:
     {
         auto pause      = std::make_unique<PauseMenuScreen>();
         pause->OnResume   = [this] { GetUI().Pop(); };
-        pause->OnQuit     = [this] { std::exit(0); };
+        pause->OnQuit     = [this] { RequestShutdown(); };
         pause->OnSettings = [this] { ShowInputRebind(); };
         GetUI().Push(std::move(pause));
     }

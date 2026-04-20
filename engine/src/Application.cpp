@@ -154,7 +154,7 @@ void Application::Run()
 
     LOG_INFO(Engine, "Entering game loop");
 
-    while (_window->PollEvents()) {
+    while (_window->PollEvents() && !_shouldShutdown) {
         // Record the frame start time before any work so the FPS limiter can
         // measure the total cost of this frame (including SubmitFrame's back-
         // pressure wait) and sleep only the time that remains.

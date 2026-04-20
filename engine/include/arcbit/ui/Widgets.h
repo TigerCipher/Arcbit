@@ -22,6 +22,25 @@ protected:
     void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
                    TextureHandle whiteTex, SamplerHandle whiteSampler,
                    const UISkin& skin) override;
+
+    void Collect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
+                 TextureHandle whiteTex, SamplerHandle whiteSampler,
+                 const UISkin& skin, const Color       baseColor) const;
+};
+
+class Overlay : public Panel
+{
+public:
+    Overlay()
+    {
+        SizePercent = {1.0f, 1.0f};
+        Anchor      = {0.0f, 0.0f};
+    }
+
+protected:
+    void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
+                   TextureHandle whiteTex, SamplerHandle whiteSampler,
+                   const UISkin& skin) override;
 };
 
 // ---------------------------------------------------------------------------
@@ -149,7 +168,7 @@ public:
 protected:
     void UpdateTree(f32   dt, UIRect      parent, Vec2        mousePos,
                     bool  mouseDown, bool mouseJustDown, bool mouseJustUp,
-                    bool& consumed, f32 scrollDelta = 0.0f) override;
+                    bool& consumed, f32   scrollDelta = 0.0f) override;
 
     void CollectTree(FramePacket&  packet, UIRect          parent, f32 parentOpacity,
                      TextureHandle whiteTex, SamplerHandle whiteSampler,
@@ -166,10 +185,7 @@ private:
     f32  _dragStartOffset = 0.0f;
     bool _needsScrollbar  = false; // set in CollectTree / UpdateTree before OnCollect
 
-    [[nodiscard]] f32 MaxScroll(f32 panelH) const
-    {
-        return std::max(0.0f, ContentHeight - panelH);
-    }
+    [[nodiscard]] f32    MaxScroll(f32 panelH) const { return std::max(0.0f, ContentHeight - panelH); }
     [[nodiscard]] UIRect ThumbRect(UIRect track, f32 panelH) const;
 };
 } // namespace Arcbit

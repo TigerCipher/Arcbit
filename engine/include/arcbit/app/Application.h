@@ -117,6 +117,9 @@ public:
     [[nodiscard]] f32 GetFPS() const { return _renderStats.FPS; }
 
 protected:
+    
+    void RequestShutdown() { _shouldShutdown = true; }
+    
     // -----------------------------------------------------------------------
     // Game hooks — override these in your Application subclass.
     // -----------------------------------------------------------------------
@@ -173,6 +176,7 @@ private:
     // Engine system actions — registered before OnStart so settings can rebind them.
     static constexpr ActionID ActionEngineFullscreen = MakeAction("Engine_Fullscreen");
 
+    bool _shouldShutdown = false;
 
     FontAtlas   _debugFont;
     RenderStats _renderStats{};

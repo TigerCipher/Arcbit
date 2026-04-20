@@ -46,7 +46,7 @@ static Color WithAlpha(Color c, const f32 alpha) { c.A *= alpha; return c; }
 
 // Push a textured quad (arbitrary UV) into UISprites.
 static void PushTexturedRect(FramePacket& packet, const UIRect& r, const UVRect& uv,
-                              const Color& c, TextureHandle tex, SamplerHandle samp, i32 layer)
+                              const Color& c, const TextureHandle tex, const SamplerHandle samp, const i32 layer)
 {
     if (r.W <= 0.0f || r.H <= 0.0f) return;
     Sprite s{};
@@ -112,8 +112,14 @@ void Panel::OnCollect(FramePacket&        packet, const UIRect          myRect, 
                       const UISkin&       skin)
 {
     const Color base = BackgroundColor.A > 0.0f ? BackgroundColor : skin.PanelBg;
-    PushRect(packet, myRect, WithAlpha(base, effectiveOpacity),
-             whiteTex, whiteSampler, BgLayer(*this, skin));
+    Collect(packet, myRect, effectiveOpacity, whiteTex, whiteSampler, skin, base);
+}
+
+void Panel::Collect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity, const TextureHandle whiteTex,
+    const SamplerHandle whiteSampler, const UISkin& skin, const Color baseColor) const
+{
+    PushRect(packet, myRect, WithAlpha(baseColor, effectiveOpacity),
+         whiteTex, whiteSampler, BgLayer(*this, skin));
 
     if (DrawBorder) {
         // Simple 1px border — four thin rects around the edge.
@@ -126,6 +132,13 @@ void Panel::OnCollect(FramePacket&        packet, const UIRect          myRect, 
         PushRect(packet, {myRect.X + myRect.W - t, myRect.Y, t, myRect.H}, bc, whiteTex, whiteSampler,
                  FillLayer(*this, skin));
     }
+}
+
+void Overlay::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity, const TextureHandle whiteTex,
+                        const SamplerHandle whiteSampler, const UISkin& skin)
+{
+    const Color base = BackgroundColor.A > 0.0f ? BackgroundColor : skin.OverlayColor;
+    Collect(packet, myRect, effectiveOpacity, whiteTex, whiteSampler, skin, base);
 }
 
 // ---------------------------------------------------------------------------
