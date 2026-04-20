@@ -500,6 +500,41 @@ void InputManager::ProcessEdges()
         }
     }
 
+    // Just-released tracking (rebind screen listens on release to avoid capturing
+    // the mouse-up that first opened the listening dialog).
+    _anyJustReleasedKey = Key::Unknown;
+    if (!_pendingKeyUp.empty()) {
+        const SDL_Scancode sc = static_cast<SDL_Scancode>(*_pendingKeyUp.begin());
+        for (u32 i = 0; i < static_cast<u32>(Key::Count); ++i) {
+            if (ToScancode(static_cast<Key>(i)) == sc) {
+                _anyJustReleasedKey = static_cast<Key>(i);
+                break;
+            }
+        }
+    }
+
+    _anyJustReleasedMouseButton = MouseButton::Count;
+    if (!_pendingMouseUp.empty()) {
+        const i32 sdlBtn = *_pendingMouseUp.begin();
+        for (u32 i = 0; i < static_cast<u32>(MouseButton::Count); ++i) {
+            if (ToSDLMouseButton(static_cast<MouseButton>(i)) == sdlBtn) {
+                _anyJustReleasedMouseButton = static_cast<MouseButton>(i);
+                break;
+            }
+        }
+    }
+
+    _anyJustReleasedGamepadButton = GamepadButton::Count;
+    if (!_pendingGamepadUp.empty()) {
+        const i32 sdlBtn = _pendingGamepadUp.front().Button;
+        for (u32 i = 0; i < static_cast<u32>(GamepadButton::Count); ++i) {
+            if (static_cast<i32>(ToSDLGamepadButton(static_cast<GamepadButton>(i))) == sdlBtn) {
+                _anyJustReleasedGamepadButton = static_cast<GamepadButton>(i);
+                break;
+            }
+        }
+    }
+
     for (auto& entry : _actions | std::views::values)
     {
         bool anyJustPressed  = false;
@@ -618,6 +653,17 @@ void InputManager::UnbindKey(const Key key)
         std::erase_if(entry.Bindings, [key](const Binding& b) {
             return b.BindingType == Binding::Type::Key && b.BoundKey == key;
         });
+}
+
+void InputManager::AddBinding(const ActionID action, const Binding& b)
+{
+    GetOrCreate(action).Bindings.push_back(b);
+}
+
+void InputManager::RemoveBinding(const ActionID action, const Binding& b)
+{
+    if (const auto it = _actions.find(action); it != _actions.end())
+        std::erase_if(it->second.Bindings, [&b](const Binding& x) { return x == b; });
 }
 
 void InputManager::ClearKBMBindings(const ActionID action)

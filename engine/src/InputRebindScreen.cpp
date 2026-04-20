@@ -3,68 +3,67 @@
 #include <arcbit/input/InputManager.h>
 
 #include <algorithm>
-#include <format>
 
 namespace Arcbit
 {
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Module-scope helpers
 // ---------------------------------------------------------------------------
 
-static bool HasHiddenPrefix(const std::string_view name,
-                             const std::vector<std::string>& prefixes)
+static bool HasHiddenPrefix(std::string_view name, const std::vector<std::string>& prefixes)
 {
     for (const auto& p : prefixes)
         if (name.starts_with(p)) return true;
     return false;
 }
 
-// Key and mouse button bindings for the left column.
-static std::string AllKBMBindings(const InputManager& input, const ActionID action)
+static bool IsKBM(const Binding& b)
 {
-    std::string result;
-    for (const Binding& b : input.GetBindings(action)) {
-        if (b.BindingType != Binding::Type::Key &&
-            b.BindingType != Binding::Type::MouseButton) continue;
-        if (!result.empty()) result += ", ";
-        result += InputManager::BindingToString(b);
-    }
-    return result.empty() ? "---" : result;
-}
-
-static std::string AllGamepadBindings(const InputManager& input, const ActionID action)
-{
-    std::string result;
-    for (const Binding& b : input.GetBindings(action)) {
-        if (b.BindingType != Binding::Type::GamepadButton) continue;
-        if (!result.empty()) result += ", ";
-        result += InputManager::BindingToString(b);
-    }
-    return result.empty() ? "---" : result;
+    return b.BindingType == Binding::Type::Key ||
+           b.BindingType == Binding::Type::MouseButton;
 }
 
 // ---------------------------------------------------------------------------
-// OnEnter — build the full screen widget tree
+// BuildEntries — collect + sort visible actions once on enter.
+// ---------------------------------------------------------------------------
+
+void InputRebindScreen::BuildEntries()
+{
+    _entries.clear();
+    for (const ActionID id : Input->GetAllActions()) {
+        const std::string_view name = Input->GetActionName(id);
+        if (name.empty() || HasHiddenPrefix(name, HiddenPrefixes)) continue;
+        _entries.push_back({id,
+            std::string(Input->GetActionDisplayName(id)),
+            std::string(Input->GetActionCategory(id))});
+    }
+    std::ranges::sort(_entries, [](const ActionEntry& a, const ActionEntry& b) {
+        return a.category != b.category ? a.category < b.category : a.display < b.display;
+    });
+}
+
+// ---------------------------------------------------------------------------
+// OnEnter — build fixed chrome; call RebuildScroll for the dynamic rows.
 // ---------------------------------------------------------------------------
 
 void InputRebindScreen::OnEnter()
 {
     _roots.clear();
-    _rows.clear();
-    _listeningIdx = -1;
-    _flashTimer   = 0.0f;
+    _isListening     = false;
+    _listeningButton = nullptr;
+    _hadRemoved      = false;
 
     if (!Input) return;
+    BuildEntries();
 
-    // Fully opaque scrim so the screen below isn't visible.
     auto* scrim            = Add<Panel>();
     scrim->SizePercent     = {1.0f, 1.0f};
     scrim->BackgroundColor = {0.04f, 0.04f, 0.06f, 1.0f};
     scrim->ZOrder          = 0;
 
-    const f32 panelW = 680.0f;
-    const f32 panelH = 540.0f;
+    const f32 panelW = 720.0f;
+    const f32 panelH = 560.0f;
 
     auto* bg   = Add<Panel>();
     bg->Size   = {panelW, panelH};
@@ -81,27 +80,31 @@ void InputRebindScreen::OnEnter()
     title->Offset = {0.0f, 16.0f};
     title->ZOrder = 2;
 
-    // Column headers
-    auto* colAction   = bg->AddChild<Label>();
-    colAction->Text   = "Action";
-    colAction->Size   = {220.0f, 18.0f};
-    colAction->Anchor = {0.0f, 0.0f};
-    colAction->Offset = {20.0f, 54.0f};
-    colAction->ZOrder = 2;
+    const f32 nameX  = 16.0f;
+    const f32 keyHX  = 250.0f;
+    const f32 ctrlHX = 462.0f;
+    const f32 hdrY   = 54.0f;
 
-    auto* colKey   = bg->AddChild<Label>();
-    colKey->Text   = "Key / Mouse";
-    colKey->Size   = {170.0f, 18.0f};
-    colKey->Anchor = {0.0f, 0.0f};
-    colKey->Offset = {260.0f, 54.0f};
-    colKey->ZOrder = 2;
+    auto* hdrAction   = bg->AddChild<Label>();
+    hdrAction->Text   = "Action";
+    hdrAction->Size   = {220.0f, 18.0f};
+    hdrAction->Anchor = {0.0f, 0.0f};
+    hdrAction->Offset = {nameX, hdrY};
+    hdrAction->ZOrder = 2;
 
-    auto* colCtrl   = bg->AddChild<Label>();
-    colCtrl->Text   = "Controller";
-    colCtrl->Size   = {170.0f, 18.0f};
-    colCtrl->Anchor = {0.0f, 0.0f};
-    colCtrl->Offset = {450.0f, 54.0f};
-    colCtrl->ZOrder = 2;
+    auto* hdrKey    = bg->AddChild<Label>();
+    hdrKey->Text    = "Key / Mouse";
+    hdrKey->Size    = {190.0f, 18.0f};
+    hdrKey->Anchor  = {0.0f, 0.0f};
+    hdrKey->Offset  = {keyHX, hdrY};
+    hdrKey->ZOrder  = 2;
+
+    auto* hdrCtrl   = bg->AddChild<Label>();
+    hdrCtrl->Text   = "Controller";
+    hdrCtrl->Size   = {190.0f, 18.0f};
+    hdrCtrl->Anchor = {0.0f, 0.0f};
+    hdrCtrl->Offset = {ctrlHX, hdrY};
+    hdrCtrl->ZOrder = 2;
 
     auto* sep    = bg->AddChild<Panel>();
     sep->Size    = {panelW - 40.0f, 1.0f};
@@ -118,7 +121,7 @@ void InputRebindScreen::OnEnter()
     _scroll->ZOrder         = 2;
     _scroll->ScrollbarWidth = 8.0f;
 
-    RebuildRows();
+    RebuildScroll();
 
     auto* back      = bg->AddChild<Button>();
     back->Text      = "Back";
@@ -128,56 +131,106 @@ void InputRebindScreen::OnEnter()
     back->Offset    = {0.0f, -16.0f};
     back->Focusable = true;
     back->ZOrder    = 2;
-    back->OnClick   = OnBack;
+    back->OnClick   = [this] { StopListening(false); if (OnBack) OnBack(); };
 }
 
 // ---------------------------------------------------------------------------
-// RebuildRows — populate _scroll grouped by category
+// CountBindings / AddChipColumn helpers
 // ---------------------------------------------------------------------------
 
-void InputRebindScreen::RebuildRows()
+i32 InputRebindScreen::CountBindings(const ActionID action, const bool forKey) const
 {
-    if (!Input || !_scroll) return;
-    _rows.clear();
+    i32 n = 0;
+    for (const Binding& b : Input->GetBindings(action))
+        if (IsKBM(b) == forKey) ++n;
+    return n;
+}
 
-    struct Entry { ActionID id; std::string_view name, display, category; };
-    std::vector<Entry> entries;
-    for (const ActionID action : Input->GetAllActions()) {
-        const std::string_view name = Input->GetActionName(action);
-        if (name.empty() || HasHiddenPrefix(name, HiddenPrefixes)) continue;
-        entries.push_back({action, name,
-                           Input->GetActionDisplayName(action),
-                           Input->GetActionCategory(action)});
+void InputRebindScreen::AddChipColumn(const ActionID action, const bool forKey,
+                                       const f32 colX, const f32 startY,
+                                       const f32 chipH, const f32 chipGap)
+{
+    const f32 labelW  = 148.0f;
+    const f32 xBtnW   = 22.0f;
+    const f32 xBtnX   = colX + labelW + 3.0f;
+    const f32 chipSlot = chipH + chipGap;
+    i32 slot = 0;
+
+    for (const Binding& b : Input->GetBindings(action)) {
+        if (IsKBM(b) != forKey) continue;
+        const f32     y   = startY + slot * chipSlot;
+        const Binding cap = b;
+
+        auto* chipBtn    = _scroll->AddChild<Button>();
+        chipBtn->Text    = InputManager::BindingToString(cap);
+        chipBtn->Size    = {labelW, chipH};
+        chipBtn->Anchor  = {0.0f, 0.0f};
+        chipBtn->Offset  = {colX, y};
+        chipBtn->ZOrder  = 4;
+        chipBtn->OnClick = [this, action, forKey, cap, chipBtn]() {
+            StartListening(action, forKey, chipBtn, true, cap);
+        };
+
+        auto* xBtn    = _scroll->AddChild<Button>();
+        xBtn->Text    = "x";
+        xBtn->Size    = {xBtnW, chipH};
+        xBtn->Anchor  = {0.0f, 0.0f};
+        xBtn->Offset  = {xBtnX, y};
+        xBtn->ZOrder  = 4;
+        xBtn->OnClick = [this, action, cap]() { RemoveChip(action, cap); };
+
+        ++slot;
     }
-    std::ranges::sort(entries, [](const Entry& a, const Entry& b) {
-        return a.category != b.category ? a.category < b.category
-                                        : a.display   < b.display;
-    });
 
-    const f32 rowH    = 36.0f;
-    const f32 catH    = 24.0f;
-    const f32 rowW    = _scroll->Size.X - _scroll->ScrollbarWidth - 8.0f;
-    const f32 keyColX = 242.0f;
-    const f32 ctrlColX = 432.0f;
-    const f32 btnW    = 160.0f;
-    f32       y       = 4.0f;
+    // "+" button to add a new binding
+    auto* addBtn    = _scroll->AddChild<Button>();
+    addBtn->Text    = "+";
+    addBtn->Size    = {labelW, chipH};
+    addBtn->Anchor  = {0.0f, 0.0f};
+    addBtn->Offset  = {colX, startY + slot * chipSlot};
+    addBtn->ZOrder  = 4;
+    addBtn->OnClick = [this, action, forKey, addBtn]() {
+        StartListening(action, forKey, addBtn, false);
+    };
+}
+
+// ---------------------------------------------------------------------------
+// RebuildScroll — clear and repopulate scroll contents; preserves offset.
+// ---------------------------------------------------------------------------
+
+void InputRebindScreen::RebuildScroll()
+{
+    if (!_scroll) return;
+    const f32 savedOffset = _scroll->ScrollOffset;
+    _scroll->ClearChildren();
+
+    const f32 chipH    = 22.0f;
+    const f32 chipGap  = 4.0f;
+    const f32 chipSlot = chipH + chipGap;
+    const f32 rowPad   = 10.0f;
+    const f32 rowW     = _scroll->Size.X - _scroll->ScrollbarWidth - 8.0f;
+    const f32 nameX    = 8.0f;
+    const f32 keyColX  = 242.0f;
+    const f32 ctrlColX = 454.0f;
+
+    f32              y            = 4.0f;
     std::string_view lastCategory;
 
-    for (const Entry& e : entries) {
+    for (const ActionEntry& e : _entries) {
         if (e.category != lastCategory) {
             if (!e.category.empty()) {
-                auto* cat      = _scroll->AddChild<Label>();
-                cat->Text      = std::string(e.category);
-                cat->Size      = {rowW, catH};
-                cat->Anchor    = {0.0f, 0.0f};
-                cat->Offset    = {8.0f, y + 4.0f};
-                cat->ZOrder    = 3;
-                y += catH;
+                auto* cat   = _scroll->AddChild<Label>();
+                cat->Text   = e.category;
+                cat->Size   = {rowW, 22.0f};
+                cat->Anchor = {0.0f, 0.0f};
+                cat->Offset = {nameX + 4.0f, y + 2.0f};
+                cat->ZOrder = 3;
+                y += 26.0f;
             }
             lastCategory = e.category;
         }
 
-        if (!_rows.empty()) {
+        if (y > 4.0f) {
             auto* sep   = _scroll->AddChild<Panel>();
             sep->Size   = {rowW - 8.0f, 1.0f};
             sep->Anchor = {0.0f, 0.0f};
@@ -185,134 +238,117 @@ void InputRebindScreen::RebuildRows()
             sep->ZOrder = 3;
         }
 
-        ActionRow& row = _rows.emplace_back();
-        row.action     = e.id;
+        const i32 keySlots  = CountBindings(e.id, true)  + 1; // +1 for "+"
+        const i32 ctrlSlots = CountBindings(e.id, false) + 1;
+        const f32 rowH = std::max(keySlots, ctrlSlots) * chipSlot - chipGap + rowPad * 2.0f;
 
-        row.nameLabel         = _scroll->AddChild<Label>();
-        row.nameLabel->Text   = std::string(e.display);
-        row.nameLabel->Size   = {230.0f, rowH};
-        row.nameLabel->Anchor = {0.0f, 0.0f};
-        row.nameLabel->Offset = {16.0f, y};
-        row.nameLabel->ZOrder = 4;
+        auto* nameLabel   = _scroll->AddChild<Label>();
+        nameLabel->Text   = e.display;
+        nameLabel->Size   = {226.0f, rowH};
+        nameLabel->Anchor = {0.0f, 0.0f};
+        nameLabel->Offset = {nameX, y};
+        nameLabel->ZOrder = 4;
 
-        const i32 rowIdx = static_cast<i32>(_rows.size()) - 1;
-
-        row.keyButton          = _scroll->AddChild<Button>();
-        row.keyButton->Size    = {btnW, rowH - 6.0f};
-        row.keyButton->Anchor  = {0.0f, 0.0f};
-        row.keyButton->Offset  = {keyColX, y + 3.0f};
-        row.keyButton->Focusable = true;
-        row.keyButton->ZOrder  = 4;
-        row.keyButton->OnClick = [this, rowIdx] { StartListening(rowIdx, true); };
-
-        row.ctrlButton          = _scroll->AddChild<Button>();
-        row.ctrlButton->Size    = {btnW, rowH - 6.0f};
-        row.ctrlButton->Anchor  = {0.0f, 0.0f};
-        row.ctrlButton->Offset  = {ctrlColX, y + 3.0f};
-        row.ctrlButton->Focusable = true;
-        row.ctrlButton->ZOrder  = 4;
-        row.ctrlButton->OnClick = [this, rowIdx] { StartListening(rowIdx, false); };
-
-        RefreshKeyText(row);
-        RefreshCtrlText(row);
+        AddChipColumn(e.id, true,  keyColX,  y + rowPad, chipH, chipGap);
+        AddChipColumn(e.id, false, ctrlColX, y + rowPad, chipH, chipGap);
 
         y += rowH;
     }
 
     _scroll->ContentHeight = y + 4.0f;
-    _scroll->ScrollOffset  = 0.0f;
+    _scroll->ScrollOffset  = std::min(savedOffset,
+                                      std::max(0.0f, _scroll->ContentHeight - _scroll->Size.Y));
 }
 
 // ---------------------------------------------------------------------------
 // Listening mode
 // ---------------------------------------------------------------------------
 
-void InputRebindScreen::StartListening(const i32 idx, const bool forKey)
+void InputRebindScreen::StartListening(const ActionID action, const bool forKey,
+                                        Button* const btn, const bool replaceExisting,
+                                        const Binding toReplace)
 {
-    // Clicking the already-listening button cancels.
-    if (_listeningIdx == idx && _rows[idx].listenKey == forKey) {
-        StopListening();
-        return;
+    // Clicking the same slot again cancels.
+    if (_isListening && _listeningButton == btn) { StopListening(false); return; }
+
+    // Restore any previously removed binding without rebuilding the scroll.
+    CancelListening();
+
+    _isListening      = true;
+    _listeningAction  = action;
+    _listeningForKey  = forKey;
+    _listeningButton  = btn;
+    _flashTimer       = 0.0f;
+    _hadRemoved       = replaceExisting;
+
+    if (replaceExisting) {
+        _removedBinding = toReplace;
+        Input->RemoveBinding(action, toReplace);
     }
 
-    StopListening();
-    if (idx < 0 || idx >= static_cast<i32>(_rows.size())) return;
-
-    _listeningIdx            = idx;
-    _rows[idx].listening     = true;
-    _rows[idx].listenKey     = forKey;
-
-    if (forKey) _rows[idx].keyButton->Text  = "...";
-    else        _rows[idx].ctrlButton->Text = "...";
+    btn->Text = "...";
 }
 
-void InputRebindScreen::StopListening()
+void InputRebindScreen::CancelListening()
 {
-    if (_listeningIdx >= 0 && _listeningIdx < static_cast<i32>(_rows.size())) {
-        ActionRow& row  = _rows[_listeningIdx];
-        row.listening   = false;
-        RefreshKeyText(row);
-        RefreshCtrlText(row);
-    }
-    _listeningIdx = -1;
-    _flashTimer   = 0.0f;
+    if (!_isListening) return;
+    if (_hadRemoved) Input->AddBinding(_listeningAction, _removedBinding);
+    _isListening     = false;
+    _listeningButton = nullptr;
+    _hadRemoved      = false;
+    _flashTimer      = 0.0f;
 }
 
-void InputRebindScreen::RefreshKeyText(ActionRow& row) const
+void InputRebindScreen::StopListening(const bool commit)
 {
-    row.keyButton->Text = AllKBMBindings(*Input, row.action);
+    if (!_isListening && !_hadRemoved) { RebuildScroll(); return; }
+    if (!commit && _hadRemoved) Input->AddBinding(_listeningAction, _removedBinding);
+    _isListening     = false;
+    _listeningButton = nullptr;
+    _hadRemoved      = false;
+    _flashTimer      = 0.0f;
+    RebuildScroll();
 }
 
-void InputRebindScreen::RefreshCtrlText(ActionRow& row) const
+void InputRebindScreen::RemoveChip(const ActionID action, const Binding& b)
 {
-    row.ctrlButton->Text = AllGamepadBindings(*Input, row.action);
+    CancelListening();  // restores any in-flight removal, no rebuild yet
+    Input->RemoveBinding(action, b);
+    RebuildScroll();
 }
 
 // ---------------------------------------------------------------------------
-// OnTick — capture input while listening
+// OnTick — flash listening button; capture released input.
 // ---------------------------------------------------------------------------
 
 void InputRebindScreen::OnTick(const f32 dt, const InputManager& input)
 {
-    if (_listeningIdx < 0) return;
+    if (!_isListening) return;
 
-    // Flash the active button.
     _flashTimer += dt;
-    const bool flash = static_cast<i32>(_flashTimer * 3.0f) % 2 == 0;
-    if (_listeningIdx < static_cast<i32>(_rows.size())) {
-        ActionRow& row = _rows[_listeningIdx];
-        const std::string blinkText = flash ? "..." : "   ";
-        if (row.listenKey) row.keyButton->Text  = blinkText;
-        else               row.ctrlButton->Text = blinkText;
-    }
+    if (_listeningButton)
+        _listeningButton->Text = static_cast<i32>(_flashTimer * 3.0f) % 2 == 0 ? "..." : "   ";
 
-    ActionRow& row = _rows[_listeningIdx];
-
-    if (row.listenKey) {
-        // Key/mouse column — capture whichever arrives first.
-        const Key         k   = input.GetAnyJustPressedKey();
-        const MouseButton mb  = input.GetAnyJustPressedMouseButton();
-
+    if (_listeningForKey) {
+        const Key         k  = input.GetAnyJustReleasedKey();
+        const MouseButton mb = input.GetAnyJustReleasedMouseButton();
         if (k == Key::Unknown && mb == MouseButton::Count) return;
 
-        Input->ClearKBMBindings(row.action);
         if (k != Key::Unknown) {
             Input->UnbindKey(k);
-            Input->BindKey(row.action, k);
+            Input->BindKey(_listeningAction, k);
         } else {
             Input->UnbindMouseButton(mb);
-            Input->BindMouseButton(row.action, mb);
+            Input->BindMouseButton(_listeningAction, mb);
         }
     } else {
-        const GamepadButton btn = input.GetAnyJustPressedGamepadButton();
+        const GamepadButton btn = input.GetAnyJustReleasedGamepadButton();
         if (btn == GamepadButton::Count) return;
-
         Input->UnbindGamepadButton(btn);
-        Input->ClearGamepadBindings(row.action);
-        Input->BindGamepadButton(row.action, btn);
+        Input->BindGamepadButton(_listeningAction, btn);
     }
 
-    StopListening();
+    StopListening(true);
 }
 
 } // namespace Arcbit

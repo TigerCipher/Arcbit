@@ -1,7 +1,6 @@
 #pragma once
 
 #include <arcbit/ui/UIScreen.h>
-#include <arcbit/render/RenderHandle.h>
 #include <arcbit/input/InputTypes.h>
 
 #include <functional>
@@ -10,19 +9,17 @@
 
 namespace Arcbit
 {
-class  InputManager;
-class  Label;
-class  Button;
-class  ScrollPanel;
+class InputManager;
+class Button;
+class ScrollPanel;
 
 // ---------------------------------------------------------------------------
-// InputRebindScreen — engine-provided input binding editor.
+// InputRebindScreen — chip-based input binding editor.
 //
-// Shows all registered actions with two binding columns: keyboard and gamepad.
-// Clicking a column button enters listening mode for that input type — the
-// next matching input replaces that slot.  Click the same button again to
-// cancel.  Actions whose names start with a prefix in HiddenPrefixes are
-// omitted (hides internal engine actions by default).
+// Each action displays its bindings as removable chips in two columns:
+// Key/Mouse and Controller.  Clicking a chip replaces that binding; clicking
+// "+" adds a new one.  Input is captured on RELEASE to avoid recording the
+// click that opened listening mode, which means LMB is bindable normally.
 //
 // Requires Input to be set before Push.  Wire OnBack to pop the screen.
 // ---------------------------------------------------------------------------
@@ -42,25 +39,31 @@ public:
     void OnTick(f32 dt, const InputManager& input) override;
 
 private:
-    struct ActionRow
-    {
-        ActionID action      = 0;
-        Label*   nameLabel   = nullptr;
-        Button*  keyButton   = nullptr;   // keyboard binding column
-        Button*  ctrlButton  = nullptr;   // gamepad binding column
-        bool     listening   = false;
-        bool     listenKey   = true;      // true = waiting for key, false = gamepad
-    };
+    struct ActionEntry { ActionID id; std::string display, category; };
 
-    std::vector<ActionRow> _rows;
-    i32  _listeningIdx  = -1;
-    f32  _flashTimer    = 0.0f;
+    std::vector<ActionEntry> _entries;  // sorted visible actions; stable across rebuilds
+
+    // Listening state
+    bool        _isListening      = false;
+    ActionID    _listeningAction  = 0;
+    bool        _listeningForKey  = true;   // true = Key/Mouse column, false = Controller
+    Button*     _listeningButton  = nullptr; // button being flashed
+    f32         _flashTimer       = 0.0f;
+    bool        _hadRemoved       = false;   // whether we removed a binding to replace it
+    Binding     _removedBinding   = {};      // restored on cancel
+
     ScrollPanel* _scroll = nullptr;
 
-    void RebuildRows();
-    void StartListening(i32 idx, bool forKey);
-    void StopListening();
-    void RefreshKeyText (ActionRow& row) const;
-    void RefreshCtrlText(ActionRow& row) const;
+    void BuildEntries();
+    void RebuildScroll();
+    void AddChipColumn(ActionID action, bool forKey,
+                       f32 colX, f32 startY, f32 chipH, f32 chipGap);
+    [[nodiscard]] i32 CountBindings(ActionID action, bool forKey) const;
+    void StartListening(ActionID action, bool forKey, Button* btn,
+                        bool replaceExisting, Binding toReplace = {});
+    void CancelListening();  // restores removed binding, does NOT rebuild
+    void StopListening(bool commit);
+    void RemoveChip(ActionID action, const Binding& b);
 };
+
 } // namespace Arcbit

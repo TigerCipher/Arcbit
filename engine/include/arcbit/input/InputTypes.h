@@ -213,6 +213,18 @@ struct Binding
         b.Deadzone    = deadzone;
         return b;
     }
+
+    bool operator==(const Binding& o) const
+    {
+        if (BindingType != o.BindingType) return false;
+        switch (BindingType) {
+            case Type::Key:           return BoundKey    == o.BoundKey;
+            case Type::MouseButton:   return BoundMouse  == o.BoundMouse;
+            case Type::GamepadButton: return BoundButton == o.BoundButton;
+            case Type::GamepadAxis:   return BoundAxis   == o.BoundAxis;
+            default: return false;
+        }
+    }
 };
 
 } // namespace Arcbit

@@ -216,16 +216,23 @@ public:
     [[nodiscard]] Key GetAnyJustPressedKey() const { return _anyJustPressedKey; }
 
     // Returns the first mouse button pressed this tick, or MouseButton::Count if none.
-    [[nodiscard]] MouseButton GetAnyJustPressedMouseButton() const
-    {
-        return _anyJustPressedMouseButton;
-    }
+    [[nodiscard]] MouseButton GetAnyJustPressedMouseButton() const { return _anyJustPressedMouseButton; }
 
     // Returns the first gamepad button pressed this tick, or GamepadButton::Count if none.
-    [[nodiscard]] GamepadButton GetAnyJustPressedGamepadButton() const
-    {
-        return _anyJustPressedGamepadButton;
-    }
+    [[nodiscard]] GamepadButton GetAnyJustPressedGamepadButton() const { return _anyJustPressedGamepadButton; }
+
+    // Released equivalents — use these in the rebind screen to avoid capturing the
+    // click that opens listening mode (click fires on mouse-up; we then wait for
+    // the next full press+release cycle before considering input committed).
+    [[nodiscard]] Key         GetAnyJustReleasedKey()            const { return _anyJustReleasedKey; }
+    [[nodiscard]] MouseButton GetAnyJustReleasedMouseButton()    const { return _anyJustReleasedMouseButton; }
+    [[nodiscard]] GamepadButton GetAnyJustReleasedGamepadButton() const { return _anyJustReleasedGamepadButton; }
+
+    // Add or remove a specific binding from an action.
+    // Used by InputRebindScreen to handle chips (add-on-release, remove-on-click,
+    // restore-on-cancel).
+    void AddBinding   (ActionID action, const Binding& b);
+    void RemoveBinding(ActionID action, const Binding& b);
 
     // Accumulated mouse wheel delta this tick (positive = scroll up/away from user).
     // ProcessEdges moves the pending value into the readable slot each tick.
@@ -275,11 +282,14 @@ private:
     u32 _mouseButtonMask   = 0;
     u32 _mouseJustDownMask = 0;  // set by ProcessEdges(), cleared at next ProcessEdges() call
     u32 _mouseJustUpMask   = 0;
-    Key           _anyJustPressedKey            = Key::Unknown;          // set by ProcessEdges()
-    MouseButton   _anyJustPressedMouseButton    = MouseButton::Count;    // set by ProcessEdges()
-    GamepadButton _anyJustPressedGamepadButton  = GamepadButton::Count;  // set by ProcessEdges()
-    f32           _pendingScrollDelta           = 0.0f;                  // accumulates via InjectMouseScroll
-    f32           _scrollDelta                  = 0.0f;                  // readable after ProcessEdges()
+    Key           _anyJustPressedKey             = Key::Unknown;
+    MouseButton   _anyJustPressedMouseButton     = MouseButton::Count;
+    GamepadButton _anyJustPressedGamepadButton   = GamepadButton::Count;
+    Key           _anyJustReleasedKey            = Key::Unknown;
+    MouseButton   _anyJustReleasedMouseButton    = MouseButton::Count;
+    GamepadButton _anyJustReleasedGamepadButton  = GamepadButton::Count;
+    f32           _pendingScrollDelta            = 0.0f;
+    f32           _scrollDelta                   = 0.0f;
     i32 _mouseX = 0, _mouseY = 0;
     i32 _prevMouseX = 0, _prevMouseY = 0;
 

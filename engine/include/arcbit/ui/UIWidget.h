@@ -83,6 +83,8 @@ public:
         _children.push_back(std::move(child));
         return ptr;
     }
+
+    void ClearChildren() { _children.clear(); }
     
     // Tree traversal — virtual so ScrollPanel and other containers can override
     // child iteration to apply scroll offsets and clip rect registration.
