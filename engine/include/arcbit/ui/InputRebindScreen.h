@@ -52,7 +52,8 @@ private:
     bool        _hadRemoved       = false;   // whether we removed a binding to replace it
     Binding     _removedBinding   = {};      // restored on cancel
 
-    ScrollPanel* _scroll = nullptr;
+    ScrollPanel* _scroll         = nullptr;
+    bool         _pendingRebuild = false; // deferred RebuildScroll to avoid re-entering UpdateTree
 
     void BuildEntries();
     void RebuildScroll();

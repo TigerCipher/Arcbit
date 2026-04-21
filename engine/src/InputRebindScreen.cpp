@@ -11,11 +11,9 @@ namespace Arcbit
 // Module-scope helpers
 // ---------------------------------------------------------------------------
 
-static bool HasHiddenPrefix(std::string_view name, const std::vector<std::string>& prefixes)
+static bool HasHiddenPrefix(const std::string_view name, const std::vector<std::string>& prefixes)
 {
-    for (const auto& p : prefixes)
-        if (name.starts_with(p)) return true;
-    return false;
+    return std::ranges::any_of(prefixes, [&](const std::string& p) { return name.starts_with(p); });
 }
 
 static bool IsKBM(const Binding& b)
@@ -57,10 +55,7 @@ void InputRebindScreen::OnEnter()
     if (!Input) return;
     BuildEntries();
 
-    auto* scrim            = Add<Panel>();
-    scrim->SizePercent     = {1.0f, 1.0f};
-    scrim->BackgroundColor = {0.04f, 0.04f, 0.06f, 1.0f};
-    scrim->ZOrder          = 0;
+    Add<Overlay>();
 
     const f32 panelW = 720.0f;
     const f32 panelH = 560.0f;
@@ -301,20 +296,20 @@ void InputRebindScreen::CancelListening()
 
 void InputRebindScreen::StopListening(const bool commit)
 {
-    if (!_isListening && !_hadRemoved) { RebuildScroll(); return; }
+    if (!_isListening && !_hadRemoved) { _pendingRebuild = true; return; }
     if (!commit && _hadRemoved) Input->AddBinding(_listeningAction, _removedBinding);
     _isListening     = false;
     _listeningButton = nullptr;
     _hadRemoved      = false;
     _flashTimer      = 0.0f;
-    RebuildScroll();
+    _pendingRebuild  = true;
 }
 
 void InputRebindScreen::RemoveChip(const ActionID action, const Binding& b)
 {
     CancelListening();  // restores any in-flight removal, no rebuild yet
     Input->RemoveBinding(action, b);
-    RebuildScroll();
+    _pendingRebuild = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -323,6 +318,8 @@ void InputRebindScreen::RemoveChip(const ActionID action, const Binding& b)
 
 void InputRebindScreen::OnTick(const f32 dt, const InputManager& input)
 {
+    if (_pendingRebuild) { _pendingRebuild = false; RebuildScroll(); }
+
     if (!_isListening) return;
 
     _flashTimer += dt;
