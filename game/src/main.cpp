@@ -10,6 +10,8 @@
 #include <arcbit/render/RenderTypes.h>
 #include <arcbit/scene/Scene.h>
 #include <arcbit/tilemap/TileMap.h>
+#include <arcbit/ui/AudioSettingsScreen.h>
+#include <arcbit/ui/GraphicsSettingsScreen.h>
 #include <arcbit/ui/HudScreen.h>
 #include <arcbit/ui/InputRebindScreen.h>
 #include <arcbit/ui/PauseMenuScreen.h>
@@ -767,10 +769,12 @@ private:
 
     void ShowPauseMenu()
     {
-        auto pause      = std::make_unique<PauseMenuScreen>();
-        pause->OnResume   = [this] { GetUI().Pop(); };
-        pause->OnQuit     = [this] { RequestShutdown(); };
-        pause->OnSettings = [this] { ShowInputRebind(); };
+        auto pause                  = std::make_unique<PauseMenuScreen>();
+        pause->OnResume             = [this] { GetUI().Pop(); };
+        pause->OnControls           = [this] { ShowInputRebind(); };
+        pause->OnAudioSettings      = [this] { ShowAudioSettings(); };
+        pause->OnGraphicsSettings   = [this] { ShowGraphicsSettings(); };
+        pause->OnQuit               = [this] { RequestShutdown(); };
         GetUI().Push(std::move(pause));
     }
 
@@ -780,6 +784,21 @@ private:
         rebind->Input  = &GetInput();
         rebind->OnBack = [this] { GetUI().Pop(); };
         GetUI().Push(std::move(rebind));
+    }
+
+    void ShowAudioSettings()
+    {
+        auto audio    = std::make_unique<AudioSettingsScreen>();
+        audio->OnBack = [this] { GetUI().Pop(); };
+        GetUI().Push(std::move(audio));
+    }
+
+    void ShowGraphicsSettings()
+    {
+        auto gfx                   = std::make_unique<GraphicsSettingsScreen>();
+        gfx->OnBack                = [this] { GetUI().Pop(); };
+        gfx->OnToggleFullscreen    = [this] { ToggleFullscreen(); };
+        GetUI().Push(std::move(gfx));
     }
 
 private:

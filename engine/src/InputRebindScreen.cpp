@@ -214,13 +214,25 @@ void InputRebindScreen::RebuildScroll()
     for (const ActionEntry& e : _entries) {
         if (e.category != lastCategory) {
             if (!e.category.empty()) {
-                auto* cat   = _scroll->AddChild<Label>();
-                cat->Text   = e.category;
-                cat->Size   = {rowW, 22.0f};
-                cat->Anchor = {0.0f, 0.0f};
-                cat->Offset = {nameX + 4.0f, y + 2.0f};
-                cat->ZOrder = 3;
-                y += 26.0f;
+                if (y > 4.0f) y += 6.0f; // extra gap before non-first category
+
+                auto* bar   = _scroll->AddChild<Panel>();
+                bar->Size   = {rowW, 24.0f};
+                bar->Anchor = {0.0f, 0.0f};
+                bar->Offset = {0.0f, y};
+                bar->ZOrder = 3;
+                bar->BackgroundColor = {0.22f, 0.30f, 0.45f, 1.0f};
+
+                auto* cat       = _scroll->AddChild<Label>();
+                cat->Text       = e.category;
+                cat->Size       = {rowW, 24.0f};
+                cat->Anchor     = {0.0f, 0.0f};
+                cat->Offset     = {nameX + 4.0f, y};
+                cat->ZOrder     = 4;
+                cat->TextColor  = {0.85f, 0.92f, 1.0f, 1.0f};
+                cat->AutoCenter = true;
+
+                y += 30.0f;
             }
             lastCategory = e.category;
         }

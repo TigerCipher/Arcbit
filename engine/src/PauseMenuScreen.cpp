@@ -7,13 +7,15 @@ void PauseMenuScreen::OnEnter()
 {
     _roots.clear();
 
-    // Full-screen dark scrim
     Add<Overlay>();
 
-    // Center panel — NineSlice if a texture is wired, else solid Panel
-    const f32 panelW   = 360.0f;
-    const f32 btnCount = ShowSettings ? 3.0f : 2.0f;
-    const f32 panelH   = 80.0f + btnCount * 56.0f + 20.0f;
+    const i32 btnCount = 2 // Resume + Quit always shown
+        + (ShowControls         ? 1 : 0)
+        + (ShowAudioSettings    ? 1 : 0)
+        + (ShowGraphicsSettings ? 1 : 0);
+
+    const f32 panelW = 360.0f;
+    const f32 panelH = 80.0f + static_cast<f32>(btnCount) * 56.0f + 20.0f;
 
     UIWidget* bg;
     if (PanelTexture.IsValid()) {
@@ -41,7 +43,6 @@ void PauseMenuScreen::OnEnter()
     title->Offset = {0.0f, 20.0f};
     title->ZOrder = 2;
 
-    // Thin separator below title — Panel uses skin.PanelBg (dark), visible on light textures.
     auto* sep   = bg->AddChild<Panel>();
     sep->Size   = {panelW - 40.0f, 1.0f};
     sep->Anchor = {0.5f, 0.0f};
@@ -49,13 +50,12 @@ void PauseMenuScreen::OnEnter()
     sep->Offset = {0.0f, 62.0f};
     sep->ZOrder = 2;
 
-    const f32 btnW  = 240.0f;
-    const f32 btnH  = 44.0f;
-    const f32 btnX0 = 72.0f; // top of first button from panel top
-    const f32 gap   = 56.0f;
+    const f32 btnW = 240.0f;
+    const f32 btnH = 44.0f;
+    const f32 gap  = 56.0f;
 
     auto MakeButton = [&](const char* label, f32 yOffset, std::function<void()> cb,
-                          Color       textColor = {0, 0, 0, 0}) -> Button* {
+                          Color textColor = {0, 0, 0, 0}) {
         auto* btn      = bg->AddChild<Button>();
         btn->Text      = label;
         btn->Size      = {btnW, btnH};
@@ -66,15 +66,13 @@ void PauseMenuScreen::OnEnter()
         btn->ZOrder    = 2;
         btn->TextColor = textColor;
         btn->OnClick   = std::move(cb);
-        return btn;
     };
 
-    f32 y = btnX0;
-    MakeButton("Resume", y, OnResume);
-    y += gap;
-    if (ShowSettings)
-        MakeButton("Settings", y, OnSettings);
-    y += gap;
+    f32 y = 72.0f;
+    MakeButton("Resume",   y, OnResume); y += gap;
+    if (ShowControls)         { MakeButton("Controls", y, OnControls);         y += gap; }
+    if (ShowAudioSettings)    { MakeButton("Audio",    y, OnAudioSettings);    y += gap; }
+    if (ShowGraphicsSettings) { MakeButton("Graphics", y, OnGraphicsSettings); y += gap; }
     MakeButton("Quit", y, OnQuit, {0.88f, 0.30f, 0.30f, 1.0f});
 }
 } // namespace Arcbit

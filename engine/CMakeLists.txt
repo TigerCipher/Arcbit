@@ -30,6 +30,8 @@ add_library(arcbit-engine STATIC
     src/HudScreen.cpp
     src/PauseMenuScreen.cpp
     src/InputRebindScreen.cpp
+    src/AudioSettingsScreen.cpp
+    src/GraphicsSettingsScreen.cpp
 )
 
 target_include_directories(arcbit-engine
