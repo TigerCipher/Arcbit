@@ -1,7 +1,6 @@
 #include <arcbit/ui/InputRebindScreen.h>
 #include <arcbit/ui/Widgets.h>
 #include <arcbit/input/InputManager.h>
-#include <arcbit/core/Loc.h>
 
 #include <algorithm>
 
@@ -56,78 +55,13 @@ void InputRebindScreen::OnEnter()
     if (!Input) return;
     BuildEntries();
 
-    Add<Overlay>();
+    LoadLayout(LayoutPath);
 
-    const f32 panelW = 720.0f;
-    const f32 panelH = 560.0f;
-
-    auto* bg   = Add<Panel>();
-    bg->Size   = {panelW, panelH};
-    bg->Anchor = {0.5f, 0.5f};
-    bg->Pivot  = {0.5f, 0.5f};
-    bg->ZOrder = 1;
-
-    auto* title   = bg->AddChild<Label>();
-    title->Text   = Loc::Get("ui.rebind.title");
-    title->Align  = TextAlign::Center;
-    title->Size   = {panelW, 28.0f};
-    title->Anchor = {0.5f, 0.0f};
-    title->Pivot  = {0.5f, 0.0f};
-    title->Offset = {0.0f, 16.0f};
-    title->ZOrder = 2;
-
-    const f32 nameX  = 16.0f;
-    const f32 keyHX  = 250.0f;
-    const f32 ctrlHX = 462.0f;
-    const f32 hdrY   = 54.0f;
-
-    auto* hdrAction   = bg->AddChild<Label>();
-    hdrAction->Text   = Loc::Get("ui.rebind.col_action");
-    hdrAction->Size   = {220.0f, 18.0f};
-    hdrAction->Anchor = {0.0f, 0.0f};
-    hdrAction->Offset = {nameX, hdrY};
-    hdrAction->ZOrder = 2;
-
-    auto* hdrKey    = bg->AddChild<Label>();
-    hdrKey->Text    = Loc::Get("ui.rebind.col_key");
-    hdrKey->Size    = {190.0f, 18.0f};
-    hdrKey->Anchor  = {0.0f, 0.0f};
-    hdrKey->Offset  = {keyHX, hdrY};
-    hdrKey->ZOrder  = 2;
-
-    auto* hdrCtrl   = bg->AddChild<Label>();
-    hdrCtrl->Text   = Loc::Get("ui.rebind.col_ctrl");
-    hdrCtrl->Size   = {190.0f, 18.0f};
-    hdrCtrl->Anchor = {0.0f, 0.0f};
-    hdrCtrl->Offset = {ctrlHX, hdrY};
-    hdrCtrl->ZOrder = 2;
-
-    auto* sep    = bg->AddChild<Panel>();
-    sep->Size    = {panelW - 40.0f, 1.0f};
-    sep->Anchor  = {0.5f, 0.0f};
-    sep->Pivot   = {0.5f, 0.0f};
-    sep->Offset  = {0.0f, 76.0f};
-    sep->ZOrder  = 2;
-
-    _scroll                 = bg->AddChild<ScrollPanel>();
-    _scroll->Size           = {panelW - 20.0f, panelH - 148.0f};
-    _scroll->Anchor         = {0.5f, 0.0f};
-    _scroll->Pivot          = {0.5f, 0.0f};
-    _scroll->Offset         = {0.0f, 82.0f};
-    _scroll->ZOrder         = 2;
-    _scroll->ScrollbarWidth = 8.0f;
-
+    _scroll = FindWidget<ScrollPanel>("scroll");
     RebuildScroll();
 
-    auto* back      = bg->AddChild<Button>();
-    back->Text      = Loc::Get("ui.common.back");
-    back->Size      = {160.0f, 40.0f};
-    back->Anchor    = {0.5f, 1.0f};
-    back->Pivot     = {0.5f, 1.0f};
-    back->Offset    = {0.0f, -16.0f};
-    back->Focusable = true;
-    back->ZOrder    = 2;
-    back->OnClick   = [this] { StopListening(false); if (OnBack) OnBack(); };
+    if (auto* back = FindWidget<Button>("back-btn"))
+        back->OnClick = [this] { StopListening(false); if (OnBack) OnBack(); };
 }
 
 // ---------------------------------------------------------------------------
@@ -205,9 +139,9 @@ void InputRebindScreen::RebuildScroll()
     const f32 chipSlot = chipH + chipGap;
     const f32 rowPad   = 10.0f;
     const f32 rowW     = _scroll->Size.X - _scroll->ScrollbarWidth - 8.0f;
-    const f32 nameX    = 8.0f;
-    const f32 keyColX  = 242.0f;
-    const f32 ctrlColX = 454.0f;
+    const f32 nameX    = GetMetaF32("name_x",     8.0f);
+    const f32 keyColX  = GetMetaF32("key_col_x",  242.0f);
+    const f32 ctrlColX = GetMetaF32("ctrl_col_x", 454.0f);
 
     f32              y            = 4.0f;
     std::string_view lastCategory;

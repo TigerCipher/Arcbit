@@ -515,7 +515,9 @@ engine/
     GraphicsSettingsScreen.cpp
   assets/ui/                — engine-provided .arcui defaults
     pause_menu.arcui
-    (audio_settings.arcui, graphics_settings.arcui — pending migration)
+    audio_settings.arcui
+    graphics_settings.arcui
+    input_rebind.arcui
   assets/locale/            — engine locale strings
     en.json
 ```
@@ -552,10 +554,10 @@ Game assets go in `game/assets/ui/`.
 - [x] `UIWidget::Name` + `FindDescendant` for post-load callback wiring
 - [x] `UIScreen::LoadLayout`, `FindWidget<T>`, meta accessors
 - [x] `PauseMenuScreen` migrated to `.arcui` with C++ fallback
-- [x] `AudioSettingsScreen`, `GraphicsSettingsScreen` (code-built; awaiting `.arcui` migration)
+- [x] `AudioSettingsScreen`, `GraphicsSettingsScreen` migrated to `.arcui` with `WireVolumeRow`/`FindWidget` callbacks
 - [x] Engine asset deployment: `engine/assets/ui/` → `assets/engine/ui/` via CMake
 - [x] Localization foundation: `Loc::Get(key)`, `text_key` field in UILoader, `en.json` engine locale
-- [ ] Migrate `AudioSettingsScreen`, `GraphicsSettingsScreen`, `InputRebindScreen` to `.arcui`
+- [x] Migrate `AudioSettingsScreen`, `GraphicsSettingsScreen`, `InputRebindScreen` chrome to `.arcui`
 - [ ] Editor integration: load/save `.arcui` from AvaloniaUI editor
 
 ### Phase 21D — Engine Screens (planned)

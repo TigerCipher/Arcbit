@@ -1,0 +1,72 @@
+{
+  "widgets": [
+    {
+      "type": "Overlay"
+    },
+    {
+      "type":   "Panel",
+      "name":   "bg",
+      "size":   [420, 300],
+      "anchor": [0.5, 0.5],
+      "pivot":  [0.5, 0.5],
+      "zorder": 1,
+      "children": [
+        {
+          "type":     "Label",
+          "name":     "title",
+          "text_key": "ui.graphics.title",
+          "align":    "center",
+          "size":     [420, 28],
+          "anchor":   [0.5, 0.0],
+          "pivot":    [0.5, 0.0],
+          "offset":   [0, 16],
+          "zorder":   2
+        },
+        {
+          "type":   "Panel",
+          "name":   "separator",
+          "size":   [380, 1],
+          "anchor": [0.5, 0.0],
+          "pivot":  [0.5, 0.0],
+          "offset": [0, 56],
+          "zorder": 2
+        },
+
+        { "type": "Label",  "text_key": "ui.graphics.fullscreen", "size": [200, 32], "anchor": [0.0, 0.0], "offset": [20, 70],  "zorder": 2 },
+        { "type": "Button", "name": "fullscreen-btn", "size": [120, 32], "anchor": [0.0, 0.0], "offset": [240, 70],  "focusable": true, "zorder": 2 },
+
+        { "type": "Label",  "text_key": "ui.graphics.vsync",      "size": [200, 32], "anchor": [0.0, 0.0], "offset": [20, 118], "zorder": 2 },
+        { "type": "Button", "name": "vsync-btn",      "size": [120, 32], "anchor": [0.0, 0.0], "offset": [240, 118], "focusable": true, "zorder": 2 },
+
+        { "type": "Label",  "text_key": "ui.graphics.fps_limit",  "size": [200, 32], "anchor": [0.0, 0.0], "offset": [20, 166], "zorder": 2 },
+        { "type": "Button", "name": "fps-dec", "text": "<",       "size": [32,  32], "anchor": [0.0, 0.0], "offset": [240, 166], "zorder": 2 },
+        { "type": "Label",  "name": "fps-val", "align": "center", "size": [90,  32], "anchor": [0.0, 0.0], "offset": [278, 166], "zorder": 2 },
+        { "type": "Button", "name": "fps-inc", "text": ">",       "size": [32,  32], "anchor": [0.0, 0.0], "offset": [374, 166], "zorder": 2 },
+
+        {
+          "type":       "Label",
+          "name":       "vsync-note",
+          "text_key":   "ui.graphics.vsync_note",
+          "align":      "center",
+          "size":       [420, 18],
+          "anchor":     [0.5, 0.0],
+          "pivot":      [0.5, 0.0],
+          "offset":     [0, 214],
+          "text_color": [0.50, 0.50, 0.50, 1.0],
+          "zorder":     2
+        },
+        {
+          "type":      "Button",
+          "name":      "back-btn",
+          "text_key":  "ui.common.back",
+          "size":      [160, 40],
+          "anchor":    [0.5, 1.0],
+          "pivot":     [0.5, 1.0],
+          "offset":    [0, -16],
+          "focusable": true,
+          "zorder":    2
+        }
+      ]
+    }
+  ]
+}

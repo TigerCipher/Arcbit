@@ -1,0 +1,90 @@
+{
+  "widgets": [
+    {
+      "type": "Overlay"
+    },
+    {
+      "type":   "Panel",
+      "name":   "bg",
+      "size":   [720, 560],
+      "anchor": [0.5, 0.5],
+      "pivot":  [0.5, 0.5],
+      "zorder": 1,
+      "children": [
+        {
+          "type":     "Label",
+          "name":     "title",
+          "text_key": "ui.rebind.title",
+          "align":    "center",
+          "size":     [720, 28],
+          "anchor":   [0.5, 0.0],
+          "pivot":    [0.5, 0.0],
+          "offset":   [0, 16],
+          "zorder":   2
+        },
+        {
+          "type":     "Label",
+          "name":     "hdr-action",
+          "text_key": "ui.rebind.col_action",
+          "size":     [220, 18],
+          "anchor":   [0.0, 0.0],
+          "offset":   [16, 54],
+          "zorder":   2
+        },
+        {
+          "type":     "Label",
+          "name":     "hdr-key",
+          "text_key": "ui.rebind.col_key",
+          "size":     [190, 18],
+          "anchor":   [0.0, 0.0],
+          "offset":   [250, 54],
+          "zorder":   2
+        },
+        {
+          "type":     "Label",
+          "name":     "hdr-ctrl",
+          "text_key": "ui.rebind.col_ctrl",
+          "size":     [190, 18],
+          "anchor":   [0.0, 0.0],
+          "offset":   [462, 54],
+          "zorder":   2
+        },
+        {
+          "type":   "Panel",
+          "name":   "separator",
+          "size":   [680, 1],
+          "anchor": [0.5, 0.0],
+          "pivot":  [0.5, 0.0],
+          "offset": [0, 76],
+          "zorder": 2
+        },
+        {
+          "type":            "ScrollPanel",
+          "name":            "scroll",
+          "size":            [700, 412],
+          "anchor":          [0.5, 0.0],
+          "pivot":           [0.5, 0.0],
+          "offset":          [0, 82],
+          "scrollbar_width": 8,
+          "zorder":          2
+        },
+        {
+          "type":      "Button",
+          "name":      "back-btn",
+          "text_key":  "ui.common.back",
+          "size":      [160, 40],
+          "anchor":    [0.5, 1.0],
+          "pivot":     [0.5, 1.0],
+          "offset":    [0, -16],
+          "focusable": true,
+          "zorder":    2
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "name_x":     8,
+    "key_col_x":  242,
+    "ctrl_col_x": 454
+  }
+}

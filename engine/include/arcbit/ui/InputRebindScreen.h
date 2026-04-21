@@ -33,6 +33,8 @@ public:
     // Action names starting with any of these prefixes are hidden.
     std::vector<std::string> HiddenPrefixes = {"UI_", "Engine_"};
 
+    std::string LayoutPath = "assets/engine/ui/input_rebind.arcui";
+
     InputRebindScreen() { BlocksInput = true; TransitionSpeed = 6.0f; }
 
     void OnEnter() override;
