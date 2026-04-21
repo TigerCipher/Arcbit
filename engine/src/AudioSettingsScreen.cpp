@@ -3,6 +3,7 @@
 #include <arcbit/ui/Widgets.h>
 #include <arcbit/audio/AudioManager.h>
 #include <arcbit/settings/Settings.h>
+#include <arcbit/core/Loc.h>
 
 #include <format>
 
@@ -105,7 +106,7 @@ void AudioSettingsScreen::OnEnter()
     bg->ZOrder = 1;
 
     auto* title   = bg->AddChild<Label>();
-    title->Text   = "Audio Settings";
+    title->Text   = Loc::Get("ui.audio.title");
     title->Align  = TextAlign::Center;
     title->Size   = {panelW, 28.0f};
     title->Anchor = {0.5f, 0.0f};
@@ -120,20 +121,20 @@ void AudioSettingsScreen::OnEnter()
     sep->Offset = {0.0f, 56.0f};
     sep->ZOrder = 2;
 
-    AddVolumeRow(bg, "Master Volume", 72.0f, _masterBar, _masterPct,
+    AddVolumeRow(bg, Loc::Get("ui.audio.master").c_str(), 72.0f, _masterBar, _masterPct,
         []()      { return Settings::Audio.MasterVolume; },
         [](f32 v) { Settings::Audio.MasterVolume = v; Settings::MarkDirty(); AudioManager::SetMasterVolume(v); });
 
-    AddVolumeRow(bg, "Music Volume", 120.0f, _musicBar, _musicPct,
+    AddVolumeRow(bg, Loc::Get("ui.audio.music").c_str(), 120.0f, _musicBar, _musicPct,
         []()      { return Settings::Audio.MusicVolume; },
         [](f32 v) { Settings::Audio.MusicVolume = v; Settings::MarkDirty(); AudioManager::SetMusicVolume(v); });
 
-    AddVolumeRow(bg, "SFX Volume", 168.0f, _sfxBar, _sfxPct,
+    AddVolumeRow(bg, Loc::Get("ui.audio.sfx").c_str(), 168.0f, _sfxBar, _sfxPct,
         []()      { return Settings::Audio.SfxVolume; },
         [](f32 v) { Settings::Audio.SfxVolume = v; Settings::MarkDirty(); AudioManager::SetSfxVolume(v); });
 
     auto* back      = bg->AddChild<Button>();
-    back->Text      = "Back";
+    back->Text      = Loc::Get("ui.common.back");
     back->Size      = {160.0f, 40.0f};
     back->Anchor    = {0.5f, 1.0f};
     back->Pivot     = {0.5f, 1.0f};

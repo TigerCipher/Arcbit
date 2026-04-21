@@ -366,6 +366,62 @@ if needed (future: per-type `FromJson` hook).
 
 ---
 
+### Custom UI with Lua scripting (future — Phase 28+)
+
+The `.arcui` format is designed to eventually support Lua-driven behavior so
+that modders and game authors can build complete screens — including callbacks —
+without writing C++.
+
+**Planned `.arcui` fields:**
+
+```json
+{
+  "type": "Button", "name": "my-btn",
+  "text_key": "ui.myscreen.action",
+  "on_click": "MyScript.OnAction"
+}
+```
+
+And at the screen level:
+
+```json
+{
+  "widgets": [ ... ],
+  "script": "scripts/ui/my_screen.lua"
+}
+```
+
+**How it will work:**
+
+1. `UILoader::Load` loads the `.lua` script specified in `"script"` and passes it
+   to the Lua VM.
+2. `"on_click": "Namespace.FunctionName"` wires a Lua function directly to
+   `Button::OnClick`. The engine calls the Lua function when the button is clicked.
+3. The Lua script can call engine-exposed APIs to push/pop screens, read game
+   state, play sounds, etc.
+
+**What stays in C++:**
+
+- Engine-owned screens (`InputRebindScreen`, `AudioSettingsScreen`) keep their C++
+  behavior wired after `LoadLayout`. They expose visual customization via `.arcui`
+  (layout, colors, text) but their logic cannot be replaced with Lua.
+- Performance-critical screens (e.g., HUD updated every tick) should remain C++.
+
+**When to use each approach:**
+
+| Scenario | Approach |
+|---|---|
+| Reskin or rearrange an engine screen | Edit its `.arcui` file |
+| Add a new menu with simple button actions | `.arcui` + Lua script |
+| Screens that read/write engine state heavily | C++ `UIScreen` subclass |
+| Dynamic content (chip lists, scroll rows) | C++ `OnEnter` + `RebuildScroll` |
+
+Until Lua scripting lands, game-specific screens are implemented as C++
+`UIScreen` subclasses that call `LoadLayout` for visual layout and wire all
+callbacks in `OnEnter`.
+
+---
+
 ## Screen Management
 
 `UIScreen` owns a widget tree and represents one logical UI layer.
@@ -460,6 +516,8 @@ engine/
   assets/ui/                — engine-provided .arcui defaults
     pause_menu.arcui
     (audio_settings.arcui, graphics_settings.arcui — pending migration)
+  assets/locale/            — engine locale strings
+    en.json
 ```
 
 Engine assets are copied to `assets/engine/ui/` in the runtime output directory.
@@ -496,7 +554,7 @@ Game assets go in `game/assets/ui/`.
 - [x] `PauseMenuScreen` migrated to `.arcui` with C++ fallback
 - [x] `AudioSettingsScreen`, `GraphicsSettingsScreen` (code-built; awaiting `.arcui` migration)
 - [x] Engine asset deployment: `engine/assets/ui/` → `assets/engine/ui/` via CMake
-- [ ] Localization foundation: `Loc::Get(key)`, `text_key` field in UILoader
+- [x] Localization foundation: `Loc::Get(key)`, `text_key` field in UILoader, `en.json` engine locale
 - [ ] Migrate `AudioSettingsScreen`, `GraphicsSettingsScreen`, `InputRebindScreen` to `.arcui`
 - [ ] Editor integration: load/save `.arcui` from AvaloniaUI editor
 

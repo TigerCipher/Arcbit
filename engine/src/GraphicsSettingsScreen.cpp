@@ -1,6 +1,7 @@
 #include <arcbit/ui/GraphicsSettingsScreen.h>
 #include <arcbit/ui/Widgets.h>
 #include <arcbit/settings/Settings.h>
+#include <arcbit/core/Loc.h>
 
 #include <algorithm>
 #include <format>
@@ -13,7 +14,8 @@ static constexpr i32 FpsPresetCount = static_cast<i32>(std::size(FpsPresets));
 
 static std::string FpsPresetText(const u32 limit)
 {
-    return limit == 0 ? "Unlimited" : std::format("{} fps", limit);
+    return limit == 0 ? std::string(Loc::Get("ui.common.unlimited"))
+                      : std::format("{} fps", limit);
 }
 
 // ---------------------------------------------------------------------------
@@ -32,14 +34,14 @@ void GraphicsSettingsScreen::AddToggleRow(UIWidget* parent, const char* name, co
     lbl->ZOrder  = 2;
 
     auto* btn    = parent->AddChild<Button>();
-    btn->Text    = get() ? "On" : "Off";
+    btn->Text    = get() ? Loc::Get("ui.common.on") : Loc::Get("ui.common.off");
     btn->Size    = {120.0f, 32.0f};
     btn->Anchor  = {0.0f, 0.0f};
     btn->Offset  = {240.0f, yOffset};
     btn->ZOrder  = 2;
     btn->OnClick = [get, toggle, &outBtn]() {
         toggle();
-        if (outBtn) outBtn->Text = get() ? "On" : "Off";
+        if (outBtn) outBtn->Text = get() ? Loc::Get("ui.common.on") : Loc::Get("ui.common.off");
     };
     outBtn = btn;
 }
@@ -51,7 +53,7 @@ void GraphicsSettingsScreen::AddToggleRow(UIWidget* parent, const char* name, co
 void GraphicsSettingsScreen::AddFpsRow(UIWidget* parent, const f32 yOffset)
 {
     auto* lbl    = parent->AddChild<Label>();
-    lbl->Text    = "FPS Limit";
+    lbl->Text    = Loc::Get("ui.graphics.fps_limit");
     lbl->Size    = {200.0f, 32.0f};
     lbl->Anchor  = {0.0f, 0.0f};
     lbl->Offset  = {20.0f, yOffset};
@@ -117,7 +119,7 @@ void GraphicsSettingsScreen::OnEnter()
     bg->ZOrder = 1;
 
     auto* title   = bg->AddChild<Label>();
-    title->Text   = "Graphics Settings";
+    title->Text   = Loc::Get("ui.graphics.title");
     title->Align  = TextAlign::Center;
     title->Size   = {panelW, 28.0f};
     title->Anchor = {0.5f, 0.0f};
@@ -132,21 +134,21 @@ void GraphicsSettingsScreen::OnEnter()
     sep->Offset = {0.0f, 56.0f};
     sep->ZOrder = 2;
 
-    AddToggleRow(bg, "Fullscreen", 70.0f, _fullscreenBtn,
+    AddToggleRow(bg, Loc::Get("ui.graphics.fullscreen").c_str(), 70.0f, _fullscreenBtn,
         []()  { return Settings::Graphics.Fullscreen; },
         [this]() {
             if (OnToggleFullscreen) OnToggleFullscreen();
             // Settings::Graphics.Fullscreen is flipped by Application::ToggleFullscreen
         });
 
-    AddToggleRow(bg, "VSync", 118.0f, _vsyncBtn,
+    AddToggleRow(bg, Loc::Get("ui.graphics.vsync").c_str(), 118.0f, _vsyncBtn,
         []()  { return Settings::Graphics.VSync; },
         []()  { Settings::Graphics.VSync = !Settings::Graphics.VSync; Settings::MarkDirty(); });
 
     AddFpsRow(bg, 166.0f);
 
     auto* note    = bg->AddChild<Label>();
-    note->Text    = "VSync changes apply on restart.";
+    note->Text    = Loc::Get("ui.graphics.vsync_note");
     note->Align   = TextAlign::Center;
     note->Size    = {panelW, 18.0f};
     note->Anchor  = {0.5f, 0.0f};
@@ -156,7 +158,7 @@ void GraphicsSettingsScreen::OnEnter()
     note->TextColor = {0.50f, 0.50f, 0.50f, 1.0f};
 
     auto* back      = bg->AddChild<Button>();
-    back->Text      = "Back";
+    back->Text      = Loc::Get("ui.common.back");
     back->Size      = {160.0f, 40.0f};
     back->Anchor    = {0.5f, 1.0f};
     back->Pivot     = {0.5f, 1.0f};

@@ -1,6 +1,7 @@
 #include <arcbit/ui/InputRebindScreen.h>
 #include <arcbit/ui/Widgets.h>
 #include <arcbit/input/InputManager.h>
+#include <arcbit/core/Loc.h>
 
 #include <algorithm>
 
@@ -67,7 +68,7 @@ void InputRebindScreen::OnEnter()
     bg->ZOrder = 1;
 
     auto* title   = bg->AddChild<Label>();
-    title->Text   = "Input Bindings";
+    title->Text   = Loc::Get("ui.rebind.title");
     title->Align  = TextAlign::Center;
     title->Size   = {panelW, 28.0f};
     title->Anchor = {0.5f, 0.0f};
@@ -81,21 +82,21 @@ void InputRebindScreen::OnEnter()
     const f32 hdrY   = 54.0f;
 
     auto* hdrAction   = bg->AddChild<Label>();
-    hdrAction->Text   = "Action";
+    hdrAction->Text   = Loc::Get("ui.rebind.col_action");
     hdrAction->Size   = {220.0f, 18.0f};
     hdrAction->Anchor = {0.0f, 0.0f};
     hdrAction->Offset = {nameX, hdrY};
     hdrAction->ZOrder = 2;
 
     auto* hdrKey    = bg->AddChild<Label>();
-    hdrKey->Text    = "Key / Mouse";
+    hdrKey->Text    = Loc::Get("ui.rebind.col_key");
     hdrKey->Size    = {190.0f, 18.0f};
     hdrKey->Anchor  = {0.0f, 0.0f};
     hdrKey->Offset  = {keyHX, hdrY};
     hdrKey->ZOrder  = 2;
 
     auto* hdrCtrl   = bg->AddChild<Label>();
-    hdrCtrl->Text   = "Controller";
+    hdrCtrl->Text   = Loc::Get("ui.rebind.col_ctrl");
     hdrCtrl->Size   = {190.0f, 18.0f};
     hdrCtrl->Anchor = {0.0f, 0.0f};
     hdrCtrl->Offset = {ctrlHX, hdrY};
@@ -119,7 +120,7 @@ void InputRebindScreen::OnEnter()
     RebuildScroll();
 
     auto* back      = bg->AddChild<Button>();
-    back->Text      = "Back";
+    back->Text      = Loc::Get("ui.common.back");
     back->Size      = {160.0f, 40.0f};
     back->Anchor    = {0.5f, 1.0f};
     back->Pivot     = {0.5f, 1.0f};

@@ -33,6 +33,7 @@ add_library(arcbit-engine STATIC
     src/AudioSettingsScreen.cpp
     src/GraphicsSettingsScreen.cpp
     src/UILoader.cpp
+    src/Loc.cpp
 )
 
 target_include_directories(arcbit-engine
@@ -105,6 +106,16 @@ add_custom_target(arcbit-engine-ui-assets ALL
         "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui"
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/engine/ui"
     COMMENT "Copying engine UI assets to bin/assets/engine/ui/"
+    VERBATIM
+)
+
+add_custom_target(arcbit-engine-locale-assets ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/engine/locale"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/locale"
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/engine/locale"
+    COMMENT "Copying engine locale assets to bin/assets/engine/locale/"
     VERBATIM
 )
 

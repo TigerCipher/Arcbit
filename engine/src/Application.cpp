@@ -4,6 +4,7 @@
 #include <arcbit/audio/AudioManager.h>
 #include <arcbit/scene/Scene.h>
 #include <arcbit/settings/Settings.h>
+#include <arcbit/core/Loc.h>
 #include <arcbit/core/Log.h>
 #include <arcbit/core/Assert.h>
 
@@ -119,6 +120,10 @@ void Application::Run()
     // Registers UI navigation actions (UI_Confirm, UI_FocusNext, UI_FocusPrev) before OnStart
     // so games can rebind them via Settings::LoadInputBindings after OnStart.
     _ui.Init(_renderThread, _debugFont, _input);
+
+    // Load engine locale strings before OnStart so built-in screens display correctly.
+    if (!Loc::Load("assets/engine/locale/en.json"))
+        LOG_WARN(Engine, "Failed to load locale strings");
 
     // Give the game a chance to register actions, create GPU resources, etc.
     // Input bindings are loaded from settings AFTER OnStart so that default

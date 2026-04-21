@@ -1,6 +1,7 @@
 #include <arcbit/ui/UILoader.h>
 #include <arcbit/ui/UIScreen.h>
 #include <arcbit/ui/Widgets.h>
+#include <arcbit/core/Loc.h>
 #include <arcbit/core/Log.h>
 
 #include <nlohmann/json.hpp>
@@ -89,6 +90,7 @@ static void ApplyLabel(UIWidget& w, const json& j)
 {
     auto& l = static_cast<Label&>(w);
     if (auto it = j.find("text");        it != j.end()) l.Text       = it->get<std::string>();
+    if (auto it = j.find("text_key");    it != j.end()) l.Text       = Loc::Get(it->get<std::string>());
     if (auto it = j.find("word_wrap");   it != j.end()) l.WordWrap   = it->get<bool>();
     if (auto it = j.find("auto_center"); it != j.end()) l.AutoCenter = it->get<bool>();
     if (auto it = j.find("text_color");  it != j.end()) l.TextColor  = ReadColor(*it);
@@ -104,6 +106,7 @@ static void ApplyButton(UIWidget& w, const json& j)
 {
     auto& b = static_cast<Button&>(w);
     if (auto it = j.find("text");       it != j.end()) b.Text      = it->get<std::string>();
+    if (auto it = j.find("text_key");   it != j.end()) b.Text      = Loc::Get(it->get<std::string>());
     if (auto it = j.find("text_color"); it != j.end()) b.TextColor = ReadColor(*it);
 }
 
