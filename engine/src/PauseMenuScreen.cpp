@@ -1,15 +1,53 @@
 #include <arcbit/ui/PauseMenuScreen.h>
 #include <arcbit/ui/Widgets.h>
+#include <arcbit/core/Log.h>
 
 namespace Arcbit
 {
+
 void PauseMenuScreen::OnEnter()
 {
     _roots.clear();
 
+    // Load visual layout from file; fall back to built-in if the file is absent.
+    if (!LoadLayout(LayoutPath)) {
+        LOG_WARN(UI, "PauseMenuScreen: '{}' not found, using built-in layout", LayoutPath);
+        BuildFallback();
+        return;
+    }
+
+    // Wire callbacks — layout is data, behavior is code.
+    if (auto* btn = FindWidget<Button>("resume-btn"))
+        btn->OnClick = OnResume;
+
+    if (auto* btn = FindWidget<Button>("controls-btn")) {
+        btn->Visible = ShowControls;
+        btn->OnClick = OnControls;
+    }
+
+    if (auto* btn = FindWidget<Button>("audio-btn")) {
+        btn->Visible = ShowAudioSettings;
+        btn->OnClick = OnAudioSettings;
+    }
+
+    if (auto* btn = FindWidget<Button>("graphics-btn")) {
+        btn->Visible = ShowGraphicsSettings;
+        btn->OnClick = OnGraphicsSettings;
+    }
+
+    if (auto* btn = FindWidget<Button>("quit-btn"))
+        btn->OnClick = OnQuit;
+}
+
+// ---------------------------------------------------------------------------
+// BuildFallback — inline layout used when the .arcui file is unavailable.
+// ---------------------------------------------------------------------------
+
+void PauseMenuScreen::BuildFallback()
+{
     Add<Overlay>();
 
-    const i32 btnCount = 2 // Resume + Quit always shown
+    const i32 btnCount = 2
         + (ShowControls         ? 1 : 0)
         + (ShowAudioSettings    ? 1 : 0)
         + (ShowGraphicsSettings ? 1 : 0);
@@ -75,4 +113,5 @@ void PauseMenuScreen::OnEnter()
     if (ShowGraphicsSettings) { MakeButton("Graphics", y, OnGraphicsSettings); y += gap; }
     MakeButton("Quit", y, OnQuit, {0.88f, 0.30f, 0.30f, 1.0f});
 }
+
 } // namespace Arcbit

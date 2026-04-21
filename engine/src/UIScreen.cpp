@@ -1,9 +1,54 @@
 #include <arcbit/ui/UIScreen.h>
+#include <arcbit/ui/UILoader.h>
 #include <arcbit/render/RenderThread.h>
 
 #include <algorithm>
 
+#include "arcbit/core/Log.h"
+
 namespace Arcbit {
+
+// ---------------------------------------------------------------------------
+// Layout loading + meta
+// ---------------------------------------------------------------------------
+
+UIWidget* UIScreen::AddRaw(std::unique_ptr<UIWidget> w)
+{
+    UIWidget* ptr = w.get();
+    _roots.push_back(std::move(w));
+    return ptr;
+}
+
+bool UIScreen::LoadLayout(const std::string_view path)
+{
+    LOG_INFO(UI, "Loading UI layout from: {}", path);
+    _roots.clear();
+    _metaF32.clear();
+    _metaStr.clear();
+    return UILoader::Load(path, *this);
+}
+
+f32 UIScreen::GetMetaF32(const std::string_view key, const f32 def) const
+{
+    const auto it = _metaF32.find(std::string(key));
+    return it != _metaF32.end() ? it->second : def;
+}
+
+std::string UIScreen::GetMetaStr(const std::string_view key, const std::string_view def) const
+{
+    const auto it = _metaStr.find(std::string(key));
+    return it != _metaStr.end() ? it->second : std::string(def);
+}
+
+void UIScreen::SetMetaF32(const std::string_view key, const f32 value)
+{
+    _metaF32[std::string(key)] = value;
+}
+
+void UIScreen::SetMetaStr(const std::string_view key, const std::string_view value)
+{
+    _metaStr[std::string(key)] = std::string(value);
+}
 
 // ---------------------------------------------------------------------------
 // Widget tree update / collect

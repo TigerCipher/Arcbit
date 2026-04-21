@@ -7,6 +7,8 @@
 
 #include <functional>
 #include <memory>
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace Arcbit
@@ -68,6 +70,9 @@ public:
     // Whether this widget participates in keyboard/gamepad focus navigation.
     bool Focusable = false;
 
+    // Optional identifier used by UIScreen::FindWidget to locate this widget.
+    std::string Name;
+
     virtual ~UIWidget() = default;
 
     // Compute this widget's pixel rect relative to parentRect.
@@ -84,7 +89,13 @@ public:
         return ptr;
     }
 
+    // Add a pre-constructed widget (used by UILoader).
+    UIWidget* AddChildRaw(std::unique_ptr<UIWidget> child);
+
     void ClearChildren() { _children.clear(); }
+
+    // Search this widget and all descendants by Name. Returns nullptr if not found.
+    [[nodiscard]] UIWidget* FindDescendant(std::string_view name);
     
     // Tree traversal — virtual so ScrollPanel and other containers can override
     // child iteration to apply scroll offsets and clip rect registration.

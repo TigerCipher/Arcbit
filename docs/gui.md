@@ -9,20 +9,19 @@ HUD elements, menus, dialog boxes, inventory screens, and pause menus.
 Guiding principles:
 - **Screen-space only** — widgets render in pixel coordinates with no camera
   transform, matching the SDF pipeline convention.
-- **No new GPU pipeline** — solid-color and textured quads reuse the existing SDF
+- **No new GPU pipeline** — solid-color and textured quads reuse the existing UI
   sprite pipeline; a 1×1 white texture stands in for untextured quads.
 - **Retained, not immediate** — widget trees are built once and mutated, not
-  rebuilt every frame. This keeps per-frame cost proportional to what changed,
-  not to the total widget count.
-- **Thin render layer** — the UI system outputs `SDFSprites` (and eventually
-  regular `Sprites` for world-space widgets). No new FramePacket lists needed.
+  rebuilt every frame. Per-frame cost is proportional to what changed.
+- **Data-driven layout** — widget trees are described in `.arcui` JSON files;
+  behavior (callbacks, dynamic content) is wired in C++ after loading.
 
 ---
 
 ## Coordinate System
 
 All UI positions and sizes are in **screen pixels**, origin at the **top-left**
-corner of the window (matching the SDF text pipeline):
+corner of the window:
 
 ```
 (0,0) ──────────────── (W, 0)
@@ -47,25 +46,8 @@ Each widget has:
 | `Anchor` | `Vec2` | Normalized (0–1) point on the **parent** rect. `{0,0}` = top-left, `{0.5,0.5}` = center, `{1,1}` = bottom-right. |
 | `Pivot` | `Vec2` | Normalized point on the **widget itself** that aligns to the anchor. Defaults to `{0,0}` (top-left). |
 | `Offset` | `Vec2` | Pixel displacement added after anchor/pivot alignment. |
-| `Size` | `Vec2` | Widget size in pixels. Can be overridden by stretch mode. |
+| `Size` | `Vec2` | Widget size in pixels. Can be overridden by `SizePercent`. |
 | `SizePercent` | `Vec2` | If non-zero, overrides `Size` as a fraction of the parent's size (useful for bars, full-screen panels). |
-
-**Examples:**
-
-```
-// Centered on screen
-anchor = {0.5, 0.5}, pivot = {0.5, 0.5}, offset = {0, 0}
-
-// Bottom-right corner, 8px margin
-anchor = {1, 1}, pivot = {1, 1}, offset = {-8, -8}
-
-// Top bar spanning full width, 40px tall
-anchor = {0, 0}, pivot = {0, 0}, size = {0, 40}, sizePercent = {1, 0}
-```
-
-Layout is computed top-down: a parent resolves its own rect first, then children
-resolve relative to it. Computed rects are cached and invalidated when any
-ancestor's position, size, or visibility changes.
 
 ---
 
@@ -76,277 +58,373 @@ ancestor's position, size, or visibility changes.
 All widgets inherit from `UIWidget`. Core fields:
 
 ```cpp
-Vec2    Anchor      = {0.0f, 0.0f};
-Vec2    Pivot       = {0.0f, 0.0f};
-Vec2    Offset      = {0.0f, 0.0f};
-Vec2    Size        = {0.0f, 0.0f};
-Vec2    SizePercent = {0.0f, 0.0f}; // overrides Size per axis when > 0
-f32     Opacity     = 1.0f;         // multiplied with children's opacity
+std::string Name;           // optional; used by FindWidget<T>()
+Vec2    Anchor      = {0, 0};
+Vec2    Pivot       = {0, 0};
+Vec2    Offset      = {0, 0};
+Vec2    Size        = {100, 100};
+Vec2    SizePercent = {0, 0};   // overrides Size per axis when > 0
+f32     Opacity     = 1.0f;     // multiplied with children's opacity
 bool    Visible     = true;
-bool    Enabled     = true;         // disabled = not interactive, still drawn
-i32     ZOrder      = 0;            // sort within the same screen layer
+bool    Enabled     = true;     // disabled = not interactive, still drawn
+i32     ZOrder      = 0;
+bool    Focusable   = false;    // participates in keyboard/gamepad nav
 ```
-
-Children are stored in a `std::vector<std::unique_ptr<UIWidget>>`. The tree is
-owned by a `UIScreen`.
 
 ### `Panel`
 
-A solid-color or textured rectangular background. The building block for all
-container widgets.
+Solid-color background rect. `BackgroundColor` alpha=0 uses the skin default.
 
 ```cpp
-Color         BackgroundColor = Color::Transparent();
-TextureHandle Texture;          // leave invalid for solid color
-SamplerHandle Sampler;
+bool  DrawBorder      = false;
+Color BackgroundColor = {0, 0, 0, 0};
 ```
+
+### `Overlay`
+
+Full-screen `Panel` (pre-set to `SizePercent={1,1}`, `Anchor={0,0}`). Used as
+a semi-transparent scrim behind modal screens.
 
 ### `NineSlice`
 
-A scalable panel that preserves corner pixel art regardless of widget size.
-The source texture is divided into a 3×3 grid by four border measurements.
+Scalable panel from a 9-patch texture. Source texture divided into 3×3 grid
+by UV-space border fractions; corners are emitted at `Pixel*` sizes; center stretches.
 
 ```cpp
-TextureHandle Texture;
-SamplerHandle Sampler;
-f32           BorderLeft, BorderRight, BorderTop, BorderBottom; // pixels in source texture
+TextureHandle Texture; SamplerHandle Sampler;
+Color Tint = {1,1,1,1};
+f32 UVBorderLeft, UVBorderRight, UVBorderTop, UVBorderBottom; // 0–1 UV fractions
+f32 PixelLeft, PixelRight, PixelTop, PixelBottom;             // screen pixels
 ```
-
-Nine-slice is rendered as 9 individual quads. Corners are fixed size; edges
-scale in one axis; center scales in both.
 
 ### `Label`
 
-Renders a text string using a `FontAtlas`.
+Single- or multi-line SDF text.
 
 ```cpp
-std::string  Text;
-FontAtlas*   Font       = nullptr; // defaults to engine debug font if null
-f32          FontScale  = 1.0f;
-Color        TextColor  = Color::White();
-TextAlign    Align      = TextAlign::Left;
-bool         WordWrap   = false;   // Phase 21B — wrap at widget width
-```
-
-### `Image`
-
-A textured quad. Unlike `Panel`, `Image` defaults to filling its size exactly
-and has no background color — it is purely a sprite.
-
-```cpp
-TextureHandle Texture;
-SamplerHandle Sampler;
-UVRect        UV    = {0, 0, 1, 1};
-Color         Tint  = Color::White();
+std::string Text;
+TextAlign   Align      = TextAlign::Left;
+bool        WordWrap   = false;
+bool        AutoCenter = false;
+Color       TextColor  = {0,0,0,0}; // {0,0,0,0} = use skin default
 ```
 
 ### `Button`
 
-A `Panel` + `Label` composite with hover / pressed / disabled state. Fires a
-callback on click (or confirm input when focused via keyboard/gamepad).
+Clickable rect with label. Fires `OnClick` on mouse-up inside, or `OnActivate`
+when confirmed via keyboard/gamepad.
 
 ```cpp
-std::string          Text;
-std::function<void()> OnClick;
-
-// Per-state overrides (resolved from UISkin if not set explicitly)
-Color NormalColor;
-Color HoverColor;
-Color PressedColor;
-Color DisabledColor;
+std::string            Text;
+std::function<void()>  OnClick;
+Color                  TextColor = {0,0,0,0};
 ```
 
-Interaction states:
-- **Normal** — default
-- **Hover** — cursor over widget (mouse) or focus ring (keyboard/gamepad)
-- **Pressed** — mouse button held or confirm input held
-- **Disabled** — `Enabled = false`
+States: Normal → Hovered → Pressed → Disabled. Colors resolved from `UISkin`.
+
+### `Image`
+
+Textured quad scaled to the widget rect.
+
+```cpp
+TextureHandle Texture; SamplerHandle Sampler;
+Color  Tint = {1,1,1,1};
+UVRect UV   = {0,0,1,1};
+```
 
 ### `ProgressBar`
 
-A two-layer bar: background rect + filled foreground rect.
+Two-layer horizontal fill bar.
 
 ```cpp
-f32   Value       = 1.0f;   // 0–1 fill fraction
-Color FillColor   = {0.2f, 0.8f, 0.2f, 1.0f};
-Color BackColor   = {0.1f, 0.1f, 0.1f, 0.8f};
-bool  Horizontal  = true;   // false = vertical fill (bottom-up)
+f32   Value     = 0.5f;
+Color FillColor = {0,0,0,0}; // {0,0,0,0} = use skin default
 ```
 
-### `ScrollPanel` *(Phase 21B)*
+### `ScrollPanel`
 
-A clipped container with optional scrollbar for lists longer than the panel height.
+Clipped container with vertical scrolling and a drag scrollbar. Set
+`ContentHeight` to the total logical height of all children.
+
+```cpp
+f32 ContentHeight  = 0.0f;
+f32 ScrollOffset   = 0.0f;
+f32 ScrollbarWidth = 6.0f;
+```
+
+Overrides `UpdateTree` and `CollectTree` to apply scissor clipping and scroll offset.
+
+---
+
+## .arcui File Format
+
+`.arcui` files are JSON documents that describe a widget tree plus optional
+metadata. They are loaded at runtime by `UILoader::Load`. The guiding principle
+is **layout is data, behavior is code**: the file owns visual properties;
+C++ wires `OnClick` and other callbacks after loading via `FindWidget<T>`.
+
+### Top-level structure
+
+```json
+{
+  "widgets": [ ... ],
+  "meta":    { ... }
+}
+```
+
+`widgets` is an array of root widget objects (equivalent to calling `Add<T>()` on
+the screen). `meta` is a flat key-value object for style hints that C++ reads via
+`GetMetaF32` / `GetMetaStr`.
+
+### Widget object — base properties
+
+Every widget object has a required `"type"` field and any subset of:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `type` | string | required | `"Panel"`, `"Overlay"`, `"Label"`, `"Button"`, `"Image"`, `"NineSlice"`, `"ProgressBar"`, `"ScrollPanel"` |
+| `name` | string | — | Identifier for `FindWidget<T>(name)` |
+| `size` | `[w, h]` | `[100, 100]` | Pixel size |
+| `size_percent` | `[x, y]` | `[0, 0]` | Overrides `size` as fraction of parent when > 0 |
+| `anchor` | `[x, y]` | `[0, 0]` | Normalized point on parent rect |
+| `pivot` | `[x, y]` | `[0, 0]` | Normalized point on this widget |
+| `offset` | `[x, y]` | `[0, 0]` | Pixel offset after anchor/pivot alignment |
+| `zorder` | int | 0 | Sort key within screen layer |
+| `opacity` | float | 1.0 | Multiplied into children |
+| `visible` | bool | true | |
+| `enabled` | bool | true | |
+| `focusable` | bool | false | Keyboard/gamepad navigation |
+| `children` | array | — | Nested widget objects |
+
+All colors are `[r, g, b, a]` floats in 0–1 range.
+
+### Per-type properties
+
+**Panel / Overlay**
+
+| Field | Type | Description |
+|---|---|---|
+| `background_color` | `[r,g,b,a]` | Fill color; alpha=0 uses skin default |
+| `draw_border` | bool | Render skin border |
+
+**Label**
+
+| Field | Type | Description |
+|---|---|---|
+| `text` | string | Literal display text |
+| `text_key` | string | Localization key — overrides `text` when present |
+| `align` | `"left"` / `"center"` / `"right"` | Horizontal alignment |
+| `text_color` | `[r,g,b,a]` | Alpha=0 uses skin default |
+| `word_wrap` | bool | Wrap at widget width |
+| `auto_center` | bool | Center text vertically in widget |
+
+**Button**
+
+| Field | Type | Description |
+|---|---|---|
+| `text` | string | Label text |
+| `text_key` | string | Localization key |
+| `text_color` | `[r,g,b,a]` | Alpha=0 uses skin default |
+
+**ProgressBar**
+
+| Field | Type | Description |
+|---|---|---|
+| `value` | float | Fill fraction 0–1 |
+| `fill_color` | `[r,g,b,a]` | Alpha=0 uses skin default |
+
+**ScrollPanel**
+
+| Field | Type | Description |
+|---|---|---|
+| `content_height` | float | Total logical height of children |
+| `scrollbar_width` | float | Scrollbar gutter width in pixels |
+
+**NineSlice**
+
+| Field | Type | Description |
+|---|---|---|
+| `tint` | `[r,g,b,a]` | Color tint |
+| `uv_border_left/right/top/bottom` | float | UV-space border fractions (0–1) |
+| `pixel_left/right/top/bottom` | float | Rendered border sizes in screen pixels |
+
+**Image**
+
+| Field | Type | Description |
+|---|---|---|
+| `tint` | `[r,g,b,a]` | Color tint |
+| `uv` | `[u0,v0,u1,v1]` | UV rect |
+
+### Meta section
+
+The `meta` object holds arbitrary key-value pairs (`number` or `string`) that C++
+reads via `GetMetaF32(key, default)` / `GetMetaStr(key, default)`. Use it to pass
+style parameters to C++ that generates procedural content so the numbers live in
+the file rather than in code:
+
+```json
+"meta": {
+  "chip_h": 22,
+  "chip_gap": 4,
+  "key_col_x": 242,
+  "ctrl_col_x": 454
+}
+```
+
+### Localization
+
+Labels and buttons support a `"text_key"` field. When present, `UILoader` passes
+the key through `Loc::Get(key)` instead of using the literal `"text"` value.
+This allows the same `.arcui` file to display in any language without modification.
+
+```json
+{ "type": "Button", "name": "resume-btn", "text_key": "ui.pause.resume" }
+```
+
+The fallback if a key has no translation is the key string itself, which makes
+`.arcui` files readable as documentation even without a translation file loaded.
+
+### Full example
+
+```json
+{
+  "widgets": [
+    { "type": "Overlay" },
+    {
+      "type": "Panel", "name": "bg",
+      "size": [360, 280], "anchor": [0.5, 0.5], "pivot": [0.5, 0.5], "zorder": 1,
+      "children": [
+        {
+          "type": "Label", "name": "title",
+          "text_key": "ui.pause.title",
+          "align": "center",
+          "size": [360, 32], "anchor": [0.5, 0.0], "pivot": [0.5, 0.0],
+          "offset": [0, 20], "zorder": 2
+        },
+        {
+          "type": "Button", "name": "resume-btn",
+          "text_key": "ui.pause.resume",
+          "size": [240, 44], "anchor": [0.5, 0.0], "pivot": [0.5, 0.0],
+          "offset": [0, 72], "focusable": true, "zorder": 2
+        },
+        {
+          "type": "Button", "name": "quit-btn",
+          "text_key": "ui.pause.quit",
+          "text_color": [0.88, 0.30, 0.30, 1.0],
+          "size": [240, 44], "anchor": [0.5, 0.0], "pivot": [0.5, 0.0],
+          "offset": [0, 128], "focusable": true, "zorder": 2
+        }
+      ]
+    }
+  ],
+  "meta": { "btn_gap": 56 }
+}
+```
+
+### C++ integration pattern
+
+```cpp
+void PauseMenuScreen::OnEnter()
+{
+    // Load visual layout — clears existing roots and meta first
+    if (!LoadLayout("assets/engine/ui/pause_menu.arcui"))
+        BuildFallback(); // inline fallback if file absent
+
+    // Wire behavior by name — the file owns layout, code owns logic
+    if (auto* btn = FindWidget<Button>("resume-btn")) btn->OnClick = OnResume;
+    if (auto* btn = FindWidget<Button>("quit-btn"))   btn->OnClick = OnQuit;
+
+    // Read style hints for procedurally-generated content
+    const f32 gap = GetMetaF32("btn_gap", 56.0f);
+}
+```
+
+### Asset locations
+
+Engine-provided `.arcui` files live in `engine/assets/ui/` and are copied to
+`assets/engine/ui/` in the runtime output directory by the build system.
+
+Game-specific layouts go in `game/assets/ui/`. To override an engine screen's
+layout, set `LayoutPath` before pushing:
+
+```cpp
+pause->LayoutPath = "assets/ui/my_pause_menu.arcui";
+GetUI().Push(std::move(pause));
+```
+
+### Custom widget types
+
+Register game-side widget types before any `Load()` call that references them:
+
+```cpp
+UILoader::RegisterType("HealthOrb", [] { return std::make_unique<HealthOrb>(); });
+```
+
+Base properties (`size`, `anchor`, `name`, etc.) are applied automatically.
+Type-specific properties must be handled by the widget's own deserialization
+if needed (future: per-type `FromJson` hook).
 
 ---
 
 ## Screen Management
 
-A `UIScreen` owns a widget tree and represents one logical UI layer (HUD, pause
-menu, dialog, inventory, etc.).
+`UIScreen` owns a widget tree and represents one logical UI layer.
+
+Key methods:
 
 ```cpp
-class UIScreen {
-public:
-    void Update(f32 dt);
-    void CollectRenderData(FramePacket& packet);
-    void OnInputEvent(const InputEvent& e, bool& consumed);
+// Layout
+bool      LoadLayout(std::string_view path);   // parse .arcui, populate tree
+template<typename T>
+T*        FindWidget(std::string_view name);   // find named widget, dynamic_cast
+f32       GetMetaF32(std::string_view key, f32 def = 0.0f) const;
+std::string GetMetaStr(std::string_view key, std::string_view def = "") const;
 
-    template<typename T, typename... Args>
-    T* AddWidget(Args&&... args);   // adds to the root
-
-    void Show();
-    void Hide();
-    bool IsVisible() const;
-};
+// Manual construction (when not using LoadLayout)
+template<typename T> T* Add();
 ```
 
-The `UIManager` maintains a **stack** of active screens. Screens deeper in the
-stack are still rendered (so the HUD stays visible behind a pause menu) but may
-optionally block input from propagating further down.
-
-```cpp
-class UIManager {
-public:
-    void PushScreen(std::string_view name);
-    void PopScreen();
-    void PopTo(std::string_view name);  // pop until named screen is on top
-    UIScreen* GetScreen(std::string_view name);
-
-    void Update(f32 dt);
-    void CollectRenderData(FramePacket& packet);
-
-    // Called before game input — returns true if the event was consumed.
-    bool RouteInput(const InputEvent& e);
-};
-```
-
-All named screens are registered at startup (in `OnStart`). Pushing a screen
-that is already in the stack brings it to the top without duplication.
-
-**Example screen stack during gameplay:**
-
-```
-[top]  PauseMenu  — blocks input to layers below
-       HUD        — renders health bar, minimap, hotbar
-[bot]  (world)    — game input reaches here only if nothing above consumed it
-```
-
----
-
-## Input Routing
-
-The `UIManager::RouteInput` is called **before** `InputManager::ProcessEdges` in
-the game loop (inside `Application::Run`). If a widget consumes the event, the
-game never sees it.
-
-**Mouse input:**
-- Each frame, compute which widget (if any) the cursor is over (top-most,
-  highest Z-order, in the top-most visible screen).
-- Hover state is updated continuously.
-- Click fires `Button::OnClick` on mouse-up when the cursor is still within the
-  widget.
-
-**Keyboard / gamepad navigation:**
-- A **focus ring** tracks the currently focused widget (navigated with
-  directional input — D-pad or arrow keys).
-- `Tab` / `Shift+Tab` move focus forward/backward through the focusable widget
-  list in the active screen.
-- Confirm input (Enter / gamepad A) activates the focused widget.
-- The focused screen layer is always the top of the stack.
-
----
-
-## Rendering
-
-`UIManager::CollectRenderData` walks the screen stack bottom-to-top (so top
-screens draw over lower ones) and emits quads into `packet.SDFSprites`.
-
-Each widget type maps to primitives:
-
-| Widget | Primitives emitted |
-|---|---|
-| `Panel` | 1 quad (white texture + tint, or actual texture) |
-| `NineSlice` | 9 quads |
-| `Label` | N quads via `DrawText` (SDF mode) |
-| `Image` | 1 quad |
-| `Button` | 1 quad (background) + N quads (label) |
-| `ProgressBar` | 2 quads |
-
-**Z ordering:** Each widget's `ZOrder` is added to a per-screen base layer
-offset (e.g. HUD = layer 10000, PauseMenu = layer 20000). The existing sprite
-layer sort handles correct draw order without a separate pass.
-
-**Opacity:** Parent opacity multiplies into children before emitting quads. A
-panel at 50% opacity with a label child makes the label 50% opaque too.
-
-**Clipping:** Phase 21A uses no per-widget clip rects (quads simply overdraw).
-Phase 21B adds scissor rect clipping for `ScrollPanel` and modal dialog masks.
+`UIManager` maintains a **stack** of active screens. The top-most screen receives
+input; all visible screens are collected each frame. Screens with `BlocksInput=true`
+prevent input from propagating to lower screens (used for pause menus, dialogs).
 
 ---
 
 ## Theming (UISkin)
 
-A `UISkin` is a plain data struct loaded from JSON. It defines defaults for
-every widget type so individual widgets don't need per-field color assignments.
+`UISkin` is a plain data struct loaded from JSON (`LoadFromFile` / `SaveToFile`).
+It defines defaults for every widget type; individual widgets override only what
+they need.
+
+Key fields:
 
 ```cpp
-struct UISkin {
-    FontAtlas* DefaultFont  = nullptr;
-    f32        DefaultScale = 1.0f;
+const FontAtlas* Font   = nullptr;
+f32              FontScale = 1.0f;
 
-    struct PanelSkin   { Color Background; Color Border; f32 BorderWidth; };
-    struct ButtonSkin  { Color Normal, Hover, Pressed, Disabled; Color TextColor; };
-    struct LabelSkin   { Color TextColor; };
-    struct BarSkin     { Color Fill, Background; };
-
-    PanelSkin  Panel;
-    ButtonSkin Button;
-    LabelSkin  Label;
-    BarSkin    ProgressBar;
-
-    // Nine-slice source texture for panel/button backgrounds (optional).
-    TextureHandle PanelTexture;
-    SamplerHandle PanelSampler;
-    f32 BorderLeft, BorderRight, BorderTop, BorderBottom;
-};
+Color PanelBg, PanelBorder;
+Color ButtonNormal, ButtonHovered, ButtonPressed, ButtonDisabled;
+Color TextNormal, TextDisabled, TextLabel;
+Color ProgressBg, ProgressFill;
+Color ScrollTrack, ScrollThumb, ScrollThumbHovered;
+Color AccentColor;  // focused/listening states
+Color OverlayColor; // Overlay widget default
+i32   ScreenLayerBase; // set per-screen by UIManager; ensures stack order
 ```
-
-`UIManager` holds the active skin. Widgets fall back to skin defaults for any
-field they don't override explicitly.
 
 ---
 
-## Integration Points
+## Rendering
 
-### Application
+`UIManager::CollectRenderData` walks the screen stack bottom-to-top and emits
+quads via the UI sprite pipeline.
 
-`UIManager` is owned by `Application` alongside `InputManager` and `TextureManager`.
-The game loop wires it in three places:
+**Layer isolation:** Each screen on the stack gets `ScreenLayerBase = stackIndex * 1000`,
+ensuring widgets from higher screens always sort above lower ones regardless of ZOrder.
 
-```cpp
-// 1. Before input processing — UI consumes first
-if (!_ui.RouteInput(e)) { /* game input */ }
+**Opacity:** Parent opacity multiplies into children before emitting quads.
 
-// 2. Fixed-timestep tick
-_ui.Update(_fixedTimestep);
-
-// 3. Render — after OnRender and CollectRenderData
-_ui.CollectRenderData(packet);
-```
-
-`GetUI()` accessor on `Application` lets game code reach `UIManager` from
-`OnStart` to register screens and wire button callbacks.
-
-### Font
-
-Labels default to the engine's `_debugFont` (Roboto SDF) if no font is set.
-Games load their own `FontAtlas` in `OnStart` and assign it to `UIManager`'s
-skin or individual `Label` widgets.
-
-### TextureManager
-
-Nine-slice and Image textures are loaded via `GetTextures()` the same way as
-sprite textures.
+**Clipping:** `ScrollPanel` registers scissor rects and clips child quads to its bounds.
 
 ---
 
@@ -358,51 +436,72 @@ engine/
     UIManager.h
     UIScreen.h
     UIWidget.h
-    Widgets.h        — Panel, Label, Button, Image, ProgressBar, NineSlice
+    UILoader.h              — .arcui parser, type registry
+    Widgets.h               — Panel, Overlay, Label, Button, Image,
+                              NineSlice, ProgressBar, ScrollPanel
     UISkin.h
+    HudScreen.h
+    PauseMenuScreen.h
+    InputRebindScreen.h
+    AudioSettingsScreen.h
+    GraphicsSettingsScreen.h
   src/
     UIManager.cpp
     UIScreen.cpp
     UIWidget.cpp
+    UILoader.cpp
     Widgets.cpp
+    UISkin.cpp
+    HudScreen.cpp
+    PauseMenuScreen.cpp
+    InputRebindScreen.cpp
+    AudioSettingsScreen.cpp
+    GraphicsSettingsScreen.cpp
+  assets/ui/                — engine-provided .arcui defaults
+    pause_menu.arcui
+    (audio_settings.arcui, graphics_settings.arcui — pending migration)
 ```
 
-`arcbit-engine` gains these sources; no new CMake targets needed.
+Engine assets are copied to `assets/engine/ui/` in the runtime output directory.
+Game assets go in `game/assets/ui/`.
 
 ---
 
 ## Implementation Phases
 
-### Phase 21A — Foundation
-- [x] `UIWidget` base class: anchor/pivot/offset/size layout, opacity, visibility, Z-order
-- [x] `UIScreen`: widget tree, `CollectRenderData`, `Update`
+### Phase 21A — Foundation ✓
+- [x] `UIWidget` base class: anchor/pivot/offset/size layout, opacity, visibility, Z-order, `Name`
+- [x] `UIScreen`: widget tree, `Update`, `Collect`, `LoadLayout`, `FindWidget<T>`, meta accessors
 - [x] `UIManager`: screen stack, `Push`/`Pop`, render collection, `HasBlockingScreen()`
-- [x] `Panel` widget (solid color + border)
-- [x] `Label` widget (SDF text via existing `DrawText`)
-- [x] `Button` widget (hover/pressed/disabled states, `OnClick` callback, `TextColor` override)
-- [x] `Image` widget
-- [x] `ProgressBar` widget (horizontal; `FillColor` override)
+- [x] `Panel`, `Overlay`, `Label`, `Button`, `Image`, `ProgressBar` widgets
 - [x] Mouse input routing (hover + click)
 - [x] Wire `UIManager` into `Application`
-- [x] `UISkin` JSON loader (`LoadFromFile` / `SaveToFile` via nlohmann-json)
-- [x] Engine-provided HUD screen (`HudScreen` with HP/MP bars + optional FPS label)
+- [x] `UISkin` JSON loader
 
-### Phase 21B — Polish
+### Phase 21B — Polish ✓
 - [x] `NineSlice` widget
-- [x] Keyboard/gamepad focus navigation (tab order, confirm input, pre-registered actions)
-- [x] Word wrap in `Label`
-- [x] Animated transitions: fade in/out per screen (lerp opacity on push/pop)
-- [x] `UIScreen::BlocksInput` + `UIManager::HasBlockingScreen()` for input gating
-- [x] `ScrollPanel` with scissor-rect clip (`ClipIndex` in Sprite, `UIClipRects` in FramePacket, `SortUISprites`)
-- [x] Engine-provided pause menu screen (`PauseMenuScreen` — NineSlice or solid, OnResume/OnSettings/OnQuit)
-- [x] Engine-provided input rebinding screen (`InputRebindScreen` — scrollable action list, click-to-rebind)
+- [x] Keyboard/gamepad focus navigation (tab order, confirm input)
+- [x] Word wrap in `Label`, `AutoCenter`
+- [x] Animated transitions: fade in/out per screen
+- [x] `UIScreen::BlocksInput` + screen layer isolation (`ScreenLayerBase`)
+- [x] `ScrollPanel` with scissor-rect clip + mouse wheel scroll
+- [x] Engine-provided `HudScreen`, `PauseMenuScreen`, `InputRebindScreen`
+- [x] Chip-based `InputRebindScreen`: multiple bindings per action, key/mouse/gamepad columns
 
-### Phase 21C — Engine Screens & HUD
-All screens in this phase ship with the engine as subclassable `UIScreen` types,
-skinnable via `UISkin` and configurable in the editor. Game devs extend or replace
-them; they do not reimplement them from scratch.
+### Phase 21C — Data-driven UI ✓ (in progress)
+- [x] `.arcui` JSON format for widget tree serialization
+- [x] `UILoader`: type registry, full property deserialization for all built-in types
+- [x] `UIWidget::Name` + `FindDescendant` for post-load callback wiring
+- [x] `UIScreen::LoadLayout`, `FindWidget<T>`, meta accessors
+- [x] `PauseMenuScreen` migrated to `.arcui` with C++ fallback
+- [x] `AudioSettingsScreen`, `GraphicsSettingsScreen` (code-built; awaiting `.arcui` migration)
+- [x] Engine asset deployment: `engine/assets/ui/` → `assets/engine/ui/` via CMake
+- [ ] Localization foundation: `Loc::Get(key)`, `text_key` field in UILoader
+- [ ] Migrate `AudioSettingsScreen`, `GraphicsSettingsScreen`, `InputRebindScreen` to `.arcui`
+- [ ] Editor integration: load/save `.arcui` from AvaloniaUI editor
 
-- [ ] `HudScreen`: health bar, mana bar, hotbar slots, minimap placeholder; game subclasses to add custom elements
-- [ ] `DialogScreen`: portrait + speaker name + scrolling text + choice buttons; used by Phase 27 dialog system
+### Phase 21D — Engine Screens (planned)
+- [ ] `DialogScreen`: portrait + speaker name + scrolling text + choice buttons
 - [ ] `SplashScreen`: ordered logo/image sequence before main menu
 - [ ] `MainMenuScreen` stub: play, settings, quit
+- [ ] `InventoryScreen` stub (populated by Phase 25 item system)

@@ -1,0 +1,98 @@
+{
+  "widgets": [
+    {
+      "type": "Overlay"
+    },
+    {
+      "type": "Panel",
+      "name": "bg",
+      "size": [360, 408],
+      "anchor": [0.5, 0.5],
+      "pivot":  [0.5, 0.5],
+      "zorder": 1,
+      "children": [
+        {
+          "type": "Label",
+          "name": "title",
+          "text": "PAUSED",
+          "align": "center",
+          "size":   [360, 32],
+          "anchor": [0.5, 0.0],
+          "pivot":  [0.5, 0.0],
+          "offset": [0, 20],
+          "zorder": 2
+        },
+        {
+          "type":   "Panel",
+          "name":   "separator",
+          "size":   [320, 1],
+          "anchor": [0.5, 0.0],
+          "pivot":  [0.5, 0.0],
+          "offset": [0, 62],
+          "zorder": 2
+        },
+        {
+          "type":     "Button",
+          "name":     "resume-btn",
+          "text":     "Resume",
+          "size":     [240, 44],
+          "anchor":   [0.5, 0.0],
+          "pivot":    [0.5, 0.0],
+          "offset":   [0, 72],
+          "focusable": true,
+          "zorder":   2
+        },
+        {
+          "type":     "Button",
+          "name":     "controls-btn",
+          "text":     "Controls",
+          "size":     [240, 44],
+          "anchor":   [0.5, 0.0],
+          "pivot":    [0.5, 0.0],
+          "offset":   [0, 128],
+          "focusable": true,
+          "zorder":   2
+        },
+        {
+          "type":     "Button",
+          "name":     "audio-btn",
+          "text":     "Audio",
+          "size":     [240, 44],
+          "anchor":   [0.5, 0.0],
+          "pivot":    [0.5, 0.0],
+          "offset":   [0, 184],
+          "focusable": true,
+          "zorder":   2
+        },
+        {
+          "type":     "Button",
+          "name":     "graphics-btn",
+          "text":     "Graphics",
+          "size":     [240, 44],
+          "anchor":   [0.5, 0.0],
+          "pivot":    [0.5, 0.0],
+          "offset":   [0, 240],
+          "focusable": true,
+          "zorder":   2
+        },
+        {
+          "type":       "Button",
+          "name":       "quit-btn",
+          "text":       "Quit",
+          "text_color": [0.88, 0.30, 0.30, 1.0],
+          "size":       [240, 44],
+          "anchor":     [0.5, 0.0],
+          "pivot":      [0.5, 0.0],
+          "offset":     [0, 296],
+          "focusable":  true,
+          "zorder":     2
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "panel_w": 360,
+    "btn_gap":  56,
+    "btn_start_y": 72
+  }
+}

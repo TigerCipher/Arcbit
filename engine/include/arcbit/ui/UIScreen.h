@@ -4,6 +4,9 @@
 #include <arcbit/ui/UISkin.h>
 
 #include <memory>
+#include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace Arcbit {
@@ -47,6 +50,33 @@ public:
         return ptr;
     }
 
+    // Add a pre-constructed root widget (used by UILoader).
+    UIWidget* AddRaw(std::unique_ptr<UIWidget> w);
+
+    // Parse a .arcui JSON file and populate this screen's widget tree.
+    // Clears existing roots and meta before loading. Returns false on error.
+    bool LoadLayout(std::string_view path);
+
+    // Find a named widget anywhere in the tree; returns nullptr if not found
+    // or if the widget is not of type T.
+    template<typename T>
+    [[nodiscard]] T* FindWidget(const std::string_view name)
+    {
+        for (auto& r : _roots)
+            if (auto* w = r->FindDescendant(name))
+                return dynamic_cast<T*>(w);
+        return nullptr;
+    }
+
+    // Typed accessors for the "meta" section of a loaded .arcui file.
+    // Returns def if the key is absent or of the wrong type.
+    [[nodiscard]] f32         GetMetaF32(std::string_view key, f32 def = 0.0f) const;
+    [[nodiscard]] std::string GetMetaStr(std::string_view key, std::string_view def = "") const;
+
+    // Called by UILoader to populate meta entries after parsing.
+    void SetMetaF32(std::string_view key, f32 value);
+    void SetMetaStr(std::string_view key, std::string_view value);
+
     void Update(f32 dt, UIRect screenRect, Vec2 mousePos,
                 bool mouseDown, bool mouseJustDown, bool mouseJustUp, f32 scrollDelta = 0.0f);
 
@@ -75,6 +105,9 @@ protected:
 
 private:
     enum class TransitionState { Idle, FadingIn, FadingOut };
+
+    std::unordered_map<std::string, f32>         _metaF32;
+    std::unordered_map<std::string, std::string>  _metaStr;
 
     bool            _visible           = true;
     TransitionState _transitionState   = TransitionState::Idle;

@@ -21,6 +21,10 @@ public:
     TextureHandle PanelTexture;
     SamplerHandle PanelSampler;
 
+    // Path to the .arcui layout file. Override to supply a custom layout.
+    // If the file is absent, a built-in fallback layout is used instead.
+    std::string LayoutPath = "assets/engine/ui/pause_menu.arcui";
+
     std::function<void()> OnResume;           // called by "Resume" button
     std::function<void()> OnControls;         // called by "Controls" button
     std::function<void()> OnAudioSettings;    // called by "Audio" button
@@ -34,5 +38,8 @@ public:
     PauseMenuScreen() { BlocksInput = true; TransitionSpeed = 6.0f; }
 
     void OnEnter() override;
+
+private:
+    void BuildFallback(); // inline layout used when LayoutPath file is absent
 };
 } // namespace Arcbit

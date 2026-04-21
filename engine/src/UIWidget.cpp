@@ -6,6 +6,21 @@
 
 namespace Arcbit
 {
+UIWidget* UIWidget::AddChildRaw(std::unique_ptr<UIWidget> child)
+{
+    UIWidget* ptr = child.get();
+    _children.push_back(std::move(child));
+    return ptr;
+}
+
+UIWidget* UIWidget::FindDescendant(const std::string_view name)
+{
+    if (Name == name) return this;
+    for (auto& child : _children)
+        if (auto* found = child->FindDescendant(name)) return found;
+    return nullptr;
+}
+
 UIRect UIWidget::ComputeRect(const UIRect parent) const
 {
     const f32 w = (SizePercent.X > 0.0f) ? parent.W * SizePercent.X : Size.X;

@@ -32,6 +32,7 @@ add_library(arcbit-engine STATIC
     src/InputRebindScreen.cpp
     src/AudioSettingsScreen.cpp
     src/GraphicsSettingsScreen.cpp
+    src/UILoader.cpp
 )
 
 target_include_directories(arcbit-engine
@@ -96,6 +97,16 @@ add_custom_target(arcbit-engine-shaders ALL DEPENDS ${ENGINE_SHADER_OUTPUTS})
 # ---------------------------------------------------------------------------
 # Engine fonts — Roboto-Regular.ttf ships with the engine for the debug overlay.
 # ---------------------------------------------------------------------------
+
+add_custom_target(arcbit-engine-ui-assets ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/engine/ui"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui"
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/engine/ui"
+    COMMENT "Copying engine UI assets to bin/assets/engine/ui/"
+    VERBATIM
+)
 
 add_custom_target(arcbit-engine-fonts ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory

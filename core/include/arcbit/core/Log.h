@@ -42,6 +42,7 @@ enum class Channel : uint8_t
     Scripting,
     EventBus,
     Game,
+    UI,
     Count
 };
 

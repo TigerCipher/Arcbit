@@ -5,7 +5,6 @@
 
 namespace Arcbit
 {
-
 // Static member definition
 std::array<std::shared_ptr<spdlog::logger>, Log::ChannelCount> Log::s_Loggers;
 
@@ -14,26 +13,25 @@ std::array<std::shared_ptr<spdlog::logger>, Log::ChannelCount> Log::s_Loggers;
 // ---------------------------------------------------------------------------
 namespace
 {
-
-struct ChannelInfo
-{
-    const char* Name;
-};
-
-constexpr std::array<ChannelInfo, static_cast<size_t>(Channel::Count)> ChannelInfoTable = {
+    struct ChannelInfo
     {
-     { "Engine" },    // Channel::Engine
-        { "Render" },    // Channel::Render
-        { "ECS" },       // Channel::ECS
-        { "Platform" },  // Channel::Platform
-        { "Audio" },     // Channel::Audio
-        { "Combat" },    // Channel::Combat
-        { "Scripting" }, // Channel::Scripting
-        { "EventBus" },  // Channel::EventBus
-        { "Game" },      // Channel::Game
-    }
-};
+        const char* Name;
+    };
 
+    constexpr std::array<ChannelInfo, static_cast<size_t>(Channel::Count)> ChannelInfoTable = {
+        {
+            {"Engine"},    // Channel::Engine
+            {"Render"},    // Channel::Render
+            {"ECS"},       // Channel::ECS
+            {"Platform"},  // Channel::Platform
+            {"Audio"},     // Channel::Audio
+            {"Combat"},    // Channel::Combat
+            {"Scripting"}, // Channel::Scripting
+            {"EventBus"},  // Channel::EventBus
+            {"Game"},      // Channel::Game
+            {"UI"},        // Channel::UI
+        }
+    };
 } // anonymous namespace
 
 // ---------------------------------------------------------------------------
@@ -54,8 +52,7 @@ void Log::Init(bool fileOutput, const std::string& filePath)
     consoleSink->set_pattern("[%T.%e] [%-9n] [%6t] [%^%-8l%$] %v");
     sinks.push_back(consoleSink);
 
-    if (fileOutput)
-    {
+    if (fileOutput) {
         auto fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(filePath, true);
         // No color codes in the file
         fileSink->set_pattern("[%T.%e] [%-9n] [%6t] [%-8l] %v");
@@ -63,28 +60,25 @@ void Log::Init(bool fileOutput, const std::string& filePath)
     }
 
     // Create one named logger per channel, all sharing the same sinks
-    for (size_t i = 0; i < ChannelCount; ++i)
-    {
+    for (size_t i = 0; i < ChannelCount; ++i) {
         auto logger = std::make_shared<spdlog::logger>(ChannelInfoTable[i].Name, sinks.begin(), sinks.end());
 
-#ifdef ARCBIT_DEBUG
+        #ifdef ARCBIT_DEBUG
         logger->set_level(spdlog::level::trace);
         logger->flush_on(spdlog::level::warn);
-#else
+        #else
         logger->set_level(spdlog::level::info);
         logger->flush_on(spdlog::level::err);
-#endif
+        #endif
 
         spdlog::register_logger(logger);
         s_Loggers[i] = std::move(logger);
     }
 }
 
-void Log::Shutdown()
-{ spdlog::shutdown(); }
+void Log::Shutdown() { spdlog::shutdown(); }
 
-void Log::SetLevel(Channel channel, spdlog::level::level_enum level)
-{ GetLogger(channel).set_level(level); }
+void Log::SetLevel(Channel channel, spdlog::level::level_enum level) { GetLogger(channel).set_level(level); }
 
 void Log::SetAllLevels(spdlog::level::level_enum level)
 {
@@ -92,7 +86,5 @@ void Log::SetAllLevels(spdlog::level::level_enum level)
         logger->set_level(level);
 }
 
-spdlog::logger& Log::GetLogger(Channel channel)
-{ return *s_Loggers[static_cast<size_t>(channel)]; }
-
+spdlog::logger& Log::GetLogger(Channel channel) { return *s_Loggers[static_cast<size_t>(channel)]; }
 } // namespace Arcbit

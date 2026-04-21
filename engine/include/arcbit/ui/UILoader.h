@@ -1,0 +1,45 @@
+#pragma once
+
+#include <functional>
+#include <memory>
+#include <string_view>
+
+namespace Arcbit
+{
+class UIWidget;
+class UIScreen;
+
+// ---------------------------------------------------------------------------
+// UILoader — deserializes .arcui JSON files into UIScreen widget trees.
+//
+// All built-in widget types (Panel, Label, Button, etc.) are pre-registered.
+// Call RegisterType() to add game-specific custom widget types before any
+// Load() call that references them.
+//
+// .arcui format (JSON):
+//   {
+//     "widgets": [ { "type": "Panel", "name": "bg", ... } ],
+//     "meta":    { "btn_gap": 56, "title": "My Menu" }
+//   }
+//
+// After loading, use UIScreen::FindWidget<T>(name) to retrieve named widgets
+// and attach OnClick / other callbacks in code.
+// ---------------------------------------------------------------------------
+class UILoader
+{
+public:
+    using Factory = std::function<std::unique_ptr<UIWidget>()>;
+
+    // Parse a .arcui file and populate screen's widget tree and meta.
+    // Returns false and logs an error if the file cannot be opened or parsed.
+    [[nodiscard]] static bool Load(std::string_view path, UIScreen& screen);
+
+    // Register a custom widget type. typeName must match the "type" field in
+    // .arcui files. Call before any Load() that uses the type.
+    static void RegisterType(std::string_view typeName, Factory factory);
+
+private:
+    static void EnsureBuiltins();
+};
+
+} // namespace Arcbit
