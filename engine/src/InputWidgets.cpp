@@ -10,7 +10,6 @@
 
 namespace Arcbit
 {
-
 // ---------------------------------------------------------------------------
 // Rendering helpers (mirrors Widgets.cpp — not shared to avoid coupling)
 // ---------------------------------------------------------------------------
@@ -30,21 +29,25 @@ static i32 TextLayer(const UIWidget& w, const UISkin& skin)
     return UIBaseLayer + (skin.ScreenLayerBase + w.ZOrder) * UILayerStride + UILayerText;
 }
 
-static void PushRect(FramePacket& packet, const UIRect& r, const Color& c,
+static void PushRect(FramePacket&        packet, const UIRect&    r, const Color& c,
                      const TextureHandle tex, const SamplerHandle samp, const i32 layer)
 {
     if (r.W <= 0.0f || r.H <= 0.0f) return;
     Sprite s{};
     s.Texture  = tex;
     s.Sampler  = samp;
-    s.Position = { r.X + r.W * 0.5f, r.Y + r.H * 0.5f };
-    s.Size     = { r.W, r.H };
+    s.Position = {r.X + r.W * 0.5f, r.Y + r.H * 0.5f};
+    s.Size     = {r.W, r.H};
     s.Tint     = c;
     s.Layer    = layer;
     packet.UISprites.push_back(s);
 }
 
-static Color WithAlpha(Color c, const f32 alpha) { c.A *= alpha; return c; }
+static Color WithAlpha(Color c, const f32 alpha)
+{
+    c.A *= alpha;
+    return c;
+}
 
 // ---------------------------------------------------------------------------
 // TextInput
@@ -52,83 +55,138 @@ static Color WithAlpha(Color c, const f32 alpha) { c.A *= alpha; return c; }
 
 bool TextInput::AcceptsChar(const char c) const
 {
-    if (c < 32 || c >= 127) return false; // non-printable ASCII
+    if (c < 32 || c >= 127) return false;
     switch (InputMode) {
-        case Mode::Text:    return true;
-        case Mode::Numeric: return std::isdigit(c) || c == '.' || c == '-';
-        case Mode::Regex:
-            if (Pattern.empty()) return true;
-            try {
-                const std::regex re(Pattern);
-                const char buf[2] = { c, '\0' };
-                return std::regex_match(buf, re);
-            } catch (...) { return false; }
+    case Mode::Text: return true;
+    case Mode::Numeric: return std::isdigit(c) || c == '.' || c == '-';
+    case Mode::Regex: if (Pattern.empty()) return true;
+        try {
+            const std::regex re(Pattern);
+            const char       buf[2] = {c, '\0'};
+            return std::regex_match(buf, re);
+        }
+        catch (...) { return false; }
     }
     return false;
 }
 
-void TextInput::ClampCursor()
+void TextInput::DeleteSelection()
 {
-    _cursor = static_cast<u32>(std::min(static_cast<size_t>(_cursor), Text.size()));
+    if (!HasSelection()) return;
+    const u32 lo = SelMin(), hi = SelMax();
+    Text.erase(lo, hi - lo);
+    _cursor = _selAnchor = lo;
+}
+
+void TextInput::MoveCursor(const u32 pos, const bool extendSel)
+{
+    _cursor = static_cast<u32>(std::min(static_cast<usize>(pos), Text.size()));
+    if (!extendSel) _selAnchor = _cursor;
+}
+
+u32 TextInput::PrevWordBoundary() const
+{
+    if (_cursor == 0) return 0;
+    u32 i = _cursor - 1;
+    while (i > 0 && Text[i] == ' ') --i;
+    while (i > 0 && Text[i - 1] != ' ') --i;
+    return i;
+}
+
+u32 TextInput::NextWordBoundary() const
+{
+    const u32 n = static_cast<u32>(Text.size());
+    u32       i = _cursor;
+    while (i < n && Text[i] != ' ') ++i;
+    while (i < n && Text[i] == ' ') ++i;
+    return i;
 }
 
 void TextInput::OnTextInput(const std::string_view chars)
 {
     if (!_focused) return;
+    DeleteSelection(); // replace selected text
     for (const char c : chars) {
         if (!AcceptsChar(c)) continue;
-        if (Text.size() >= MaxLength) continue;
+        if (Text.size() >= MaxLength) break;
         Text.insert(Text.begin() + _cursor, c);
         ++_cursor;
     }
+    _selAnchor = _cursor;
     if (OnChanged) OnChanged(Text);
 }
 
 void TextInput::OnControlKey(const UIControlKey key)
 {
     switch (key) {
-        case UIControlKey::Left:
-            if (_cursor > 0) --_cursor;
-            break;
-        case UIControlKey::Right:
-            if (_cursor < Text.size()) ++_cursor;
-            break;
-        case UIControlKey::Home:
-            _cursor = 0;
-            break;
-        case UIControlKey::End:
-            _cursor = static_cast<u32>(Text.size());
-            break;
-        case UIControlKey::Backspace:
-            if (_cursor > 0 && !Text.empty()) {
-                Text.erase(Text.begin() + --_cursor);
-                if (OnChanged) OnChanged(Text);
-            }
-            break;
-        case UIControlKey::Delete:
-            if (_cursor < Text.size()) {
-                Text.erase(Text.begin() + _cursor);
-                if (OnChanged) OnChanged(Text);
-            }
-            break;
-        case UIControlKey::Enter:
-            if (OnConfirm) OnConfirm(Text);
-            break;
-        default:
-            break;
+    // Plain motion — clears selection
+    case UIControlKey::Left:
+        if (HasSelection()) MoveCursor(SelMin(), false);
+        else if (_cursor > 0) MoveCursor(_cursor - 1, false);
+        break;
+    case UIControlKey::Right:
+        if (HasSelection()) MoveCursor(SelMax(), false);
+        else MoveCursor(_cursor + 1, false);
+        break;
+    case UIControlKey::Home: MoveCursor(0, false);
+        break;
+    case UIControlKey::End: MoveCursor(static_cast<u32>(Text.size()), false);
+        break;
+
+    // Shift motion — extends selection
+    case UIControlKey::ShiftLeft: if (_cursor > 0) MoveCursor(_cursor - 1, true);
+        break;
+    case UIControlKey::ShiftRight: MoveCursor(_cursor + 1, true);
+        break;
+    case UIControlKey::ShiftHome: MoveCursor(0, true);
+        break;
+    case UIControlKey::ShiftEnd: MoveCursor(static_cast<u32>(Text.size()), true);
+        break;
+
+    // Ctrl word navigation
+    case UIControlKey::CtrlLeft: MoveCursor(PrevWordBoundary(), false);
+        break;
+    case UIControlKey::CtrlRight: MoveCursor(NextWordBoundary(), false);
+        break;
+    case UIControlKey::CtrlShiftLeft: MoveCursor(PrevWordBoundary(), true);
+        break;
+    case UIControlKey::CtrlShiftRight: MoveCursor(NextWordBoundary(), true);
+        break;
+
+    case UIControlKey::Backspace:
+        if (HasSelection()) {
+            DeleteSelection();
+            if (OnChanged) OnChanged(Text);
+        }
+        else if (_cursor > 0) {
+            Text.erase(--_cursor, 1);
+            _selAnchor = _cursor;
+            if (OnChanged) OnChanged(Text);
+        }
+        break;
+    case UIControlKey::Delete:
+        if (HasSelection()) {
+            DeleteSelection();
+            if (OnChanged) OnChanged(Text);
+        }
+        else if (_cursor < Text.size()) {
+            Text.erase(_cursor, 1);
+            if (OnChanged) OnChanged(Text);
+        }
+        break;
+
+    case UIControlKey::Enter: if (OnConfirm) OnConfirm(Text);
+        break;
+    default: break;
     }
+    _cursorBlink = 0.0f; // reset blink so cursor is always visible right after moving
 }
 
-void TextInput::OnUpdate(const f32 dt, const UIRect myRect, const Vec2 mousePos,
-                         const bool /*mouseDown*/, const bool mouseJustDown,
-                         const bool /*mouseJustUp*/, bool& consumed)
+void TextInput::OnUpdate(const f32 dt, const UIRect myRect, const Vec2 /*mousePos*/,
+                         const bool /*mouseDown*/, const bool /*mouseJustDown*/,
+                         const bool /*mouseJustUp*/, bool& /*consumed*/)
 {
     if (!Enabled) return;
-    if (consumed) return;
-    const bool over = mousePos.X >= myRect.X && mousePos.X <= myRect.X + myRect.W &&
-                      mousePos.Y >= myRect.Y && mousePos.Y <= myRect.Y + myRect.H;
-    if (over && mouseJustDown) consumed = true; // focus is handled by UIScreen
-
     _cursorBlink += dt;
     if (_cursorBlink >= 1.0f) _cursorBlink -= 1.0f;
 }
@@ -136,61 +194,85 @@ void TextInput::OnUpdate(const f32 dt, const UIRect myRect, const Vec2 mousePos,
 void TextInput::UpdateScroll(const f32 availW, const UISkin& skin)
 {
     if (!skin.Font) return;
-    const f32 scale    = skin.FontScale;
-    const f32 cursorX  = MeasureTextWidth(*skin.Font, Text.substr(0, _cursor), scale);
-    const f32 textW    = MeasureTextWidth(*skin.Font, Text, scale);
-
-    // Scroll so the cursor is always visible.
+    const f32 cursorX = MeasureTextWidth(*skin.Font, Text.substr(0, _cursor), skin.FontScale);
+    const f32 textW   = MeasureTextWidth(*skin.Font, Text, skin.FontScale);
     if (cursorX - _scrollX > availW) _scrollX = cursorX - availW;
-    if (cursorX - _scrollX < 0.0f)   _scrollX = cursorX;
+    if (cursorX - _scrollX < 0.0f) _scrollX = cursorX;
     _scrollX = std::clamp(_scrollX, 0.0f, std::max(0.0f, textW - availW));
 }
 
-void TextInput::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity,
+void TextInput::OnCollect(FramePacket&        packet, const UIRect          myRect, const f32 effectiveOpacity,
                           const TextureHandle whiteTex, const SamplerHandle whiteSampler,
-                          const UISkin& skin)
+                          const UISkin&       skin)
 {
     const Color borderColor = _focused ? skin.InputFocusBorder : skin.InputBorder;
-    PushRect(packet, myRect, WithAlpha(skin.InputBg, effectiveOpacity),
-             whiteTex, whiteSampler, BgLayer(*this, skin));
-    // Border (1-pixel inner outline via slightly-inset rect is common; draw as bg overlay)
-    const UIRect border = { myRect.X - 1, myRect.Y - 1, myRect.W + 2, myRect.H + 2 };
+    // Draw border rect slightly outside, then background on top
+    const UIRect border = {myRect.X - 1, myRect.Y - 1, myRect.W + 2, myRect.H + 2};
     PushRect(packet, border, WithAlpha(borderColor, effectiveOpacity),
              whiteTex, whiteSampler, BgLayer(*this, skin) - 1);
+    PushRect(packet, myRect, WithAlpha(skin.InputBg, effectiveOpacity),
+             whiteTex, whiteSampler, BgLayer(*this, skin));
 
     if (!skin.Font) return;
 
-    const f32 pad    = 4.0f;
+    const f32 pad    = 6.0f;
     const f32 availW = myRect.W - pad * 2.0f;
     UpdateScroll(availW, skin);
 
-    // Collect text (and cursor) first, then register the clip rect and patch ClipIndex
-    // on all quads emitted — same pattern as ScrollPanel::CollectTree.
-    const size_t firstSprite = packet.UISprites.size();
+    // Text Y: center the full line-height (ascent + descent) within the widget.
+    // Using GetLineHeight() ensures descenders fit without clipping.
+    const f32 lineH = skin.Font->GetLineHeight() * skin.FontScale;
+    const f32 textY = myRect.Y + (myRect.H - lineH) * 0.5f;
+    const f32 textX = myRect.X + pad - _scrollX;
 
-    const std::string& display = (Text.empty() && !_focused) ? Placeholder : Text;
-    const Color textColor = (Text.empty() && !_focused)
-        ? WithAlpha(skin.InputPlaceholder, effectiveOpacity)
-        : WithAlpha(skin.TextNormal, effectiveOpacity);
+    // Register clip rect before emitting any text or selection sprites.
+    // Horizontal clipping is tight to the content area; vertical has generous
+    // slack to accommodate SDF glyph padding without shaving descenders.
+    const f32 vslack = lineH * 0.5f;
+    packet.UIClipRects.push_back({myRect.X + pad, myRect.Y - vslack, availW, myRect.H + vslack * 2.0f});
+    const u16 clipIdx = static_cast<u16>(packet.UIClipRects.size()); // 1-based
 
-    const f32  textY   = myRect.Y + myRect.H * 0.5f - skin.Font->GetAscent() * skin.FontScale * 0.5f;
-    const Vec2 textPos = { myRect.X + pad - _scrollX, textY };
-    DrawTextUI(packet, *skin.Font, display, textPos, skin.FontScale, textColor, TextLayer(*this, skin));
+    auto clip = [&](size_t from) {
+        for (size_t i = from; i < packet.UISprites.size(); ++i)
+            if (packet.UISprites[i].ClipIndex == 0)
+                packet.UISprites[i].ClipIndex = clipIdx;
+    };
 
-    // Cursor blink — visible for first half of 1-second cycle
-    if (_focused && _cursorBlink < 0.5f) {
-        const f32    cursorX = MeasureTextWidth(*skin.Font, Text.substr(0, _cursor), skin.FontScale);
-        const UIRect cursorR = { myRect.X + pad + cursorX - _scrollX, myRect.Y + 3.0f, 1.5f, myRect.H - 6.0f };
-        PushRect(packet, cursorR, WithAlpha(skin.InputCursor, effectiveOpacity),
+    // Selection highlight
+    if (_focused && HasSelection()) {
+        const f32 x0 = myRect.X + pad + MeasureTextWidth(*skin.Font, Text.substr(0, SelMin()), skin.FontScale) -
+                _scrollX;
+        const f32 x1 = myRect.X + pad + MeasureTextWidth(*skin.Font, Text.substr(0, SelMax()), skin.FontScale) -
+                _scrollX;
+        const UIRect selRect = {x0, myRect.Y + 2.0f, x1 - x0, myRect.H - 4.0f};
+        const size_t mark    = packet.UISprites.size();
+        PushRect(packet, selRect, WithAlpha(skin.AccentColor, effectiveOpacity * 0.4f),
                  whiteTex, whiteSampler, FillLayer(*this, skin));
+        clip(mark);
     }
 
-    // 1px vertical slack so descenders aren't shaved by the scissor rect.
-    packet.UIClipRects.push_back({ myRect.X + pad, myRect.Y - 1.0f, availW, myRect.H + 2.0f });
-    const u16 clipIdx = static_cast<u16>(packet.UIClipRects.size()); // 1-based
-    for (size_t i = firstSprite; i < packet.UISprites.size(); ++i)
-        if (packet.UISprites[i].ClipIndex == 0)
-            packet.UISprites[i].ClipIndex = clipIdx;
+    // Text or placeholder
+    const bool  showPlaceholder = Text.empty() && !_focused;
+    const Color textColor       = showPlaceholder
+                                  ? WithAlpha(skin.InputPlaceholder, effectiveOpacity)
+                                  : WithAlpha(skin.TextNormal, effectiveOpacity);
+    const std::string_view display = showPlaceholder ? std::string_view(Placeholder) : std::string_view(Text);
+    {
+        const size_t mark = packet.UISprites.size();
+        DrawTextUI(packet, *skin.Font, display, {textX, textY}, skin.FontScale, textColor, TextLayer(*this, skin));
+        clip(mark);
+    }
+
+    // Cursor — 2px wide, blinks at 0.5s on / 0.5s off
+    if (_focused && !HasSelection() && _cursorBlink < 0.5f) {
+        const f32 cx = myRect.X + pad + MeasureTextWidth(*skin.Font, Text.substr(0, _cursor), skin.FontScale) -
+                _scrollX;
+        const UIRect cur  = {cx - 1.0f, myRect.Y + 3.0f, 2.0f, myRect.H - 6.0f};
+        const size_t mark = packet.UISprites.size();
+        PushRect(packet, cur, WithAlpha(skin.InputCursor, effectiveOpacity),
+                 whiteTex, whiteSampler, FillLayer(*this, skin));
+        clip(mark);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -208,56 +290,64 @@ UIRect Slider::ThumbRect(const UIRect track) const
     const f32 t    = NormalizedValue();
     const f32 cx   = track.X + t * track.W;
     const f32 half = _thumbHalf;
-    return { cx - half, track.Y - 2.0f, half * 2.0f, track.H + 4.0f };
+    return {cx - half, track.Y - 2.0f, half * 2.0f, track.H + 4.0f};
 }
 
 void Slider::SetFromMouseX(const f32 mouseX, const UIRect track)
 {
-    f32 t = (mouseX - track.X) / track.W;
-    t = std::clamp(t, 0.0f, 1.0f);
+    f32 t   = (mouseX - track.X) / track.W;
+    t       = std::clamp(t, 0.0f, 1.0f);
     f32 raw = Min + t * (Max - Min);
     if (Step > 0.0f) raw = std::round(raw / Step) * Step;
     Value = std::clamp(raw, Min, Max);
     if (OnChanged) OnChanged(Value);
 }
 
-void Slider::OnUpdate(const f32 /*dt*/, const UIRect myRect, const Vec2 mousePos,
-                      const bool mouseDown, const bool mouseJustDown,
-                      const bool mouseJustUp, bool& consumed)
+void Slider::OnUpdate(const f32 /*dt*/, const UIRect myRect, const Vec2    mousePos,
+                      const bool                     mouseDown, const bool mouseJustDown,
+                      const bool                     mouseJustUp, bool&    consumed)
 {
     if (!Enabled || consumed) return;
-    const UIRect track = { myRect.X + _thumbHalf, myRect.Y + myRect.H * 0.5f - 3.0f,
-                           myRect.W - _thumbHalf * 2.0f, 6.0f };
-    const UIRect thumb = ThumbRect(track);
-    const bool overThumb = mousePos.X >= thumb.X && mousePos.X <= thumb.X + thumb.W &&
-                           mousePos.Y >= myRect.Y && mousePos.Y <= myRect.Y + myRect.H;
+    const UIRect track = {
+        myRect.X + _thumbHalf, myRect.Y + myRect.H * 0.5f - 3.0f,
+        myRect.W - _thumbHalf * 2.0f, 6.0f
+    };
+    const UIRect thumb     = ThumbRect(track);
+    const bool   overThumb = mousePos.X >= thumb.X && mousePos.X <= thumb.X + thumb.W &&
+            mousePos.Y >= myRect.Y && mousePos.Y <= myRect.Y + myRect.H;
     _hovered = overThumb;
 
-    if (mouseJustDown && overThumb) { _dragging = true; consumed = true; }
-    if (mouseJustUp)                  _dragging = false;
+    if (mouseJustDown && overThumb) {
+        _dragging = true;
+        consumed  = true;
+    }
+    if (mouseJustUp) _dragging = false;
     if (_dragging && mouseDown) {
         SetFromMouseX(mousePos.X, track);
         consumed = true;
     }
 }
 
-void Slider::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity,
+void Slider::OnCollect(FramePacket&        packet, const UIRect          myRect, const f32 effectiveOpacity,
                        const TextureHandle whiteTex, const SamplerHandle whiteSampler,
-                       const UISkin& skin)
+                       const UISkin&       skin)
 {
-    const UIRect track = { myRect.X + _thumbHalf, myRect.Y + myRect.H * 0.5f - 3.0f,
-                           myRect.W - _thumbHalf * 2.0f, 6.0f };
+    const UIRect track = {
+        myRect.X + _thumbHalf, myRect.Y + myRect.H * 0.5f - 3.0f,
+        myRect.W - _thumbHalf * 2.0f, 6.0f
+    };
     PushRect(packet, track, WithAlpha(skin.ProgressBg, effectiveOpacity),
              whiteTex, whiteSampler, BgLayer(*this, skin));
 
     // Fill from left edge to thumb
-    const UIRect fill = { track.X, track.Y, NormalizedValue() * track.W, track.H };
+    const UIRect fill = {track.X, track.Y, NormalizedValue() * track.W, track.H};
     PushRect(packet, fill, WithAlpha(skin.AccentColor, effectiveOpacity),
              whiteTex, whiteSampler, FillLayer(*this, skin));
 
-    const UIRect thumb = ThumbRect(track);
-    const Color thumbColor = (_hovered || _dragging || _focused)
-        ? skin.SliderThumbHovered : skin.SliderThumb;
+    const UIRect thumb      = ThumbRect(track);
+    const Color  thumbColor = (_hovered || _dragging || _focused)
+                              ? skin.SliderThumbHovered
+                              : skin.SliderThumb;
     PushRect(packet, thumb, WithAlpha(thumbColor, effectiveOpacity),
              whiteTex, whiteSampler, FillLayer(*this, skin));
 }
@@ -266,9 +356,9 @@ void Slider::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effec
 // Dropdown
 // ---------------------------------------------------------------------------
 
-void Dropdown::UpdateTree(const f32 dt, const UIRect parent, const Vec2 mousePos,
+void Dropdown::UpdateTree(const f32  dt, const UIRect      parent, const Vec2 mousePos,
                           const bool mouseDown, const bool mouseJustDown,
-                          const bool mouseJustUp, bool& consumed, const f32 scrollDelta)
+                          const bool mouseJustUp, bool&    consumed, const f32 scrollDelta)
 {
     const UIRect myRect = ComputeRect(parent);
     if (!Visible || !Enabled) return;
@@ -277,15 +367,17 @@ void Dropdown::UpdateTree(const f32 dt, const UIRect parent, const Vec2 mousePos
     if (_open) consumed = true;
 
     const bool overHeader = mousePos.X >= myRect.X && mousePos.X <= myRect.X + myRect.W &&
-                            mousePos.Y >= myRect.Y && mousePos.Y <= myRect.Y + myRect.H;
+            mousePos.Y >= myRect.Y && mousePos.Y <= myRect.Y + myRect.H;
     _headerHovered = overHeader;
 
     if (_open) {
         // Build list rect below the header
-        const UIRect listRect = { myRect.X, myRect.Y + myRect.H,
-                                  myRect.W, _itemHeight * static_cast<f32>(Items.size()) };
+        const UIRect listRect = {
+            myRect.X, myRect.Y + myRect.H,
+            myRect.W, _itemHeight * static_cast<f32>(Items.size())
+        };
         const bool overList = mousePos.X >= listRect.X && mousePos.X <= listRect.X + listRect.W &&
-                              mousePos.Y >= listRect.Y && mousePos.Y <= listRect.Y + listRect.H;
+                mousePos.Y >= listRect.Y && mousePos.Y <= listRect.Y + listRect.H;
 
         _hoveredIndex = -1;
         if (overList) {
@@ -300,58 +392,67 @@ void Dropdown::UpdateTree(const f32 dt, const UIRect parent, const Vec2 mousePos
             }
             _open = false; // close on any click
         }
-    } else {
-        if (mouseJustDown && overHeader) _open = true;
     }
+    else { if (mouseJustDown && overHeader) _open = true; }
 }
 
-void Dropdown::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity,
+void Dropdown::OnCollect(FramePacket&        packet, const UIRect          myRect, const f32 effectiveOpacity,
                          const TextureHandle whiteTex, const SamplerHandle whiteSampler,
-                         const UISkin& skin)
+                         const UISkin&       skin)
 {
     const Color bg = _headerHovered ? skin.ButtonHovered : skin.ButtonNormal;
     PushRect(packet, myRect, WithAlpha(bg, effectiveOpacity), whiteTex, whiteSampler, BgLayer(*this, skin));
 
     if (!skin.Font) return;
+    const f32         lineH   = skin.Font->GetLineHeight() * skin.FontScale;
+    const f32         textY   = myRect.Y + (myRect.H - lineH) * 0.5f;
     const std::string display = (SelectedIndex >= 0 && SelectedIndex < static_cast<i32>(Items.size()))
-        ? Items[static_cast<size_t>(SelectedIndex)] : "—";
+                                ? Items[static_cast<size_t>(SelectedIndex)]
+                                : "—";
     DrawTextUI(packet, *skin.Font, display,
-               { myRect.X + 6.0f, myRect.Y + myRect.H * 0.5f - skin.FontScale * 8.0f },
+               {myRect.X + 6.0f, textY},
                skin.FontScale, WithAlpha(skin.TextNormal, effectiveOpacity), TextLayer(*this, skin));
 
     // Arrow indicator on the right
     const std::string_view arrow = _open ? "▲" : "▼";
     DrawTextUI(packet, *skin.Font, arrow,
-               { myRect.X + myRect.W - 20.0f, myRect.Y + myRect.H * 0.5f - skin.FontScale * 8.0f },
+               {myRect.X + myRect.W - 20.0f, textY},
                skin.FontScale, WithAlpha(skin.TextDisabled, effectiveOpacity), TextLayer(*this, skin));
 }
 
-void Dropdown::CollectList(FramePacket& packet, const UIRect headerRect, const f32 opacity,
+void Dropdown::CollectList(FramePacket&        packet, const UIRect          headerRect, const f32 opacity,
                            const TextureHandle whiteTex, const SamplerHandle whiteSampler,
-                           const UISkin& skin) const
+                           const UISkin&       skin) const
 {
     // Overlay ZOrder for the expanded list — must sort above sibling widgets.
     const i32 listZOrder = ZOrder + 500;
-    const i32 bgL  = UIBaseLayer + (skin.ScreenLayerBase + listZOrder) * UILayerStride + UILayerBg;
-    const i32 txtL = UIBaseLayer + (skin.ScreenLayerBase + listZOrder) * UILayerStride + UILayerText;
+    const i32 bgL        = UIBaseLayer + (skin.ScreenLayerBase + listZOrder) * UILayerStride + UILayerBg;
+    const i32 txtL       = UIBaseLayer + (skin.ScreenLayerBase + listZOrder) * UILayerStride + UILayerText;
 
     for (i32 i = 0; i < static_cast<i32>(Items.size()); ++i) {
-        const UIRect row = { headerRect.X, headerRect.Y + headerRect.H + _itemHeight * static_cast<f32>(i),
-                             headerRect.W, _itemHeight };
-        const Color bg  = (i == _hoveredIndex) ? skin.ButtonHovered
-                        : (i == SelectedIndex)  ? skin.ButtonPressed
-                        :                         skin.PanelBg;
+        const UIRect row = {
+            headerRect.X, headerRect.Y + headerRect.H + _itemHeight * static_cast<f32>(i),
+            headerRect.W, _itemHeight
+        };
+        const Color bg = (i == _hoveredIndex)
+                         ? skin.ButtonHovered
+                         : (i == SelectedIndex)
+                           ? skin.ButtonPressed
+                           : skin.PanelBg;
         PushRect(packet, row, WithAlpha(bg, opacity), whiteTex, whiteSampler, bgL);
-        if (skin.Font)
+        if (skin.Font) {
+            const f32 lh   = skin.Font->GetLineHeight() * skin.FontScale;
+            const f32 rowY = row.Y + (row.H - lh) * 0.5f;
             DrawTextUI(packet, *skin.Font, Items[static_cast<size_t>(i)],
-                       { row.X + 6.0f, row.Y + row.H * 0.5f - skin.FontScale * 8.0f },
+                       {row.X + 6.0f, rowY},
                        skin.FontScale, WithAlpha(skin.TextNormal, opacity), txtL);
+        }
     }
 }
 
-void Dropdown::CollectTree(FramePacket& packet, const UIRect parent, const f32 parentOpacity,
+void Dropdown::CollectTree(FramePacket&        packet, const UIRect          parent, const f32 parentOpacity,
                            const TextureHandle whiteTex, const SamplerHandle whiteSampler,
-                           const UISkin& skin)
+                           const UISkin&       skin)
 {
     if (!Visible) return;
     const UIRect myRect = ComputeRect(parent);
@@ -372,35 +473,40 @@ void Checkbox::OnActivate()
     if (OnChanged) OnChanged(Checked);
 }
 
-void Checkbox::OnUpdate(const f32 /*dt*/, const UIRect myRect, const Vec2 mousePos,
+void Checkbox::OnUpdate(const f32 /*dt*/, const UIRect       myRect, const Vec2 mousePos,
                         const bool /*mouseDown*/, const bool mouseJustDown,
-                        const bool /*mouseJustUp*/, bool& consumed)
+                        const bool /*mouseJustUp*/, bool&    consumed)
 {
     if (!Enabled || consumed) return;
     const bool over = mousePos.X >= myRect.X && mousePos.X <= myRect.X + myRect.W &&
-                      mousePos.Y >= myRect.Y && mousePos.Y <= myRect.Y + myRect.H;
+            mousePos.Y >= myRect.Y && mousePos.Y <= myRect.Y + myRect.H;
     _hovered = over;
-    if (over && mouseJustDown) { OnActivate(); consumed = true; }
+    if (over && mouseJustDown) {
+        OnActivate();
+        consumed = true;
+    }
 }
 
-void Checkbox::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity,
+void Checkbox::OnCollect(FramePacket&        packet, const UIRect          myRect, const f32 effectiveOpacity,
                          const TextureHandle whiteTex, const SamplerHandle whiteSampler,
-                         const UISkin& skin)
+                         const UISkin&       skin)
 {
     const f32    boxSize = std::min(myRect.H, 18.0f);
-    const UIRect box     = { myRect.X, myRect.Y + (myRect.H - boxSize) * 0.5f, boxSize, boxSize };
+    const UIRect box     = {myRect.X, myRect.Y + (myRect.H - boxSize) * 0.5f, boxSize, boxSize};
     const Color  bg      = _hovered ? skin.CheckboxHovered : skin.CheckboxBg;
     PushRect(packet, box, WithAlpha(bg, effectiveOpacity), whiteTex, whiteSampler, BgLayer(*this, skin));
 
     if (Checked) {
-        const UIRect inner = { box.X + 3.0f, box.Y + 3.0f, box.W - 6.0f, box.H - 6.0f };
+        const UIRect inner = {box.X + 3.0f, box.Y + 3.0f, box.W - 6.0f, box.H - 6.0f};
         PushRect(packet, inner, WithAlpha(skin.CheckboxCheck, effectiveOpacity),
                  whiteTex, whiteSampler, FillLayer(*this, skin));
     }
 
     if (!Label.empty() && skin.Font) {
+        const f32 lineH = skin.Font->GetLineHeight() * skin.FontScale;
+        const f32 textY = myRect.Y + (myRect.H - lineH) * 0.5f;
         DrawTextUI(packet, *skin.Font, Label,
-                   { box.X + boxSize + 6.0f, myRect.Y + myRect.H * 0.5f - skin.FontScale * 8.0f },
+                   {box.X + boxSize + 6.0f, textY},
                    skin.FontScale, WithAlpha(skin.TextNormal, effectiveOpacity), TextLayer(*this, skin));
     }
 }
@@ -409,16 +515,16 @@ void Checkbox::OnCollect(FramePacket& packet, const UIRect myRect, const f32 eff
 // RadioGroup
 // ---------------------------------------------------------------------------
 
-void RadioGroup::OnUpdate(const f32 /*dt*/, const UIRect myRect, const Vec2 mousePos,
+void RadioGroup::OnUpdate(const f32 /*dt*/, const UIRect       myRect, const Vec2 mousePos,
                           const bool /*mouseDown*/, const bool mouseJustDown,
-                          const bool /*mouseJustUp*/, bool& consumed)
+                          const bool /*mouseJustUp*/, bool&    consumed)
 {
     if (!Enabled || consumed) return;
     _hoveredIndex = -1;
     for (i32 i = 0; i < static_cast<i32>(Items.size()); ++i) {
-        const UIRect row = { myRect.X, myRect.Y + ItemHeight * static_cast<f32>(i), myRect.W, ItemHeight };
-        const bool over  = mousePos.X >= row.X && mousePos.X <= row.X + row.W &&
-                           mousePos.Y >= row.Y && mousePos.Y <= row.Y + row.H;
+        const UIRect row  = {myRect.X, myRect.Y + ItemHeight * static_cast<f32>(i), myRect.W, ItemHeight};
+        const bool   over = mousePos.X >= row.X && mousePos.X <= row.X + row.W &&
+                mousePos.Y >= row.Y && mousePos.Y <= row.Y + row.H;
         if (over) _hoveredIndex = i;
         if (over && mouseJustDown) {
             SelectedIndex = i;
@@ -428,30 +534,33 @@ void RadioGroup::OnUpdate(const f32 /*dt*/, const UIRect myRect, const Vec2 mous
     }
 }
 
-void RadioGroup::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity,
+void RadioGroup::OnCollect(FramePacket&        packet, const UIRect          myRect, const f32 effectiveOpacity,
                            const TextureHandle whiteTex, const SamplerHandle whiteSampler,
-                           const UISkin& skin)
+                           const UISkin&       skin)
 {
     const f32 dotR = 7.0f; // outer circle radius
 
     for (i32 i = 0; i < static_cast<i32>(Items.size()); ++i) {
-        const UIRect row = { myRect.X, myRect.Y + ItemHeight * static_cast<f32>(i), myRect.W, ItemHeight };
+        const UIRect row = {myRect.X, myRect.Y + ItemHeight * static_cast<f32>(i), myRect.W, ItemHeight};
         const f32    cy  = row.Y + ItemHeight * 0.5f;
-        const UIRect dot = { row.X, cy - dotR, dotR * 2.0f, dotR * 2.0f };
+        const UIRect dot = {row.X, cy - dotR, dotR * 2.0f, dotR * 2.0f};
         const Color  bg  = (i == _hoveredIndex) ? skin.CheckboxHovered : skin.CheckboxBg;
         PushRect(packet, dot, WithAlpha(bg, effectiveOpacity), whiteTex, whiteSampler, BgLayer(*this, skin));
 
         if (i == SelectedIndex) {
             const f32    innerR = dotR - 3.0f;
-            const UIRect inner  = { dot.X + dotR - innerR, dot.Y + dotR - innerR, innerR * 2.0f, innerR * 2.0f };
+            const UIRect inner  = {dot.X + dotR - innerR, dot.Y + dotR - innerR, innerR * 2.0f, innerR * 2.0f};
             PushRect(packet, inner, WithAlpha(skin.CheckboxCheck, effectiveOpacity),
                      whiteTex, whiteSampler, FillLayer(*this, skin));
         }
 
-        if (skin.Font)
+        if (skin.Font) {
+            const f32 lineH = skin.Font->GetLineHeight() * skin.FontScale;
+            const f32 textY = row.Y + (row.H - lineH) * 0.5f;
             DrawTextUI(packet, *skin.Font, Items[static_cast<size_t>(i)],
-                       { row.X + dotR * 2.0f + 6.0f, cy - skin.FontScale * 8.0f },
+                       {row.X + dotR * 2.0f + 6.0f, textY},
                        skin.FontScale, WithAlpha(skin.TextNormal, effectiveOpacity), TextLayer(*this, skin));
+        }
     }
 }
 
@@ -465,30 +574,33 @@ void Switch::OnActivate()
     if (OnChanged) OnChanged(On);
 }
 
-void Switch::OnUpdate(const f32 dt, const UIRect myRect, const Vec2 mousePos,
+void Switch::OnUpdate(const f32                            dt, const UIRect myRect, const Vec2 mousePos,
                       const bool /*mouseDown*/, const bool mouseJustDown,
-                      const bool /*mouseJustUp*/, bool& consumed)
+                      const bool /*mouseJustUp*/, bool&    consumed)
 {
     if (!Enabled) return;
     const bool over = mousePos.X >= myRect.X && mousePos.X <= myRect.X + myRect.W &&
-                      mousePos.Y >= myRect.Y && mousePos.Y <= myRect.Y + myRect.H;
+            mousePos.Y >= myRect.Y && mousePos.Y <= myRect.Y + myRect.H;
     _hovered = over;
-    if (over && mouseJustDown && !consumed) { OnActivate(); consumed = true; }
+    if (over && mouseJustDown && !consumed) {
+        OnActivate();
+        consumed = true;
+    }
 
     // Animate thumb toward target
     const f32 target = On ? 1.0f : 0.0f;
     const f32 delta  = target - _animT;
-    _animT += std::copysign(std::min(std::abs(delta), AnimSpeed * dt), delta);
+    _animT           += std::copysign(std::min(std::abs(delta), AnimSpeed * dt), delta);
 }
 
-void Switch::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity,
+void Switch::OnCollect(FramePacket&        packet, const UIRect          myRect, const f32 effectiveOpacity,
                        const TextureHandle whiteTex, const SamplerHandle whiteSampler,
-                       const UISkin& skin)
+                       const UISkin&       skin)
 {
     // Lerp track color between off and on
     const Color trackOff = skin.SwitchOff;
     const Color trackOn  = skin.SwitchOn;
-    Color track;
+    Color       track;
     track.R = trackOff.R + (trackOn.R - trackOff.R) * _animT;
     track.G = trackOff.G + (trackOn.G - trackOff.G) * _animT;
     track.B = trackOff.B + (trackOn.B - trackOff.B) * _animT;
@@ -498,9 +610,8 @@ void Switch::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effec
     const f32    pad    = 2.0f;
     const f32    thumbW = myRect.H - pad * 2.0f;
     const f32    travel = myRect.W - thumbW - pad * 2.0f;
-    const UIRect thumb  = { myRect.X + pad + _animT * travel, myRect.Y + pad, thumbW, thumbW };
+    const UIRect thumb  = {myRect.X + pad + _animT * travel, myRect.Y + pad, thumbW, thumbW};
     PushRect(packet, thumb, WithAlpha(skin.SwitchThumb, effectiveOpacity),
              whiteTex, whiteSampler, FillLayer(*this, skin));
 }
-
 } // namespace Arcbit

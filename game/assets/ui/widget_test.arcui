@@ -9,7 +9,7 @@
       "name": "panel",
       "anchor": [0.5, 0.5],
       "pivot": [0.5, 0.5],
-      "size": [580, 530],
+      "size": [580, 546],
       "draw_border": true,
       "children": [
         {
@@ -41,21 +41,21 @@
           "type": "TextInput",
           "name": "text-input",
           "offset": [150, 50],
-          "size": [400, 28],
+          "size": [400, 36],
           "placeholder": "Type something..."
         },
 
         {
           "type": "Label",
           "text": "Number:",
-          "offset": [14, 98],
+          "offset": [14, 106],
           "size": [120, 24]
         },
         {
           "type": "TextInput",
           "name": "num-input",
-          "offset": [150, 94],
-          "size": [180, 28],
+          "offset": [150, 102],
+          "size": [180, 36],
           "mode": "numeric",
           "placeholder": "0.0"
         },
@@ -63,13 +63,13 @@
         {
           "type": "Label",
           "text": "Volume:",
-          "offset": [14, 144],
+          "offset": [14, 160],
           "size": [120, 24]
         },
         {
           "type": "Slider",
           "name": "volume-slider",
-          "offset": [150, 142],
+          "offset": [150, 158],
           "size": [330, 24],
           "value": 0.5,
           "min": 0.0,
@@ -79,7 +79,7 @@
           "type": "Label",
           "name": "slider-val",
           "text": "50%",
-          "offset": [492, 144],
+          "offset": [492, 160],
           "size": [72, 24],
           "align": "right"
         },
@@ -87,13 +87,13 @@
         {
           "type": "Label",
           "text": "Quality:",
-          "offset": [14, 190],
+          "offset": [14, 206],
           "size": [120, 24]
         },
         {
           "type": "Dropdown",
           "name": "quality-drop",
-          "offset": [150, 186],
+          "offset": [150, 202],
           "size": [220, 28],
           "items": ["Low", "Medium", "High", "Ultra"],
           "selected": 1
@@ -102,7 +102,7 @@
         {
           "type": "Checkbox",
           "name": "feature-check",
-          "offset": [14, 232],
+          "offset": [14, 248],
           "size": [340, 28],
           "label": "Enable Feature",
           "checked": false
@@ -111,13 +111,13 @@
         {
           "type": "Label",
           "text": "Difficulty:",
-          "offset": [14, 278],
+          "offset": [14, 294],
           "size": [120, 24]
         },
         {
           "type": "RadioGroup",
           "name": "difficulty-radio",
-          "offset": [150, 270],
+          "offset": [150, 286],
           "size": [240, 84],
           "items": ["Easy", "Normal", "Hard"],
           "selected": 1,
@@ -127,20 +127,20 @@
         {
           "type": "Label",
           "text": "Auto-Save:",
-          "offset": [14, 368],
+          "offset": [14, 379],
           "size": [120, 24]
         },
         {
           "type": "Switch",
           "name": "autosave-switch",
-          "offset": [150, 362],
+          "offset": [150, 378],
           "size": [52, 26],
           "on": true
         },
 
         {
           "type": "Panel",
-          "offset": [14, 406],
+          "offset": [14, 422],
           "size": [552, 1],
           "background_color": [0.3, 0.3, 0.35, 1.0]
         },
@@ -148,7 +148,7 @@
           "type": "Label",
           "name": "output",
           "text": "...",
-          "offset": [14, 416],
+          "offset": [14, 432],
           "size": [552, 100],
           "word_wrap": true,
           "text_color": [0.7, 0.85, 0.7, 1.0]

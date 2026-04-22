@@ -38,6 +38,13 @@ public:
     static constexpr ActionID ActionTextDelete    = MakeAction("UI_TextDelete");
     static constexpr ActionID ActionTextEscape    = MakeAction("UI_TextEscape");
 
+    // Tab-only focus navigation — active even when a text widget is focused.
+    static constexpr ActionID ActionTabNext  = MakeAction("UI_TabNext");
+
+    // Modifier state — used to dispatch Shift/Ctrl variants of control keys.
+    static constexpr ActionID ActionShiftMod = MakeAction("UI_ShiftMod");
+    static constexpr ActionID ActionCtrlMod  = MakeAction("UI_CtrlMod");
+
     // Must be called once after the render device is ready.
     // Registers navigation actions and binds their default keys.
     void Init(const RenderThread& rt, const FontAtlas& font, InputManager& input);

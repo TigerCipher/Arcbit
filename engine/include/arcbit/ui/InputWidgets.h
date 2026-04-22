@@ -51,15 +51,24 @@ protected:
                    const UISkin& skin) override;
 
     void OnFocusGained() override { _cursorBlink = 0.0f; }
-    void OnFocusLost()   override { _scrollX = 0.0f; }
+    void OnFocusLost()   override { _scrollX = 0.0f; _selAnchor = _cursor; }
+    void OnActivate()    override { if (OnConfirm) OnConfirm(Text); }
 
 private:
-    u32  _cursor     = 0;     // byte index into Text
-    f32  _scrollX    = 0.0f; // horizontal scroll offset in pixels
-    f32  _cursorBlink = 0.0f; // time accumulator for cursor blink
+    u32  _cursor      = 0;     // insertion point (byte index into Text)
+    u32  _selAnchor   = 0;     // other end of selection; == _cursor when no selection
+    f32  _scrollX     = 0.0f;
+    f32  _cursorBlink = 0.0f;
+
+    [[nodiscard]] bool HasSelection() const { return _selAnchor != _cursor; }
+    [[nodiscard]] u32  SelMin()       const { return _cursor < _selAnchor ? _cursor : _selAnchor; }
+    [[nodiscard]] u32  SelMax()       const { return _cursor > _selAnchor ? _cursor : _selAnchor; }
 
     [[nodiscard]] bool AcceptsChar(char c) const;
-    void ClampCursor();
+    void DeleteSelection();
+    void MoveCursor(u32 pos, bool extendSel);
+    [[nodiscard]] u32 PrevWordBoundary() const;
+    [[nodiscard]] u32 NextWordBoundary() const;
     void UpdateScroll(f32 availW, const UISkin& skin);
 };
 

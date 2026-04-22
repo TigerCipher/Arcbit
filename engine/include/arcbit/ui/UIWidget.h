@@ -17,7 +17,15 @@ struct FramePacket;
 struct UISkin;
 
 // Control keys forwarded to focused interactive widgets (e.g. TextInput).
-enum class UIControlKey : u8 { Left, Right, Home, End, Backspace, Delete, Enter, Escape };
+// Shift variants extend the selection; Ctrl variants jump word boundaries.
+enum class UIControlKey : u8
+{
+    Left,  ShiftLeft,  CtrlLeft,  CtrlShiftLeft,
+    Right, ShiftRight, CtrlRight, CtrlShiftRight,
+    Home,  ShiftHome,
+    End,   ShiftEnd,
+    Backspace, Delete, Enter, Escape,
+};
 
 // Base layer offset for all UI quads.  Each widget ZOrder level uses 4
 // sublayers: 0=background, 1=fill/foreground, 2=text, 3=reserved.
