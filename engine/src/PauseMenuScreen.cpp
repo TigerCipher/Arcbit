@@ -45,7 +45,7 @@ void PauseMenuScreen::OnEnter()
 
 void PauseMenuScreen::BuildFallback()
 {
-    Add<Overlay>();
+    Add<Scrim>();
 
     const i32 btnCount = 2
         + (ShowControls         ? 1 : 0)

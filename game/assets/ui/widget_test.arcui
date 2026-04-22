@@ -1,7 +1,7 @@
 {
   "widgets": [
     {
-      "type": "Overlay",
+      "type": "Scrim",
       "background_color": [0.0, 0.0, 0.0, 0.45]
     },
     {
@@ -9,7 +9,7 @@
       "name": "panel",
       "anchor": [0.5, 0.5],
       "pivot": [0.5, 0.5],
-      "size": [580, 546],
+      "size": [580, 646],
       "draw_border": true,
       "children": [
         {
@@ -102,7 +102,7 @@
         {
           "type": "Checkbox",
           "name": "feature-check",
-          "offset": [14, 248],
+          "offset": [14, 298],
           "size": [340, 28],
           "label": "Enable Feature",
           "checked": false
@@ -111,13 +111,13 @@
         {
           "type": "Label",
           "text": "Difficulty:",
-          "offset": [14, 294],
+          "offset": [14, 336],
           "size": [120, 24]
         },
         {
           "type": "RadioGroup",
           "name": "difficulty-radio",
-          "offset": [150, 286],
+          "offset": [150, 336],
           "size": [240, 84],
           "items": ["Easy", "Normal", "Hard"],
           "selected": 1,
@@ -127,20 +127,20 @@
         {
           "type": "Label",
           "text": "Auto-Save:",
-          "offset": [14, 379],
+          "offset": [14, 429],
           "size": [120, 24]
         },
         {
           "type": "Switch",
           "name": "autosave-switch",
-          "offset": [150, 378],
+          "offset": [150, 429],
           "size": [52, 26],
           "on": true
         },
 
         {
           "type": "Panel",
-          "offset": [14, 422],
+          "offset": [14, 472],
           "size": [552, 1],
           "background_color": [0.3, 0.3, 0.35, 1.0]
         },
@@ -148,7 +148,7 @@
           "type": "Label",
           "name": "output",
           "text": "...",
-          "offset": [14, 432],
+          "offset": [14, 482],
           "size": [552, 100],
           "word_wrap": true,
           "text_color": [0.7, 0.85, 0.7, 1.0]

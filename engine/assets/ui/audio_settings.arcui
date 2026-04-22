@@ -1,7 +1,7 @@
 {
   "widgets": [
     {
-      "type": "Overlay"
+      "type": "Scrim"
     },
     {
       "type":   "Panel",

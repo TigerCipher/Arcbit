@@ -213,20 +213,20 @@ void UILoader::EnsureBuiltins()
     auto& r = Registry();
     if (!r.empty()) return; // already registered
 
-    r["Panel"]       = { [] { return std::make_unique<Panel>();       }, ApplyPanel       };
-    r["Overlay"]     = { [] { return std::make_unique<Overlay>();     }, ApplyPanel       }; // inherits Panel
-    r["Label"]       = { [] { return std::make_unique<Label>();       }, ApplyLabel       };
-    r["Button"]      = { [] { return std::make_unique<Button>();      }, ApplyButton      };
-    r["Image"]       = { [] { return std::make_unique<Image>();       }, ApplyImage       };
-    r["NineSlice"]   = { [] { return std::make_unique<NineSlice>();   }, ApplyNineSlice   };
-    r["ProgressBar"] = { [] { return std::make_unique<ProgressBar>(); }, ApplyProgressBar };
-    r["ScrollPanel"] = { [] { return std::make_unique<ScrollPanel>(); }, ApplyScrollPanel };
-    r["TextInput"]   = { [] { return std::make_unique<TextInput>();   }, ApplyTextInput   };
-    r["Slider"]      = { [] { return std::make_unique<Slider>();      }, ApplySlider      };
-    r["Dropdown"]    = { [] { return std::make_unique<Dropdown>();    }, ApplyDropdown    };
-    r["Checkbox"]    = { [] { return std::make_unique<Checkbox>();    }, ApplyCheckbox    };
-    r["RadioGroup"]  = { [] { return std::make_unique<RadioGroup>();  }, ApplyRadioGroup  };
-    r["Switch"]      = { [] { return std::make_unique<Switch>();      }, ApplySwitch      };
+    r["Panel"]       = {[] { return std::make_unique<Panel>(); }, ApplyPanel};
+    r["Scrim"]     = {[] { return std::make_unique<Scrim>(); }, ApplyPanel}; // inherits Panel
+    r["Label"]       = {[] { return std::make_unique<Label>(); }, ApplyLabel};
+    r["Button"]      = {[] { return std::make_unique<Button>(); }, ApplyButton};
+    r["Image"]       = {[] { return std::make_unique<Image>(); }, ApplyImage};
+    r["NineSlice"]   = {[] { return std::make_unique<NineSlice>(); }, ApplyNineSlice};
+    r["ProgressBar"] = {[] { return std::make_unique<ProgressBar>(); }, ApplyProgressBar};
+    r["ScrollPanel"] = {[] { return std::make_unique<ScrollPanel>(); }, ApplyScrollPanel};
+    r["TextInput"]   = {[] { return std::make_unique<TextInput>(); }, ApplyTextInput};
+    r["Slider"]      = {[] { return std::make_unique<Slider>(); }, ApplySlider};
+    r["Dropdown"]    = {[] { return std::make_unique<Dropdown>(); }, ApplyDropdown};
+    r["Checkbox"]    = {[] { return std::make_unique<Checkbox>(); }, ApplyCheckbox};
+    r["RadioGroup"]  = {[] { return std::make_unique<RadioGroup>(); }, ApplyRadioGroup};
+    r["Switch"]      = {[] { return std::make_unique<Switch>(); }, ApplySwitch};
 }
 
 // ---------------------------------------------------------------------------

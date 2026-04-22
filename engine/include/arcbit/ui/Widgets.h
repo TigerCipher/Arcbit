@@ -25,13 +25,13 @@ protected:
 
     void Collect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
                  TextureHandle whiteTex, SamplerHandle whiteSampler,
-                 const UISkin& skin, const Color       baseColor) const;
+                 const UISkin& skin, Color             baseColor) const;
 };
 
-class Overlay : public Panel
+class Scrim : public Panel
 {
 public:
-    Overlay()
+    Scrim()
     {
         SizePercent = {1.0f, 1.0f};
         Anchor      = {0.0f, 0.0f};

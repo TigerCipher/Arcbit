@@ -134,7 +134,7 @@ void Panel::Collect(FramePacket& packet, const UIRect myRect, const f32 effectiv
     }
 }
 
-void Overlay::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity, const TextureHandle whiteTex,
+void Scrim::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity, const TextureHandle whiteTex,
                         const SamplerHandle whiteSampler, const UISkin& skin)
 {
     const Color base = BackgroundColor.A > 0.0f ? BackgroundColor : skin.OverlayColor;
