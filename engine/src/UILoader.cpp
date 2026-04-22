@@ -1,6 +1,7 @@
 #include <arcbit/ui/UILoader.h>
 #include <arcbit/ui/UIScreen.h>
 #include <arcbit/ui/Widgets.h>
+#include <arcbit/ui/InputWidgets.h>
 #include <arcbit/core/Loc.h>
 #include <arcbit/core/Log.h>
 
@@ -146,6 +147,63 @@ static void ApplyImage(UIWidget& w, const json& j)
         img.UV = { (*it)[0].get<f32>(), (*it)[1].get<f32>(), (*it)[2].get<f32>(), (*it)[3].get<f32>() };
 }
 
+static void ApplyTextInput(UIWidget& w, const json& j)
+{
+    auto& t = static_cast<TextInput&>(w);
+    if (auto it = j.find("placeholder"); it != j.end()) t.Placeholder = it->get<std::string>();
+    if (auto it = j.find("max_length");  it != j.end()) t.MaxLength   = it->get<u32>();
+    if (auto it = j.find("pattern");     it != j.end()) t.Pattern     = it->get<std::string>();
+    if (auto it = j.find("mode"); it != j.end()) {
+        const std::string m = it->get<std::string>();
+        if      (m == "numeric") t.InputMode = TextInput::Mode::Numeric;
+        else if (m == "regex")   t.InputMode = TextInput::Mode::Regex;
+        else                     t.InputMode = TextInput::Mode::Text;
+    }
+}
+
+static void ApplySlider(UIWidget& w, const json& j)
+{
+    auto& s = static_cast<Slider&>(w);
+    if (auto it = j.find("value"); it != j.end()) s.Value = it->get<f32>();
+    if (auto it = j.find("min");   it != j.end()) s.Min   = it->get<f32>();
+    if (auto it = j.find("max");   it != j.end()) s.Max   = it->get<f32>();
+    if (auto it = j.find("step");  it != j.end()) s.Step  = it->get<f32>();
+}
+
+static void ApplyDropdown(UIWidget& w, const json& j)
+{
+    auto& d = static_cast<Dropdown&>(w);
+    if (auto it = j.find("selected"); it != j.end()) d.SelectedIndex = it->get<i32>();
+    if (auto it = j.find("items"); it != j.end() && it->is_array())
+        for (const auto& item : *it)
+            d.Items.push_back(item.get<std::string>());
+}
+
+static void ApplyCheckbox(UIWidget& w, const json& j)
+{
+    auto& c = static_cast<Checkbox&>(w);
+    if (auto it = j.find("checked"); it != j.end()) c.Checked = it->get<bool>();
+    if (auto it = j.find("label");   it != j.end()) c.Label   = it->get<std::string>();
+    if (auto it = j.find("label_key"); it != j.end()) c.Label = Loc::Get(it->get<std::string>());
+}
+
+static void ApplyRadioGroup(UIWidget& w, const json& j)
+{
+    auto& r = static_cast<RadioGroup&>(w);
+    if (auto it = j.find("selected");    it != j.end()) r.SelectedIndex = it->get<i32>();
+    if (auto it = j.find("item_height"); it != j.end()) r.ItemHeight    = it->get<f32>();
+    if (auto it = j.find("items"); it != j.end() && it->is_array())
+        for (const auto& item : *it)
+            r.Items.push_back(item.get<std::string>());
+}
+
+static void ApplySwitch(UIWidget& w, const json& j)
+{
+    auto& s = static_cast<Switch&>(w);
+    if (auto it = j.find("on");         it != j.end()) s.On        = it->get<bool>();
+    if (auto it = j.find("anim_speed"); it != j.end()) s.AnimSpeed = it->get<f32>();
+}
+
 // ---------------------------------------------------------------------------
 // EnsureBuiltins — register all engine widget types once
 // ---------------------------------------------------------------------------
@@ -163,6 +221,12 @@ void UILoader::EnsureBuiltins()
     r["NineSlice"]   = { [] { return std::make_unique<NineSlice>();   }, ApplyNineSlice   };
     r["ProgressBar"] = { [] { return std::make_unique<ProgressBar>(); }, ApplyProgressBar };
     r["ScrollPanel"] = { [] { return std::make_unique<ScrollPanel>(); }, ApplyScrollPanel };
+    r["TextInput"]   = { [] { return std::make_unique<TextInput>();   }, ApplyTextInput   };
+    r["Slider"]      = { [] { return std::make_unique<Slider>();      }, ApplySlider      };
+    r["Dropdown"]    = { [] { return std::make_unique<Dropdown>();    }, ApplyDropdown    };
+    r["Checkbox"]    = { [] { return std::make_unique<Checkbox>();    }, ApplyCheckbox    };
+    r["RadioGroup"]  = { [] { return std::make_unique<RadioGroup>();  }, ApplyRadioGroup  };
+    r["Switch"]      = { [] { return std::make_unique<Switch>();      }, ApplySwitch      };
 }
 
 // ---------------------------------------------------------------------------

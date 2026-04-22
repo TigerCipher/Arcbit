@@ -29,6 +29,10 @@ Window::Window(const Desc& desc)
     _width  = desc.Width;
     _height = desc.Height;
 
+    // Enable SDL text input so SDL_EVENT_TEXT_INPUT fires for composed characters.
+    // On desktop this is a no-op; on mobile it shows the virtual keyboard.
+    SDL_StartTextInput(win);
+
     LOG_INFO(Platform, "Window created: '{}' ({}x{})", desc.Title, desc.Width, desc.Height);
 }
 
@@ -93,6 +97,11 @@ bool Window::PollEvents()
                     _scrollFn(event.wheel.y);
                 break;
 
+            case SDL_EVENT_TEXT_INPUT:
+                if (_textInputFn)
+                    _textInputFn(event.text.text);
+                break;
+
             case SDL_EVENT_WINDOW_RESIZED:
                 _width            = static_cast<u32>(event.window.data1);
                 _height           = static_cast<u32>(event.window.data2);
@@ -138,6 +147,11 @@ void Window::SetScrollCallback(std::function<void(f32)> fn)
 void Window::SetGamepadButtonCallback(std::function<void(u32, i32, bool)> fn)
 {
     _gamepadButtonFn = std::move(fn);
+}
+
+void Window::SetTextInputCallback(std::function<void(const char*)> fn)
+{
+    _textInputFn = std::move(fn);
 }
 
 } // namespace Arcbit

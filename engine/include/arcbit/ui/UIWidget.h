@@ -16,6 +16,9 @@ namespace Arcbit
 struct FramePacket;
 struct UISkin;
 
+// Control keys forwarded to focused interactive widgets (e.g. TextInput).
+enum class UIControlKey : u8 { Left, Right, Home, End, Backspace, Delete, Enter, Escape };
+
 // Base layer offset for all UI quads.  Each widget ZOrder level uses 4
 // sublayers: 0=background, 1=fill/foreground, 2=text, 3=reserved.
 static constexpr i32 UIBaseLayer   = 10'000'000;
@@ -74,6 +77,14 @@ public:
     std::string Name;
 
     virtual ~UIWidget() = default;
+
+    // Text and control-key events forwarded by UIManager to the focused widget.
+    virtual void OnTextInput(std::string_view /*chars*/) {}
+    virtual void OnControlKey(UIControlKey /*key*/) {}
+
+    // When true UIManager suppresses Left/Right focus navigation, allowing the
+    // widget to handle cursor movement directly. TextInput sets this when focused.
+    [[nodiscard]] virtual bool ConsumesFocusNav() const { return false; }
 
     // Compute this widget's pixel rect relative to parentRect.
     [[nodiscard]] UIRect ComputeRect(UIRect parent) const;

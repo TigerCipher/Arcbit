@@ -1,5 +1,6 @@
 add_executable(arcbit-game
     src/main.cpp
+    src/WidgetTestScreen.cpp
 )
 
 target_link_libraries(arcbit-game PRIVATE

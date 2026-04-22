@@ -29,6 +29,15 @@ public:
     static constexpr ActionID ActionFocusNext = MakeAction("UI_FocusNext");
     static constexpr ActionID ActionFocusPrev = MakeAction("UI_FocusPrev");
 
+    // Text-widget control keys — hidden from the rebind screen (UI_ prefix).
+    static constexpr ActionID ActionTextLeft      = MakeAction("UI_TextLeft");
+    static constexpr ActionID ActionTextRight     = MakeAction("UI_TextRight");
+    static constexpr ActionID ActionTextHome      = MakeAction("UI_TextHome");
+    static constexpr ActionID ActionTextEnd       = MakeAction("UI_TextEnd");
+    static constexpr ActionID ActionTextBackspace = MakeAction("UI_TextBackspace");
+    static constexpr ActionID ActionTextDelete    = MakeAction("UI_TextDelete");
+    static constexpr ActionID ActionTextEscape    = MakeAction("UI_TextEscape");
+
     // Must be called once after the render device is ready.
     // Registers navigation actions and binds their default keys.
     void Init(const RenderThread& rt, const FontAtlas& font, InputManager& input);

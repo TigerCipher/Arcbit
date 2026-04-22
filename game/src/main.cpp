@@ -18,6 +18,7 @@
 #include <arcbit/ui/UIScreen.h>
 #include <arcbit/ui/UISkin.h>
 #include <arcbit/ui/Widgets.h>
+#include "WidgetTestScreen.h"
 
 #include <cmath>
 #include <vector>
@@ -133,6 +134,9 @@ protected:
         if (GetInput().JustPressed(ActionPause) && !GetUI().HasBlockingScreen())
             ShowPauseMenu();
 
+        if (GetInput().JustPressed(ActionWidgetTest) && !GetUI().HasBlockingScreen())
+            ShowWidgetTest();
+
         if (GetUI().HasBlockingScreen()) return;
 
         if (GetInput().JustPressed(ActionToggleGrid)) _showGrid = !_showGrid;
@@ -172,7 +176,8 @@ private:
 
     void RegisterInputActions()
     {
-        GetInput().RegisterAction(ActionToggleGrid, "Debug_ToggleGrid", "Toggle Grid",  "Debug");
+        GetInput().RegisterAction(ActionToggleGrid,  "Debug_ToggleGrid",  "Toggle Grid",   "Debug");
+        GetInput().RegisterAction(ActionWidgetTest,  "Debug_WidgetTest",  "Widget Test",   "Debug");
         GetInput().RegisterAction(ActionMoveLeft,   "Move_Left",        "Move Left",    "Movement");
         GetInput().RegisterAction(ActionMoveRight,  "Move_Right",       "Move Right",   "Movement");
         GetInput().RegisterAction(ActionMoveUp,     "Move_Up",          "Move Up",      "Movement");
@@ -182,6 +187,7 @@ private:
         GetInput().RegisterAction(ActionAttack,     "Player_Attack",    "Attack",       "Gameplay");
         GetInput().RegisterAction(ActionPause,      "Pause",            "Pause",        "System");
 
+        GetInput().BindKey(ActionWidgetTest,  Key::T);
         GetInput().BindKey(ActionToggleGrid, Key::G);
         GetInput().BindKey(ActionMoveLeft, Key::A);
         GetInput().BindKey(ActionMoveLeft, Key::Left);
@@ -801,6 +807,13 @@ private:
         GetUI().Push(std::move(gfx));
     }
 
+    void ShowWidgetTest()
+    {
+        auto screen     = std::make_unique<WidgetTestScreen>();
+        screen->OnClose = [this] { GetUI().Pop(); };
+        GetUI().Push(std::move(screen));
+    }
+
 private:
     static constexpr ActionID ActionToggleGrid = MakeAction("Debug_ToggleGrid");
     static constexpr ActionID ActionMoveLeft   = MakeAction("Move_Left");
@@ -809,8 +822,9 @@ private:
     static constexpr ActionID ActionMoveDown   = MakeAction("Move_Down");
     static constexpr ActionID ActionInteract   = MakeAction("Interact");
     static constexpr ActionID ActionSprint     = MakeAction("Sprint");
-    static constexpr ActionID ActionAttack = MakeAction("Player_Attack");
-    static constexpr ActionID ActionPause  = MakeAction("Pause");
+    static constexpr ActionID ActionAttack     = MakeAction("Player_Attack");
+    static constexpr ActionID ActionPause      = MakeAction("Pause");
+    static constexpr ActionID ActionWidgetTest = MakeAction("Debug_WidgetTest");
 
     static constexpr f32 ViewportW     = 1920.0f;
     static constexpr f32 ViewportH     = 1080.0f;

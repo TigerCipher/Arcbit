@@ -83,6 +83,12 @@ public:
     void Collect(FramePacket& packet, UIRect screenRect, const UISkin& skin,
                  TextureHandle whiteTex, SamplerHandle whiteSampler);
 
+    // --- Text input routing -------------------------------------------------
+
+    // Forward typed characters / control keys to the currently focused widget.
+    void DispatchTextInput(std::string_view chars);
+    void DispatchControlKey(UIControlKey key);
+
     // --- Focus navigation ---------------------------------------------------
 
     void FocusNext();
@@ -119,6 +125,9 @@ private:
 
     std::vector<UIWidget*> GatherFocusables() const;
     static void CollectFocusables(UIWidget& w, std::vector<UIWidget*>& out);
+
+    // Hit-test the widget tree for the deepest Focusable widget under pos.
+    [[nodiscard]] UIWidget* FindFocusableHit(UIWidget& w, UIRect parent, Vec2 pos) const;
 
     friend class UIManager;
 };

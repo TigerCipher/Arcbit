@@ -33,6 +33,7 @@ add_library(arcbit-engine STATIC
     src/AudioSettingsScreen.cpp
     src/GraphicsSettingsScreen.cpp
     src/UILoader.cpp
+    src/InputWidgets.cpp
     src/Loc.cpp
 )
 

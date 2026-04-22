@@ -31,6 +31,23 @@ void UIManager::Init(const RenderThread& rt, const FontAtlas& font, InputManager
     input.BindGamepadButton(ActionFocusNext, GamepadButton::DPadRight);
     input.BindGamepadButton(ActionFocusPrev, GamepadButton::DPadUp);
     input.BindGamepadButton(ActionFocusPrev, GamepadButton::DPadLeft);
+
+    // Text widget control keys — UI_ prefix hides them from the rebind screen.
+    input.RegisterAction(ActionTextLeft,      "UI_TextLeft");
+    input.RegisterAction(ActionTextRight,     "UI_TextRight");
+    input.RegisterAction(ActionTextHome,      "UI_TextHome");
+    input.RegisterAction(ActionTextEnd,       "UI_TextEnd");
+    input.RegisterAction(ActionTextBackspace, "UI_TextBackspace");
+    input.RegisterAction(ActionTextDelete,    "UI_TextDelete");
+    input.RegisterAction(ActionTextEscape,    "UI_TextEscape");
+
+    input.BindKey(ActionTextLeft,      Key::Left);
+    input.BindKey(ActionTextRight,     Key::Right);
+    input.BindKey(ActionTextHome,      Key::Home);
+    input.BindKey(ActionTextEnd,       Key::End);
+    input.BindKey(ActionTextBackspace, Key::Backspace);
+    input.BindKey(ActionTextDelete,    Key::Delete);
+    input.BindKey(ActionTextEscape,    Key::Escape);
 }
 
 // ---------------------------------------------------------------------------
@@ -115,9 +132,28 @@ void UIManager::Update(const f32 dt, const Vec2 windowSize, const InputManager& 
     active->Update(dt, screenRect, _mousePos, _mouseDown, _mouseJustDown, _mouseJustUp,
                    input.GetScrollDelta());
 
-    if (input.JustPressed(ActionFocusNext)) active->FocusNext();
-    if (input.JustPressed(ActionFocusPrev)) active->FocusPrev();
-    if (input.JustPressed(ActionConfirm))   active->ActivateFocused();
+    // Suppress arrow-key focus navigation when a text-consuming widget is focused
+    // (e.g. TextInput handles Left/Right for cursor movement instead).
+    const bool consumesNav = active->GetFocusedWidget() &&
+                             active->GetFocusedWidget()->ConsumesFocusNav();
+
+    if (!consumesNav) {
+        if (input.JustPressed(ActionFocusNext)) active->FocusNext();
+        if (input.JustPressed(ActionFocusPrev)) active->FocusPrev();
+    }
+    if (input.JustPressed(ActionConfirm)) active->ActivateFocused();
+
+    // Escape always clears focus on a text-consuming widget (cancels editing).
+    if (consumesNav && input.JustPressed(ActionTextEscape)) active->ClearFocus();
+
+    // Forward typed characters and control keys to the focused widget.
+    if (!input.GetTextInput().empty()) active->DispatchTextInput(input.GetTextInput());
+    if (input.JustPressed(ActionTextBackspace)) active->DispatchControlKey(UIControlKey::Backspace);
+    if (input.JustPressed(ActionTextDelete))    active->DispatchControlKey(UIControlKey::Delete);
+    if (input.JustPressed(ActionTextLeft))      active->DispatchControlKey(UIControlKey::Left);
+    if (input.JustPressed(ActionTextRight))     active->DispatchControlKey(UIControlKey::Right);
+    if (input.JustPressed(ActionTextHome))      active->DispatchControlKey(UIControlKey::Home);
+    if (input.JustPressed(ActionTextEnd))       active->DispatchControlKey(UIControlKey::End);
 }
 
 // ---------------------------------------------------------------------------

@@ -101,6 +101,10 @@ public:
     void SetGamepadButtonCallback(std::function<void(u32 joystickId, i32 button, bool down)> fn);
     void SetScrollCallback       (std::function<void(f32 deltaY)>                        fn);
 
+    // Fires for each SDL_EVENT_TEXT_INPUT event — UTF-8 composed characters.
+    // SDL text input is always active on desktop; enables IME on mobile/console.
+    void SetTextInputCallback    (std::function<void(const char* utf8)>                  fn);
+
 private:
     // SDL_Window* stored as void* to avoid including SDL3/SDL.h in this header.
     // Cast back to SDL_Window* in Window.cpp where SDL is included.
@@ -115,6 +119,7 @@ private:
     std::function<void(i32, bool)>            _mouseButtonFn;
     std::function<void(u32, i32, bool)>       _gamepadButtonFn;
     std::function<void(f32)>                  _scrollFn;
+    std::function<void(const char*)>          _textInputFn;
 };
 
 } // namespace Arcbit

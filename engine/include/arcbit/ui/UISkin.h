@@ -40,8 +40,29 @@ struct UISkin
 
     // Accent — used for focused/listening states (e.g. rebind screen row)
     Color AccentColor      = { 0.38f, 0.60f, 0.90f, 1.00f };
-    
+
     Color OverlayColor     = { 0.10f, 0.10f, 0.12f, 0.20f };
+
+    // Text input
+    Color InputBg          = { 0.08f, 0.08f, 0.10f, 1.00f };
+    Color InputBorder      = { 0.30f, 0.30f, 0.35f, 1.00f };
+    Color InputFocusBorder = { 0.38f, 0.60f, 0.90f, 1.00f };
+    Color InputCursor      = { 0.38f, 0.60f, 0.90f, 1.00f };
+    Color InputPlaceholder = { 0.40f, 0.40f, 0.45f, 1.00f };
+
+    // Slider
+    Color SliderThumb        = { 0.38f, 0.60f, 0.90f, 1.00f };
+    Color SliderThumbHovered = { 0.55f, 0.75f, 1.00f, 1.00f };
+
+    // Checkbox and radio button (shared)
+    Color CheckboxBg      = { 0.20f, 0.20f, 0.25f, 1.00f };
+    Color CheckboxHovered = { 0.30f, 0.30f, 0.38f, 1.00f };
+    Color CheckboxCheck   = { 0.38f, 0.60f, 0.90f, 1.00f };
+
+    // Switch
+    Color SwitchOn    = { 0.20f, 0.55f, 0.25f, 1.00f };
+    Color SwitchOff   = { 0.20f, 0.20f, 0.25f, 1.00f };
+    Color SwitchThumb = { 0.90f, 0.90f, 0.95f, 1.00f };
 
     // Per-screen layer base set by UIManager based on stack index.
     // Ensures sprites from screens higher in the stack always sort above lower ones.

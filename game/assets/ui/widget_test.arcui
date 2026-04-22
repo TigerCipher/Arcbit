@@ -1,0 +1,159 @@
+{
+  "widgets": [
+    {
+      "type": "Overlay",
+      "background_color": [0.0, 0.0, 0.0, 0.45]
+    },
+    {
+      "type": "Panel",
+      "name": "panel",
+      "anchor": [0.5, 0.5],
+      "pivot": [0.5, 0.5],
+      "size": [580, 530],
+      "draw_border": true,
+      "children": [
+        {
+          "type": "Label",
+          "text": "Widget Test",
+          "anchor": [0.5, 0.0],
+          "pivot": [0.5, 0.0],
+          "offset": [0, 12],
+          "size": [300, 26],
+          "align": "center"
+        },
+        {
+          "type": "Button",
+          "name": "close-btn",
+          "text": "Close",
+          "anchor": [1.0, 0.0],
+          "pivot": [1.0, 0.0],
+          "offset": [-8, 10],
+          "size": [64, 26]
+        },
+
+        {
+          "type": "Label",
+          "text": "Text:",
+          "offset": [14, 54],
+          "size": [120, 24]
+        },
+        {
+          "type": "TextInput",
+          "name": "text-input",
+          "offset": [150, 50],
+          "size": [400, 28],
+          "placeholder": "Type something..."
+        },
+
+        {
+          "type": "Label",
+          "text": "Number:",
+          "offset": [14, 98],
+          "size": [120, 24]
+        },
+        {
+          "type": "TextInput",
+          "name": "num-input",
+          "offset": [150, 94],
+          "size": [180, 28],
+          "mode": "numeric",
+          "placeholder": "0.0"
+        },
+
+        {
+          "type": "Label",
+          "text": "Volume:",
+          "offset": [14, 144],
+          "size": [120, 24]
+        },
+        {
+          "type": "Slider",
+          "name": "volume-slider",
+          "offset": [150, 142],
+          "size": [330, 24],
+          "value": 0.5,
+          "min": 0.0,
+          "max": 1.0
+        },
+        {
+          "type": "Label",
+          "name": "slider-val",
+          "text": "50%",
+          "offset": [492, 144],
+          "size": [72, 24],
+          "align": "right"
+        },
+
+        {
+          "type": "Label",
+          "text": "Quality:",
+          "offset": [14, 190],
+          "size": [120, 24]
+        },
+        {
+          "type": "Dropdown",
+          "name": "quality-drop",
+          "offset": [150, 186],
+          "size": [220, 28],
+          "items": ["Low", "Medium", "High", "Ultra"],
+          "selected": 1
+        },
+
+        {
+          "type": "Checkbox",
+          "name": "feature-check",
+          "offset": [14, 232],
+          "size": [340, 28],
+          "label": "Enable Feature",
+          "checked": false
+        },
+
+        {
+          "type": "Label",
+          "text": "Difficulty:",
+          "offset": [14, 278],
+          "size": [120, 24]
+        },
+        {
+          "type": "RadioGroup",
+          "name": "difficulty-radio",
+          "offset": [150, 270],
+          "size": [240, 84],
+          "items": ["Easy", "Normal", "Hard"],
+          "selected": 1,
+          "item_height": 28.0
+        },
+
+        {
+          "type": "Label",
+          "text": "Auto-Save:",
+          "offset": [14, 368],
+          "size": [120, 24]
+        },
+        {
+          "type": "Switch",
+          "name": "autosave-switch",
+          "offset": [150, 362],
+          "size": [52, 26],
+          "on": true
+        },
+
+        {
+          "type": "Panel",
+          "offset": [14, 406],
+          "size": [552, 1],
+          "background_color": [0.3, 0.3, 0.35, 1.0]
+        },
+        {
+          "type": "Label",
+          "name": "output",
+          "text": "...",
+          "offset": [14, 416],
+          "size": [552, 100],
+          "word_wrap": true,
+          "text_color": [0.7, 0.85, 0.7, 1.0]
+        }
+      ]
+    }
+  ]
+}

@@ -239,6 +239,11 @@ public:
     void InjectMouseScroll(f32 delta) { _pendingScrollDelta += delta; }
     [[nodiscard]] f32 GetScrollDelta() const { return _scrollDelta; }
 
+    // UTF-8 text typed this tick (composed, IME-aware). Populated from
+    // SDL_EVENT_TEXT_INPUT via InjectTextInput; available after ProcessEdges().
+    void InjectTextInput(const char* utf8);
+    [[nodiscard]] const std::string& GetTextInput() const { return _textInput; }
+
     // -----------------------------------------------------------------------
     // Display helpers
     // -----------------------------------------------------------------------
@@ -290,6 +295,8 @@ private:
     GamepadButton _anyJustReleasedGamepadButton  = GamepadButton::Count;
     f32           _pendingScrollDelta            = 0.0f;
     f32           _scrollDelta                   = 0.0f;
+    std::string   _pendingTextInput;  // accumulates between ProcessEdges calls
+    std::string   _textInput;         // available to read after ProcessEdges
     i32 _mouseX = 0, _mouseY = 0;
     i32 _prevMouseX = 0, _prevMouseY = 0;
 

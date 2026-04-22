@@ -54,6 +54,17 @@ void UIScreen::SetMetaStr(const std::string_view key, const std::string_view val
 // Widget tree update / collect
 // ---------------------------------------------------------------------------
 
+UIWidget* UIScreen::FindFocusableHit(UIWidget& w, const UIRect parent, const Vec2 pos) const
+{
+    if (!w.Visible || !w.Enabled) return nullptr;
+    const UIRect myRect = w.ComputeRect(parent);
+    // Children checked first in reverse ZOrder (highest = topmost visually)
+    for (auto it = w._children.rbegin(); it != w._children.rend(); ++it)
+        if (auto* hit = FindFocusableHit(**it, myRect, pos)) return hit;
+    if (w.Focusable && myRect.Contains(pos)) return &w;
+    return nullptr;
+}
+
 void UIScreen::Update(const f32 dt, const UIRect screenRect, const Vec2 mousePos,
                       const bool mouseDown, const bool mouseJustDown, const bool mouseJustUp,
                       const f32 scrollDelta)
@@ -69,6 +80,17 @@ void UIScreen::Update(const f32 dt, const UIRect screenRect, const Vec2 mousePos
     bool consumed = false;
     for (UIWidget* w : sorted)
         w->UpdateTree(dt, screenRect, mousePos, mouseDown, mouseJustDown, mouseJustUp, consumed, scrollDelta);
+
+    // Click-to-focus: when the mouse button goes down, find the topmost Focusable
+    // widget under the cursor and give it focus. This lets TextInput (and other
+    // keyboard-driven widgets) receive focus without requiring Tab navigation.
+    if (mouseJustDown) {
+        for (UIWidget* w : sorted)
+            if (auto* hit = FindFocusableHit(*w, screenRect, mousePos)) {
+                ApplyFocus(hit);
+                break;
+            }
+    }
 }
 
 void UIScreen::Collect(FramePacket& packet, const UIRect screenRect, const UISkin& skin,
@@ -98,6 +120,20 @@ void UIScreen::AdvanceTransition(const f32 dt)
     } else if (_transitionState == TransitionState::FadingOut) {
         _transitionOpacity = std::max(0.0f, _transitionOpacity - TransitionSpeed * dt);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Text input dispatch
+// ---------------------------------------------------------------------------
+
+void UIScreen::DispatchTextInput(const std::string_view chars)
+{
+    if (_focusedWidget) _focusedWidget->OnTextInput(chars);
+}
+
+void UIScreen::DispatchControlKey(const UIControlKey key)
+{
+    if (_focusedWidget) _focusedWidget->OnControlKey(key);
 }
 
 // ---------------------------------------------------------------------------

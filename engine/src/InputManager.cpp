@@ -476,6 +476,10 @@ void InputManager::ProcessEdges()
     _scrollDelta        = _pendingScrollDelta;
     _pendingScrollDelta = 0.0f;
 
+    // Publish accumulated text input for this tick (same pattern as scroll delta).
+    _textInput = std::move(_pendingTextInput);
+    _pendingTextInput.clear();
+
     // Capture the first raw key-down this tick for the rebind screen.
     _anyJustPressedKey = Key::Unknown;
     if (!_pendingKeyDown.empty()) {
@@ -773,6 +777,11 @@ f32 InputManager::EvaluateBinding(const Binding& binding) const
     }
 
     return 0.0f;
+}
+
+void InputManager::InjectTextInput(const char* utf8)
+{
+    if (utf8) _pendingTextInput += utf8;
 }
 
 } // namespace Arcbit
