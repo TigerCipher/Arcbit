@@ -8,7 +8,6 @@
 
 namespace Arcbit
 {
-
 // ---------------------------------------------------------------------------
 // TextInput — single-line editable text field.
 //
@@ -27,9 +26,9 @@ public:
 
     std::string Text;
     std::string Placeholder;
-    std::string Pattern;     // regex string; used only in Mode::Regex
-    Mode        InputMode  = Mode::Text;
-    u32         MaxLength  = 256;
+    std::string Pattern; // regex string; used only in Mode::Regex
+    Mode        InputMode = Mode::Text;
+    u32         MaxLength = 256;
 
     std::function<void(const std::string&)> OnChanged;
     std::function<void(const std::string&)> OnConfirm;
@@ -51,25 +50,31 @@ protected:
                    const UISkin& skin) override;
 
     void OnFocusGained() override { _cursorBlink = 0.0f; }
-    void OnFocusLost()   override { _scrollX = 0.0f; _selAnchor = _cursor; }
-    void OnActivate()    override { if (OnConfirm) OnConfirm(Text); }
+
+    void OnFocusLost() override
+    {
+        _scrollX   = 0.0f;
+        _selAnchor = _cursor;
+    }
+
+    void OnActivate() override { if (OnConfirm) OnConfirm(Text); }
 
 private:
-    u32  _cursor      = 0;     // insertion point (byte index into Text)
-    u32  _selAnchor   = 0;     // other end of selection; == _cursor when no selection
-    f32  _scrollX     = 0.0f;
-    f32  _cursorBlink = 0.0f;
+    u32 _cursor      = 0; // insertion point (byte index into Text)
+    u32 _selAnchor   = 0; // other end of selection; == _cursor when no selection
+    f32 _scrollX     = 0.0f;
+    f32 _cursorBlink = 0.0f;
 
     [[nodiscard]] bool HasSelection() const { return _selAnchor != _cursor; }
-    [[nodiscard]] u32  SelMin()       const { return _cursor < _selAnchor ? _cursor : _selAnchor; }
-    [[nodiscard]] u32  SelMax()       const { return _cursor > _selAnchor ? _cursor : _selAnchor; }
+    [[nodiscard]] u32  SelMin() const { return _cursor < _selAnchor ? _cursor : _selAnchor; }
+    [[nodiscard]] u32  SelMax() const { return _cursor > _selAnchor ? _cursor : _selAnchor; }
 
     [[nodiscard]] bool AcceptsChar(char c) const;
-    void DeleteSelection();
-    void MoveCursor(u32 pos, bool extendSel);
-    [[nodiscard]] u32 PrevWordBoundary() const;
-    [[nodiscard]] u32 NextWordBoundary() const;
-    void UpdateScroll(f32 availW, const UISkin& skin);
+    void               DeleteSelection();
+    void               MoveCursor(u32 pos, bool extendSel);
+    [[nodiscard]] u32  PrevWordBoundary() const;
+    [[nodiscard]] u32  NextWordBoundary() const;
+    void               UpdateScroll(f32 availW, const UISkin& skin);
 };
 
 // ---------------------------------------------------------------------------
@@ -84,7 +89,7 @@ public:
     f32 Value = 0.5f;
     f32 Min   = 0.0f;
     f32 Max   = 1.0f;
-    f32 Step  = 0.0f;  // 0 = continuous
+    f32 Step  = 0.0f; // 0 = continuous
 
     std::function<void(f32)> OnChanged;
 
@@ -106,7 +111,7 @@ private:
 
     [[nodiscard]] f32    NormalizedValue() const;
     [[nodiscard]] UIRect ThumbRect(UIRect track) const;
-    void SetFromMouseX(f32 mouseX, UIRect track);
+    void                 SetFromMouseX(f32 mouseX, UIRect track);
 };
 
 // ---------------------------------------------------------------------------
@@ -119,7 +124,7 @@ class Dropdown : public UIWidget
 {
 public:
     std::vector<std::string> Items;
-    i32 SelectedIndex = -1;
+    i32                      SelectedIndex = -1;
 
     std::function<void(i32)> OnChanged;
 
@@ -144,7 +149,7 @@ private:
     i32  _hoveredIndex  = -1;
     f32  _itemHeight    = 24.0f;
 
-    void CollectList(FramePacket& packet, UIRect headerRect, f32 opacity,
+    void CollectList(FramePacket&  packet, UIRect          headerRect, f32 opacity,
                      TextureHandle whiteTex, SamplerHandle whiteSampler,
                      const UISkin& skin) const;
 };
@@ -188,8 +193,8 @@ class RadioGroup : public UIWidget
 {
 public:
     std::vector<std::string> Items;
-    i32 SelectedIndex = -1;
-    f32 ItemHeight    = 28.0f;
+    i32                      SelectedIndex = -1;
+    f32                      ItemHeight    = 28.0f;
 
     std::function<void(i32)> OnChanged;
 
@@ -205,7 +210,7 @@ protected:
                    const UISkin& skin) override;
 
 private:
-    i32  _hoveredIndex = -1;
+    i32 _hoveredIndex = -1;
 };
 
 // ---------------------------------------------------------------------------
@@ -217,8 +222,8 @@ private:
 class Switch : public UIWidget
 {
 public:
-    bool On         = false;
-    f32  AnimSpeed  = 6.0f;
+    bool On        = false;
+    f32  AnimSpeed = 6.0f;
 
     std::function<void(bool)> OnChanged;
 
@@ -239,5 +244,4 @@ private:
     bool _hovered = false;
     f32  _animT   = 0.0f; // 0 = fully left (off), 1 = fully right (on)
 };
-
 } // namespace Arcbit
