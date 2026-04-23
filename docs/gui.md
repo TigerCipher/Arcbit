@@ -180,23 +180,25 @@ the screen). `meta` is a flat key-value object for style hints that C++ reads vi
 
 Every widget object has a required `"type"` field and any subset of:
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `type` | string | required | `"Panel"`, `"Overlay"`, `"Label"`, `"Button"`, `"Image"`, `"NineSlice"`, `"ProgressBar"`, `"ScrollPanel"` |
-| `name` | string | — | Identifier for `FindWidget<T>(name)` |
-| `size` | `[w, h]` | `[100, 100]` | Pixel size |
-| `size_percent` | `[x, y]` | `[0, 0]` | Overrides `size` as fraction of parent when > 0 |
-| `anchor` | `[x, y]` | `[0, 0]` | Normalized point on parent rect |
-| `pivot` | `[x, y]` | `[0, 0]` | Normalized point on this widget |
-| `offset` | `[x, y]` | `[0, 0]` | Pixel offset after anchor/pivot alignment |
-| `zorder` | int | 0 | Sort key within screen layer |
-| `opacity` | float | 1.0 | Multiplied into children |
-| `visible` | bool | true | |
-| `enabled` | bool | true | |
-| `focusable` | bool | false | Keyboard/gamepad navigation |
-| `children` | array | — | Nested widget objects |
+| Field          | Type         | Default      | Description                                                                                               |
+|----------------|--------------|--------------|-----------------------------------------------------------------------------------------------------------|
+| `type`         | string       | required     | `"Panel"`, `"Overlay"`, `"Label"`, `"Button"`, `"Image"`, `"NineSlice"`, `"ProgressBar"`, `"ScrollPanel"` |
+| `name`         | string       | —            | Identifier for `FindWidget<T>(name)`                                                                      |
+| `size`         | `[w, h]`     | `[100, 100]` | Pixel size                                                                                                |
+| `size_percent` | `[x, y]`     | `[0, 0]`     | Overrides `size` as fraction of parent when > 0                                                           |
+| `anchor`       | `[x, y]`     | `[0, 0]`     | Normalized point on parent rect                                                                           |
+| `pivot`        | `[x, y]`     | `[0, 0]`     | Normalized point on this widget                                                                           |
+| `offset`       | `[x, y]`     | `[0, 0]`     | Pixel offset after anchor/pivot alignment                                                                 |
+| `zorder`       | int          | 0            | Sort key within screen layer                                                                              |
+| `opacity`      | float        | 1.0          | Multiplied into children                                                                                  |
+| `visible`      | bool         | true         |                                                                                                           |
+| `enabled`      | bool         | true         |                                                                                                           |
+| `focusable`    | bool         | false        | Keyboard/gamepad navigation                                                                               |
+| `children`     | array        | —            | Nested widget objects                                                                                     |
+| `tab_order`    | unsigned int | 0            | Sets focus keyboard/gamepad order                                                                         |
 
-All colors are `[r, g, b, a]` floats in 0–1 range.
+* Note: Defaults listed are the base defaults. Specific widgets may override them. I.e., default `focusable` for a dropdown is `true`
+* All colors are `[r, g, b, a]` floats in 0–1 range.
 
 ### Per-type properties
 
