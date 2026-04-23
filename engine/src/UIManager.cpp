@@ -3,8 +3,8 @@
 #include <arcbit/input/InputManager.h>
 #include <arcbit/input/InputTypes.h>
 
-namespace Arcbit {
-
+namespace Arcbit
+{
 // ---------------------------------------------------------------------------
 // Init — register nav actions and bind default keys/buttons.
 // ---------------------------------------------------------------------------
@@ -15,46 +15,46 @@ void UIManager::Init(const RenderThread& rt, const FontAtlas& font, InputManager
     _whiteSampler = rt.GetUIWhiteSampler();
     _skin.Font    = &font;
 
-    input.RegisterAction(ActionConfirm,   "UI_Confirm");
+    input.RegisterAction(ActionConfirm, "UI_Confirm");
     input.RegisterAction(ActionFocusNext, "UI_FocusNext");
     input.RegisterAction(ActionFocusPrev, "UI_FocusPrev");
 
-    input.BindKey(ActionConfirm,   Key::Enter);
+    input.BindKey(ActionConfirm, Key::Enter);
     input.BindKey(ActionFocusNext, Key::Down);
     input.BindKey(ActionFocusNext, Key::Right);
     input.BindKey(ActionFocusPrev, Key::Up);
     input.BindKey(ActionFocusPrev, Key::Left);
 
-    input.BindGamepadButton(ActionConfirm,   GamepadButton::South);
+    input.BindGamepadButton(ActionConfirm, GamepadButton::South);
     input.BindGamepadButton(ActionFocusNext, GamepadButton::DPadDown);
     input.BindGamepadButton(ActionFocusNext, GamepadButton::DPadRight);
     input.BindGamepadButton(ActionFocusPrev, GamepadButton::DPadUp);
     input.BindGamepadButton(ActionFocusPrev, GamepadButton::DPadLeft);
 
     // Text widget control keys — UI_ prefix hides them from the rebind screen.
-    input.RegisterAction(ActionTextLeft,      "UI_TextLeft");
-    input.RegisterAction(ActionTextRight,     "UI_TextRight");
-    input.RegisterAction(ActionTextHome,      "UI_TextHome");
-    input.RegisterAction(ActionTextEnd,       "UI_TextEnd");
+    input.RegisterAction(ActionTextLeft, "UI_TextLeft");
+    input.RegisterAction(ActionTextRight, "UI_TextRight");
+    input.RegisterAction(ActionTextHome, "UI_TextHome");
+    input.RegisterAction(ActionTextEnd, "UI_TextEnd");
     input.RegisterAction(ActionTextBackspace, "UI_TextBackspace");
-    input.RegisterAction(ActionTextDelete,    "UI_TextDelete");
-    input.RegisterAction(ActionTextEscape,    "UI_TextEscape");
-    input.RegisterAction(ActionTabNext,       "UI_TabNext");
-    input.RegisterAction(ActionShiftMod,      "UI_ShiftMod");
-    input.RegisterAction(ActionCtrlMod,       "UI_CtrlMod");
+    input.RegisterAction(ActionTextDelete, "UI_TextDelete");
+    input.RegisterAction(ActionTextEscape, "UI_TextEscape");
+    input.RegisterAction(ActionTabNext, "UI_TabNext");
+    input.RegisterAction(ActionShiftMod, "UI_ShiftMod");
+    input.RegisterAction(ActionCtrlMod, "UI_CtrlMod");
 
-    input.BindKey(ActionTextLeft,      Key::Left);
-    input.BindKey(ActionTextRight,     Key::Right);
-    input.BindKey(ActionTextHome,      Key::Home);
-    input.BindKey(ActionTextEnd,       Key::End);
+    input.BindKey(ActionTextLeft, Key::Left);
+    input.BindKey(ActionTextRight, Key::Right);
+    input.BindKey(ActionTextHome, Key::Home);
+    input.BindKey(ActionTextEnd, Key::End);
     input.BindKey(ActionTextBackspace, Key::Backspace);
-    input.BindKey(ActionTextDelete,    Key::Delete);
-    input.BindKey(ActionTextEscape,    Key::Escape);
-    input.BindKey(ActionTabNext,       Key::Tab);
-    input.BindKey(ActionShiftMod,      Key::LeftShift);
-    input.BindKey(ActionShiftMod,      Key::RightShift);
-    input.BindKey(ActionCtrlMod,       Key::LeftCtrl);
-    input.BindKey(ActionCtrlMod,       Key::RightCtrl);
+    input.BindKey(ActionTextDelete, Key::Delete);
+    input.BindKey(ActionTextEscape, Key::Escape);
+    input.BindKey(ActionTabNext, Key::Tab);
+    input.BindKey(ActionShiftMod, Key::LeftShift);
+    input.BindKey(ActionShiftMod, Key::RightShift);
+    input.BindKey(ActionCtrlMod, Key::LeftCtrl);
+    input.BindKey(ActionCtrlMod, Key::RightCtrl);
 }
 
 // ---------------------------------------------------------------------------
@@ -78,16 +78,14 @@ void UIManager::Pop()
     if (top.TransitionSpeed > 0.0f) {
         top._transitionOpacity = 1.0f;
         top._transitionState   = UIScreen::TransitionState::FadingOut;
-    } else {
+    }
+    else {
         top.OnExit();
         _stack.pop_back();
     }
 }
 
-UIScreen* UIManager::Top() const
-{
-    return _stack.empty() ? nullptr : _stack.back().get();
-}
+UIScreen* UIManager::Top() const { return _stack.empty() ? nullptr : _stack.back().get(); }
 
 bool UIManager::HasBlockingScreen() const
 {
@@ -109,13 +107,12 @@ UIScreen* UIManager::ActiveInputScreen() const
 
 void UIManager::RemoveCompletedFadeOuts()
 {
-    for (auto it = _stack.begin(); it != _stack.end(); ) {
+    for (auto it = _stack.begin(); it != _stack.end();) {
         if ((*it)->IsFadingOut() && (*it)->GetTransitionOpacity() <= 0.0f) {
             (*it)->OnExit();
             it = _stack.erase(it);
-        } else {
-            ++it;
         }
+        else { ++it; }
     }
 }
 
@@ -123,18 +120,18 @@ void UIManager::Update(const f32 dt, const Vec2 windowSize, const InputManager& 
 {
     i32 mx = 0, my = 0;
     input.GetMousePosition(mx, my);
-    _mousePos      = { static_cast<f32>(mx), static_cast<f32>(my) };
+    _mousePos      = {static_cast<f32>(mx), static_cast<f32>(my)};
     _mouseDown     = input.IsMouseButtonDown(MouseButton::Left);
     _mouseJustDown = input.IsMouseButtonJustDown(MouseButton::Left);
     _mouseJustUp   = input.IsMouseButtonJustUp(MouseButton::Left);
 
-    for (auto& s : _stack) s->AdvanceTransition(dt);
+    for (const auto& s : _stack) s->AdvanceTransition(dt);
     RemoveCompletedFadeOuts();
 
     UIScreen* active = ActiveInputScreen();
     if (!active) return;
 
-    const UIRect screenRect = { 0.0f, 0.0f, windowSize.X, windowSize.Y };
+    const UIRect screenRect = {0.0f, 0.0f, windowSize.X, windowSize.Y};
     active->OnTick(dt, input);
     active->Update(dt, screenRect, _mousePos, _mouseDown, _mouseJustDown, _mouseJustUp,
                    input.GetScrollDelta());
@@ -142,12 +139,11 @@ void UIManager::Update(const f32 dt, const Vec2 windowSize, const InputManager& 
     // Suppress arrow-key focus navigation when a text-consuming widget is focused.
     // Tab is always routed through ActionTabNext and never suppressed.
     const bool consumesNav = active->GetFocusedWidget() &&
-                             active->GetFocusedWidget()->ConsumesFocusNav();
+            active->GetFocusedWidget()->ConsumesFocusNav();
 
     // Tab always moves focus regardless of whether a text widget is focused.
-    if (input.JustPressed(ActionTabNext))   active->FocusNext();
-
-    if (!consumesNav) {
+    if (input.JustPressed(ActionTabNext)) active->FocusNext();
+    else if (!consumesNav) {
         if (input.JustPressed(ActionFocusNext)) active->FocusNext();
         if (input.JustPressed(ActionFocusPrev)) active->FocusPrev();
     }
@@ -165,29 +161,28 @@ void UIManager::Update(const f32 dt, const Vec2 windowSize, const InputManager& 
     const bool shift = input.IsPressed(ActionShiftMod);
     const bool ctrl  = input.IsPressed(ActionCtrlMod);
 
-    auto dispatch = [&](UIControlKey plain, UIControlKey withShift,
-                        UIControlKey withCtrl, UIControlKey withCtrlShift)
-    {
-        if      (ctrl && shift) active->DispatchControlKey(withCtrlShift);
-        else if (ctrl)          active->DispatchControlKey(withCtrl);
-        else if (shift)         active->DispatchControlKey(withShift);
-        else                    active->DispatchControlKey(plain);
+    auto dispatch = [&](UIControlKey plain, UIControlKey    withShift,
+                        UIControlKey withCtrl, UIControlKey withCtrlShift) {
+        if (ctrl && shift) active->DispatchControlKey(withCtrlShift);
+        else if (ctrl) active->DispatchControlKey(withCtrl);
+        else if (shift) active->DispatchControlKey(withShift);
+        else active->DispatchControlKey(plain);
     };
 
     if (input.JustPressed(ActionTextLeft))
-        dispatch(UIControlKey::Left,  UIControlKey::ShiftLeft,
-                 UIControlKey::CtrlLeft,  UIControlKey::CtrlShiftLeft);
+        dispatch(UIControlKey::Left, UIControlKey::ShiftLeft,
+                 UIControlKey::CtrlLeft, UIControlKey::CtrlShiftLeft);
     if (input.JustPressed(ActionTextRight))
         dispatch(UIControlKey::Right, UIControlKey::ShiftRight,
                  UIControlKey::CtrlRight, UIControlKey::CtrlShiftRight);
     if (input.JustPressed(ActionTextHome))
-        dispatch(UIControlKey::Home,  UIControlKey::ShiftHome,
-                 UIControlKey::Home,      UIControlKey::ShiftHome);
+        dispatch(UIControlKey::Home, UIControlKey::ShiftHome,
+                 UIControlKey::Home, UIControlKey::ShiftHome);
     if (input.JustPressed(ActionTextEnd))
-        dispatch(UIControlKey::End,   UIControlKey::ShiftEnd,
-                 UIControlKey::End,       UIControlKey::ShiftEnd);
+        dispatch(UIControlKey::End, UIControlKey::ShiftEnd,
+                 UIControlKey::End, UIControlKey::ShiftEnd);
     if (input.JustPressed(ActionTextBackspace)) active->DispatchControlKey(UIControlKey::Backspace);
-    if (input.JustPressed(ActionTextDelete))    active->DispatchControlKey(UIControlKey::Delete);
+    if (input.JustPressed(ActionTextDelete)) active->DispatchControlKey(UIControlKey::Delete);
 }
 
 // ---------------------------------------------------------------------------
@@ -197,12 +192,11 @@ void UIManager::Update(const f32 dt, const Vec2 windowSize, const InputManager& 
 void UIManager::CollectRenderData(FramePacket& packet, const Vec2 windowSize)
 {
     if (_stack.empty()) return;
-    const UIRect screenRect = { 0.0f, 0.0f, windowSize.X, windowSize.Y };
+    const UIRect screenRect = {0.0f, 0.0f, windowSize.X, windowSize.Y};
     for (i32 i = 0; i < static_cast<i32>(_stack.size()); ++i) {
-        UISkin screenSkin        = _skin;
+        UISkin screenSkin          = _skin;
         screenSkin.ScreenLayerBase = i * 1000;
         _stack[i]->Collect(packet, screenRect, screenSkin, _whiteTex, _whiteSampler);
     }
 }
-
 } // namespace Arcbit
