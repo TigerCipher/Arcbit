@@ -4,7 +4,7 @@
 // UI fragment shader — handles both regular textures and SDF text in one pass.
 //
 // mode == 0: sample texture × tint  (panels, images, progress bar fills)
-// mode == 1: SDF distance field      (labels, button text via stb_truetype)
+// mode == 1: SDF distance field     (labels, button text via stb_truetype)
 //
 // Using a single pipeline for all UI lets the layer sort control draw order
 // for both backgrounds and text without requiring separate render passes.
@@ -18,14 +18,19 @@ layout(location = 2) in float inMode;
 
 layout(location = 0) out vec4 outColor;
 
+vec4 sampleSDF(sampler2D tex)
+{
+    // SDF text: R channel encodes signed distance; edge at 128/255 ≈ 0.502.
+    float dist      = texture(tex, inUV).r;
+    float smoothing = max(fwidth(dist) * 0.5, 0.004);
+    float alpha     = smoothstep(0.5 - smoothing, 0.5 + smoothing, dist);
+    return vec4(inTint.rgb, inTint.a * alpha);
+}
+
 void main()
 {
     if (inMode > 0.5) {
-        // SDF text: R channel encodes signed distance; edge at 128/255 ≈ 0.502.
-        float dist      = texture(u_Texture, inUV).r;
-        float smoothing = max(fwidth(dist) * 0.5, 0.004);
-        float alpha     = smoothstep(0.5 - smoothing, 0.5 + smoothing, dist);
-        outColor        = vec4(inTint.rgb, inTint.a * alpha);
+        outColor = sampleSDF(u_Texture);
     } else {
         // Regular texture: sample and multiply by tint.
         // Solid-color quads bind a 1×1 white texture and set tint to the desired color.

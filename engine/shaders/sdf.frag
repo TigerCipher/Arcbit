@@ -21,10 +21,17 @@ layout(location = 1) in vec4 inTint;
 
 layout(location = 0) out vec4 outColor;
 
+// TODO: Implement #include system for shared shader code (e.g. SDF sampling) to avoid duplication between this and ui.frag, and potentially other future shaders that use SDF text rendering.
+vec4 sampleSDF(sampler2D tex)
+{
+    // SDF text: R channel encodes signed distance; edge at 128/255 ≈ 0.502.
+    float dist      = texture(tex, inUV).r;
+    float smoothing = max(fwidth(dist) * 0.5, 0.004);
+    float alpha     = smoothstep(0.5 - smoothing, 0.5 + smoothing, dist);
+    return vec4(inTint.rgb, inTint.a * alpha);
+}
+
 void main()
 {
-    float dist     = texture(u_Atlas, inUV).r;
-    float smoothing = max(fwidth(dist) * 0.5, 0.004);
-    float alpha    = smoothstep(0.5 - smoothing, 0.5 + smoothing, dist);
-    outColor = vec4(inTint.rgb, inTint.a * alpha);
+    outColor = sampleSDF(u_Atlas);
 }
