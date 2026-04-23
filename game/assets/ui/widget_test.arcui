@@ -28,7 +28,9 @@
           "anchor": [1.0, 0.0],
           "pivot": [1.0, 0.0],
           "offset": [-8, 10],
-          "size": [64, 26]
+          "size": [64, 26],
+          "focusable": true,
+          "tab_order": 2
         },
 
         {
@@ -57,7 +59,8 @@
           "offset": [150, 102],
           "size": [180, 36],
           "mode": "numeric",
-          "placeholder": "0.0"
+          "placeholder": "0.0",
+          "tab_order": 1
         },
 
         {
@@ -73,7 +76,8 @@
           "size": [330, 24],
           "value": 0.5,
           "min": 0.0,
-          "max": 1.0
+          "max": 1.0,
+          "tab_order": 4
         },
         {
           "type": "Label",
@@ -96,7 +100,9 @@
           "offset": [150, 202],
           "size": [220, 28],
           "items": ["Low", "Medium", "High", "Ultra"],
-          "selected": 1
+          "selected": 1,
+          "focusable": true,
+          "tab_order": 3
         },
 
         {
@@ -105,7 +111,8 @@
           "offset": [14, 298],
           "size": [340, 28],
           "label": "Enable Feature",
-          "checked": false
+          "checked": false,
+          "tab_order": 5
         },
 
         {
@@ -121,7 +128,8 @@
           "size": [240, 84],
           "items": ["Easy", "Normal", "Hard"],
           "selected": 1,
-          "item_height": 28.0
+          "item_height": 28.0,
+          "tab_order": 7
         },
 
         {
@@ -135,7 +143,8 @@
           "name": "autosave-switch",
           "offset": [150, 429],
           "size": [52, 26],
-          "on": true
+          "on": true,
+          "tab_order": 6
         },
 
         {

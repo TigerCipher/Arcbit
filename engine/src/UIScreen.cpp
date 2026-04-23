@@ -153,6 +153,11 @@ std::vector<UIWidget*> UIScreen::GatherFocusables() const
     std::vector<UIWidget*> result;
     for (auto& root : _roots)
         CollectFocusables(*root, result);
+    
+    std::ranges::sort(result, [](const UIWidget* a, const UIWidget* b) {
+       return a->TabOrder < b->TabOrder; 
+    });
+    
     return result;
 }
 
@@ -161,7 +166,11 @@ void UIScreen::ApplyFocus(UIWidget* widget)
     if (_focusedWidget == widget) return;
     if (_focusedWidget) { _focusedWidget->_focused = false; _focusedWidget->OnFocusLost(); }
     _focusedWidget = widget;
-    if (_focusedWidget) { _focusedWidget->_focused = true;  _focusedWidget->OnFocusGained(); }
+    if (_focusedWidget) {
+        LOG_DEBUG(UI, "Focus: {}", _focusedWidget->Name);
+        _focusedWidget->_focused = true;  
+        _focusedWidget->OnFocusGained();
+    }
 }
 
 void UIScreen::FocusNext()

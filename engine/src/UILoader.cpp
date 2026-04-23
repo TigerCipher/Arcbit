@@ -76,6 +76,7 @@ static void ApplyBase(UIWidget& w, const json& j)
     if (auto it = j.find("visible"); it != j.end()) w.Visible = it->get<bool>();
     if (auto it = j.find("enabled"); it != j.end()) w.Enabled = it->get<bool>();
     if (auto it = j.find("focusable"); it != j.end()) w.Focusable = it->get<bool>();
+    if (auto it = j.find("tab_order"); it != j.end()) w.TabOrder = it->get<u32>();
 }
 
 static void ApplyPanel(UIWidget& w, const json& j)

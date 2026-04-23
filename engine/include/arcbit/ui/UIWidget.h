@@ -80,6 +80,9 @@ public:
 
     // Whether this widget participates in keyboard/gamepad focus navigation.
     bool Focusable = false;
+    
+    // Sort order for keyboard/gamepad & tab focus navigation. Lower values are focused first.
+    u32 TabOrder = 0;
 
     // Optional identifier used by UIScreen::FindWidget to locate this widget.
     std::string Name;
