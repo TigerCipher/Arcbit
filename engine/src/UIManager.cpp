@@ -1,4 +1,5 @@
 #include <arcbit/ui/UIManager.h>
+#include <arcbit/ui/UILoader.h>
 #include <arcbit/render/RenderThread.h>
 #include <arcbit/input/InputManager.h>
 #include <arcbit/input/InputTypes.h>
@@ -14,6 +15,7 @@ void UIManager::Init(const RenderThread& rt, const FontAtlas& font, InputManager
     _whiteTex     = rt.GetUIWhiteTexture();
     _whiteSampler = rt.GetUIWhiteSampler();
     _skin.Font    = &font;
+    UILoader::RegisterFont("default", font);
 
     input.RegisterAction(ActionConfirm, "UI_Confirm");
     input.RegisterAction(ActionFocusNext, "UI_FocusNext");
@@ -138,7 +140,7 @@ void UIManager::Update(const f32 dt, const Vec2 windowSize, const InputManager& 
     // Screens set this flag on the frame they are pushed so that the key event
     // that caused the push (e.g. Escape to open a menu) is not also processed
     // as a back-press on the newly-visible screen.
-    const bool skipInput = active->_skipInputThisFrame;
+    const bool skipInput        = active->_skipInputThisFrame;
     active->_skipInputThisFrame = false;
 
     const UIRect screenRect = {0.0f, 0.0f, windowSize.X, windowSize.Y};
@@ -174,10 +176,10 @@ void UIManager::Update(const f32 dt, const Vec2 windowSize, const InputManager& 
     // ActionTextEscape = Key::Escape; ActionBack = GamepadButton::East.
     // Both share the same behavior: cancel text editing when focused, else back.
     const bool backPressed = input.JustPressed(ActionTextEscape) ||
-                             input.JustPressed(ActionBack);
+            input.JustPressed(ActionBack);
     if (backPressed) {
         if (consumesNav) active->ClearFocus();
-        else             active->OnBackPressed();
+        else active->OnBackPressed();
     }
 
     // Forward typed characters to the focused widget.

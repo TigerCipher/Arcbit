@@ -8,6 +8,7 @@ namespace Arcbit
 {
 class UIWidget;
 class UIScreen;
+struct FontAtlas;
 
 // ---------------------------------------------------------------------------
 // UILoader — deserializes .arcui JSON files into UIScreen widget trees.
@@ -38,8 +39,15 @@ public:
     // .arcui files. Call before any Load() that uses the type.
     static void RegisterType(std::string_view typeName, Factory factory);
 
+    // Register a font under a string key so .arcui files can reference it by
+    // name in a skin block: { "Font": "roboto" }.
+    // UIManager::Init auto-registers the engine font as "default".
+    static void RegisterFont(std::string_view key, const FontAtlas& font);
+
+    // Returns the font registered under key, or nullptr if not found.
+    [[nodiscard]] static const FontAtlas* FindFont(std::string_view key);
+
 private:
     static void EnsureBuiltins();
 };
-
 } // namespace Arcbit

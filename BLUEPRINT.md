@@ -494,6 +494,7 @@ define *how* it gets there. Any controller pairs with any style.
 - [ ] Dialog graph editor (node canvas for Phase 27 conversation trees)
 - [ ] Event sequence editor (timeline view for Phase 35 cutscene commands)
 - [ ] GUI layout designer (drag-and-drop widget canvas for Phase 21 screens)
+- [ ] **Font registry panel** (part of asset browser): register loaded `FontAtlas` instances under string keys so `.arcui` skin blocks can reference fonts by name (`"Font": "roboto"`); call `UILoader::RegisterFont(key, atlas)` at startup from game code or project config; editor needs UI to add/remove/rename entries and preview each registered font
 - [ ] Particle emitter preview panel (live preview of Phase 33 emitter configs)
 - [ ] Visual effects panel: light animator curve editor, weather overlay preview, material effect preview (Phase 34)
 - [ ] Localization tools: key picker, `en.json` export, per-locale coverage report (Phase 28)

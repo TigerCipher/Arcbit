@@ -15,8 +15,7 @@ namespace Arcbit
 class Panel : public UIWidget
 {
 public:
-    bool  DrawBorder      = false;
-    Color BackgroundColor = {0, 0, 0, 0}; // overrides skin.PanelBg when alpha > 0
+    bool DrawBorder = false;
 
 protected:
     void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
@@ -53,7 +52,6 @@ public:
     TextAlign   Align      = TextAlign::Left;
     bool        WordWrap   = false; // wrap lines at word boundaries to fit myRect.W
     bool        AutoCenter = false;
-    Color       TextColor  = {0, 0, 0, 0}; // {0,0,0,0} = use skin default
 
 protected:
     void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
@@ -69,7 +67,6 @@ class Button : public UIWidget
 public:
     std::string           Text;
     std::function<void()> OnClick;
-    Color                 TextColor = {0, 0, 0, 0}; // {0,0,0,0} = use skin default
 
     Button() { Focusable = true; }
 
@@ -144,8 +141,7 @@ protected:
 class ProgressBar : public UIWidget
 {
 public:
-    f32   Value     = 0.5f;         // 0 = empty, 1 = full
-    Color FillColor = {0, 0, 0, 0}; // {0,0,0,0} = use skin default
+    f32 Value = 0.5f; // 0 = empty, 1 = full
 
 protected:
     void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,

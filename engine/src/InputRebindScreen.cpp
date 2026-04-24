@@ -6,7 +6,6 @@
 
 namespace Arcbit
 {
-
 // ---------------------------------------------------------------------------
 // Module-scope helpers
 // ---------------------------------------------------------------------------
@@ -19,7 +18,7 @@ static bool HasHiddenPrefix(const std::string_view name, const std::vector<std::
 static bool IsKBM(const Binding& b)
 {
     return b.BindingType == Binding::Type::Key ||
-           b.BindingType == Binding::Type::MouseButton;
+            b.BindingType == Binding::Type::MouseButton;
 }
 
 // ---------------------------------------------------------------------------
@@ -32,9 +31,11 @@ void InputRebindScreen::BuildEntries()
     for (const ActionID id : Input->GetAllActions()) {
         const std::string_view name = Input->GetActionName(id);
         if (name.empty() || HasHiddenPrefix(name, HiddenPrefixes)) continue;
-        _entries.push_back({id,
+        _entries.push_back({
+            id,
             std::string(Input->GetActionDisplayName(id)),
-            std::string(Input->GetActionCategory(id))});
+            std::string(Input->GetActionCategory(id))
+        });
     }
     std::ranges::sort(_entries, [](const ActionEntry& a, const ActionEntry& b) {
         return a.category != b.category ? a.category < b.category : a.display < b.display;
@@ -61,7 +62,10 @@ void InputRebindScreen::OnEnter()
     RebuildScroll();
 
     if (auto* back = FindWidget<Button>("back-btn"))
-        back->OnClick = [this] { StopListening(false); if (OnBack) OnBack(); };
+        back->OnClick = [this] {
+            StopListening(false);
+            if (OnBack) OnBack();
+        };
 }
 
 // ---------------------------------------------------------------------------
@@ -77,14 +81,14 @@ i32 InputRebindScreen::CountBindings(const ActionID action, const bool forKey) c
 }
 
 void InputRebindScreen::AddChipColumn(const ActionID action, const bool forKey,
-                                       const f32 colX, const f32 startY,
-                                       const f32 chipH, const f32 chipGap)
+                                      const f32      colX, const f32    startY,
+                                      const f32      chipH, const f32   chipGap)
 {
-    const f32 labelW  = 148.0f;
-    const f32 xBtnW   = 22.0f;
-    const f32 xBtnX   = colX + labelW + 3.0f;
+    const f32 labelW   = 148.0f;
+    const f32 xBtnW    = 22.0f;
+    const f32 xBtnX    = colX + labelW + 3.0f;
     const f32 chipSlot = chipH + chipGap;
-    i32 slot = 0;
+    i32       slot     = 0;
 
     for (const Binding& b : Input->GetBindings(action)) {
         if (IsKBM(b) != forKey) continue;
@@ -119,9 +123,7 @@ void InputRebindScreen::AddChipColumn(const ActionID action, const bool forKey,
     addBtn->Anchor  = {0.0f, 0.0f};
     addBtn->Offset  = {colX, startY + slot * chipSlot};
     addBtn->ZOrder  = 4;
-    addBtn->OnClick = [this, action, forKey, addBtn]() {
-        StartListening(action, forKey, addBtn, false);
-    };
+    addBtn->OnClick = [this, action, forKey, addBtn]() { StartListening(action, forKey, addBtn, false); };
 }
 
 // ---------------------------------------------------------------------------
@@ -139,11 +141,11 @@ void InputRebindScreen::RebuildScroll()
     const f32 chipSlot = chipH + chipGap;
     const f32 rowPad   = 10.0f;
     const f32 rowW     = _scroll->Size.X - _scroll->ScrollbarWidth - 8.0f;
-    const f32 nameX    = GetMetaF32("name_x",     8.0f);
-    const f32 keyColX  = GetMetaF32("key_col_x",  242.0f);
+    const f32 nameX    = GetMetaF32("name_x", 8.0f);
+    const f32 keyColX  = GetMetaF32("key_col_x", 242.0f);
     const f32 ctrlColX = GetMetaF32("ctrl_col_x", 454.0f);
 
-    f32              y            = 4.0f;
+    f32              y = 4.0f;
     std::string_view lastCategory;
 
     for (const ActionEntry& e : _entries) {
@@ -151,21 +153,21 @@ void InputRebindScreen::RebuildScroll()
             if (!e.category.empty()) {
                 if (y > 4.0f) y += 6.0f; // extra gap before non-first category
 
-                auto* bar   = _scroll->AddChild<Panel>();
-                bar->Size   = {rowW, 24.0f};
-                bar->Anchor = {0.0f, 0.0f};
-                bar->Offset = {0.0f, y};
-                bar->ZOrder = 3;
-                bar->BackgroundColor = {0.22f, 0.30f, 0.45f, 1.0f};
+                auto* bar                 = _scroll->AddChild<Panel>();
+                bar->Size                 = {rowW, 24.0f};
+                bar->Anchor               = {0.0f, 0.0f};
+                bar->Offset               = {0.0f, y};
+                bar->ZOrder               = 3;
+                bar->SkinOverride.PanelBg = {0.22f, 0.30f, 0.45f, 1.0f};
 
-                auto* cat       = _scroll->AddChild<Label>();
-                cat->Text       = e.category;
-                cat->Size       = {rowW, 24.0f};
-                cat->Anchor     = {0.0f, 0.0f};
-                cat->Offset     = {nameX + 4.0f, y};
-                cat->ZOrder     = 4;
-                cat->TextColor  = {0.85f, 0.92f, 1.0f, 1.0f};
-                cat->AutoCenter = true;
+                auto* cat                   = _scroll->AddChild<Label>();
+                cat->Text                   = e.category;
+                cat->Size                   = {rowW, 24.0f};
+                cat->Anchor                 = {0.0f, 0.0f};
+                cat->Offset                 = {nameX + 4.0f, y};
+                cat->ZOrder                 = 4;
+                cat->SkinOverride.TextLabel = {0.85f, 0.92f, 1.0f, 1.0f};
+                cat->AutoCenter             = true;
 
                 y += 30.0f;
             }
@@ -180,9 +182,9 @@ void InputRebindScreen::RebuildScroll()
             sep->ZOrder = 3;
         }
 
-        const i32 keySlots  = CountBindings(e.id, true)  + 1; // +1 for "+"
+        const i32 keySlots  = CountBindings(e.id, true) + 1; // +1 for "+"
         const i32 ctrlSlots = CountBindings(e.id, false) + 1;
-        const f32 rowH = std::max(keySlots, ctrlSlots) * chipSlot - chipGap + rowPad * 2.0f;
+        const f32 rowH      = std::max(keySlots, ctrlSlots) * chipSlot - chipGap + rowPad * 2.0f;
 
         auto* nameLabel   = _scroll->AddChild<Label>();
         nameLabel->Text   = e.display;
@@ -191,7 +193,7 @@ void InputRebindScreen::RebuildScroll()
         nameLabel->Offset = {nameX, y};
         nameLabel->ZOrder = 4;
 
-        AddChipColumn(e.id, true,  keyColX,  y + rowPad, chipH, chipGap);
+        AddChipColumn(e.id, true, keyColX, y + rowPad, chipH, chipGap);
         AddChipColumn(e.id, false, ctrlColX, y + rowPad, chipH, chipGap);
 
         y += rowH;
@@ -207,21 +209,24 @@ void InputRebindScreen::RebuildScroll()
 // ---------------------------------------------------------------------------
 
 void InputRebindScreen::StartListening(const ActionID action, const bool forKey,
-                                        Button* const btn, const bool replaceExisting,
-                                        const Binding toReplace)
+                                       Button* const  btn, const bool    replaceExisting,
+                                       const Binding  toReplace)
 {
     // Clicking the same slot again cancels.
-    if (_isListening && _listeningButton == btn) { StopListening(false); return; }
+    if (_isListening && _listeningButton == btn) {
+        StopListening(false);
+        return;
+    }
 
     // Restore any previously removed binding without rebuilding the scroll.
     CancelListening();
 
-    _isListening      = true;
-    _listeningAction  = action;
-    _listeningForKey  = forKey;
-    _listeningButton  = btn;
-    _flashTimer       = 0.0f;
-    _hadRemoved       = replaceExisting;
+    _isListening     = true;
+    _listeningAction = action;
+    _listeningForKey = forKey;
+    _listeningButton = btn;
+    _flashTimer      = 0.0f;
+    _hadRemoved      = replaceExisting;
 
     if (replaceExisting) {
         _removedBinding = toReplace;
@@ -243,7 +248,10 @@ void InputRebindScreen::CancelListening()
 
 void InputRebindScreen::StopListening(const bool commit)
 {
-    if (!_isListening && !_hadRemoved) { _pendingRebuild = true; return; }
+    if (!_isListening && !_hadRemoved) {
+        _pendingRebuild = true;
+        return;
+    }
     if (!commit && _hadRemoved) Input->AddBinding(_listeningAction, _removedBinding);
     _isListening     = false;
     _listeningButton = nullptr;
@@ -254,7 +262,7 @@ void InputRebindScreen::StopListening(const bool commit)
 
 void InputRebindScreen::RemoveChip(const ActionID action, const Binding& b)
 {
-    CancelListening();  // restores any in-flight removal, no rebuild yet
+    CancelListening(); // restores any in-flight removal, no rebuild yet
     Input->RemoveBinding(action, b);
     _pendingRebuild = true;
 }
@@ -265,7 +273,10 @@ void InputRebindScreen::RemoveChip(const ActionID action, const Binding& b)
 
 void InputRebindScreen::OnTick(const f32 dt, const InputManager& input)
 {
-    if (_pendingRebuild) { _pendingRebuild = false; RebuildScroll(); }
+    if (_pendingRebuild) {
+        _pendingRebuild = false;
+        RebuildScroll();
+    }
 
     if (!_isListening) return;
 
@@ -281,11 +292,13 @@ void InputRebindScreen::OnTick(const f32 dt, const InputManager& input)
         if (k != Key::Unknown) {
             Input->UnbindKey(k);
             Input->BindKey(_listeningAction, k);
-        } else {
+        }
+        else {
             Input->UnbindMouseButton(mb);
             Input->BindMouseButton(_listeningAction, mb);
         }
-    } else {
+    }
+    else {
         const GamepadButton btn = input.GetAnyJustReleasedGamepadButton();
         if (btn == GamepadButton::Count) return;
         Input->UnbindGamepadButton(btn);
@@ -298,8 +311,10 @@ void InputRebindScreen::OnTick(const f32 dt, const InputManager& input)
 void InputRebindScreen::OnBackPressed()
 {
     // Cancel any in-flight listen before navigating away.
-    if (_isListening) { StopListening(false); return; }
+    if (_isListening) {
+        StopListening(false);
+        return;
+    }
     if (OnBack) OnBack();
 }
-
 } // namespace Arcbit

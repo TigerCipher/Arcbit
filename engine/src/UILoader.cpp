@@ -32,11 +32,29 @@ namespace
         static std::unordered_map<std::string, TypeEntry> s_map;
         return s_map;
     }
+
+    std::unordered_map<std::string, const FontAtlas*>& FontRegistry()
+    {
+        static std::unordered_map<std::string, const FontAtlas*> s_map;
+        return s_map;
+    }
 } // anonymous namespace
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+void UILoader::RegisterFont(const std::string_view key, const FontAtlas& font)
+{
+    FontRegistry()[std::string(key)] = &font;
+}
+
+const FontAtlas* UILoader::FindFont(const std::string_view key)
+{
+    const auto& map = FontRegistry();
+    const auto  it  = map.find(std::string(key));
+    return it != map.end() ? it->second : nullptr;
+}
 
 void UILoader::RegisterType(const std::string_view typeName, Factory factory)
 {
@@ -63,6 +81,46 @@ static Color ReadColor(const json& j, const Color def = {})
 // Property appliers — one per widget type
 // ---------------------------------------------------------------------------
 
+static void ApplySkinBlock(UISkinOverride& o, const json& j)
+{
+    // Generic skin override block — keys match UISkin / UISkinOverride field names.
+    // NOTE: When adding a field to UISkin / UISkinOverride, add a line here.
+    if (auto it = j.find("Font"); it != j.end()) {
+        if (const FontAtlas* f = UILoader::FindFont(it->get<std::string>()))
+            o.Font = f;
+    }
+    if (auto it = j.find("FontScale"); it != j.end()) o.FontScale = it->get<f32>();
+    if (auto it = j.find("PanelBg"); it != j.end()) o.PanelBg = ReadColor(*it);
+    if (auto it = j.find("PanelBorder"); it != j.end()) o.PanelBorder = ReadColor(*it);
+    if (auto it = j.find("ButtonNormal"); it != j.end()) o.ButtonNormal = ReadColor(*it);
+    if (auto it = j.find("ButtonHovered"); it != j.end()) o.ButtonHovered = ReadColor(*it);
+    if (auto it = j.find("ButtonPressed"); it != j.end()) o.ButtonPressed = ReadColor(*it);
+    if (auto it = j.find("ButtonDisabled"); it != j.end()) o.ButtonDisabled = ReadColor(*it);
+    if (auto it = j.find("TextNormal"); it != j.end()) o.TextNormal = ReadColor(*it);
+    if (auto it = j.find("TextDisabled"); it != j.end()) o.TextDisabled = ReadColor(*it);
+    if (auto it = j.find("TextLabel"); it != j.end()) o.TextLabel = ReadColor(*it);
+    if (auto it = j.find("ProgressBg"); it != j.end()) o.ProgressBg = ReadColor(*it);
+    if (auto it = j.find("ProgressFill"); it != j.end()) o.ProgressFill = ReadColor(*it);
+    if (auto it = j.find("ScrollTrack"); it != j.end()) o.ScrollTrack = ReadColor(*it);
+    if (auto it = j.find("ScrollThumb"); it != j.end()) o.ScrollThumb = ReadColor(*it);
+    if (auto it = j.find("ScrollThumbHovered"); it != j.end()) o.ScrollThumbHovered = ReadColor(*it);
+    if (auto it = j.find("AccentColor"); it != j.end()) o.AccentColor = ReadColor(*it);
+    if (auto it = j.find("OverlayColor"); it != j.end()) o.OverlayColor = ReadColor(*it);
+    if (auto it = j.find("InputBg"); it != j.end()) o.InputBg = ReadColor(*it);
+    if (auto it = j.find("InputBorder"); it != j.end()) o.InputBorder = ReadColor(*it);
+    if (auto it = j.find("InputFocusBorder"); it != j.end()) o.InputFocusBorder = ReadColor(*it);
+    if (auto it = j.find("InputCursor"); it != j.end()) o.InputCursor = ReadColor(*it);
+    if (auto it = j.find("InputPlaceholder"); it != j.end()) o.InputPlaceholder = ReadColor(*it);
+    if (auto it = j.find("SliderThumb"); it != j.end()) o.SliderThumb = ReadColor(*it);
+    if (auto it = j.find("SliderThumbHovered"); it != j.end()) o.SliderThumbHovered = ReadColor(*it);
+    if (auto it = j.find("CheckboxBg"); it != j.end()) o.CheckboxBg = ReadColor(*it);
+    if (auto it = j.find("CheckboxHovered"); it != j.end()) o.CheckboxHovered = ReadColor(*it);
+    if (auto it = j.find("CheckboxCheck"); it != j.end()) o.CheckboxCheck = ReadColor(*it);
+    if (auto it = j.find("SwitchOn"); it != j.end()) o.SwitchOn = ReadColor(*it);
+    if (auto it = j.find("SwitchOff"); it != j.end()) o.SwitchOff = ReadColor(*it);
+    if (auto it = j.find("SwitchThumb"); it != j.end()) o.SwitchThumb = ReadColor(*it);
+}
+
 static void ApplyBase(UIWidget& w, const json& j)
 {
     if (auto it = j.find("name"); it != j.end()) w.Name = it->get<std::string>();
@@ -77,12 +135,13 @@ static void ApplyBase(UIWidget& w, const json& j)
     if (auto it = j.find("enabled"); it != j.end()) w.Enabled = it->get<bool>();
     if (auto it = j.find("focusable"); it != j.end()) w.Focusable = it->get<bool>();
     if (auto it = j.find("tab_order"); it != j.end()) w.TabOrder = it->get<u32>();
+    if (auto it = j.find("skin"); it != j.end()) ApplySkinBlock(w.SkinOverride, *it);
 }
 
 static void ApplyPanel(UIWidget& w, const json& j)
 {
     auto& p = dynamic_cast<Panel&>(w);
-    if (const auto it = j.find("background_color"); it != j.end()) p.BackgroundColor = ReadColor(*it);
+    if (const auto it = j.find("background_color"); it != j.end()) p.SkinOverride.PanelBg = ReadColor(*it);
     if (const auto it = j.find("draw_border"); it != j.end()) p.DrawBorder = it->get<bool>();
 }
 
@@ -93,7 +152,7 @@ static void ApplyLabel(UIWidget& w, const json& j)
     if (const auto it = j.find("text_key"); it != j.end()) l.Text = Loc::Get(it->get<std::string>());
     if (const auto it = j.find("word_wrap"); it != j.end()) l.WordWrap = it->get<bool>();
     if (const auto it = j.find("auto_center"); it != j.end()) l.AutoCenter = it->get<bool>();
-    if (const auto it = j.find("text_color"); it != j.end()) l.TextColor = ReadColor(*it);
+    if (const auto it = j.find("text_color"); it != j.end()) l.SkinOverride.TextLabel = ReadColor(*it);
     if (const auto it = j.find("align"); it != j.end()) {
         if (const std::string s = it->get<std::string>(); s == "center")
             l.Align = TextAlign::Center;
@@ -109,14 +168,14 @@ static void ApplyButton(UIWidget& w, const json& j)
     auto& b = dynamic_cast<Button&>(w);
     if (const auto it = j.find("text"); it != j.end()) b.Text = it->get<std::string>();
     if (const auto it = j.find("text_key"); it != j.end()) b.Text = Loc::Get(it->get<std::string>());
-    if (const auto it = j.find("text_color"); it != j.end()) b.TextColor = ReadColor(*it);
+    if (const auto it = j.find("text_color"); it != j.end()) b.SkinOverride.TextLabel = ReadColor(*it);
 }
 
 static void ApplyProgressBar(UIWidget& w, const json& j)
 {
     auto& p = dynamic_cast<ProgressBar&>(w);
     if (const auto it = j.find("value"); it != j.end()) p.Value = it->get<f32>();
-    if (const auto it = j.find("fill_color"); it != j.end()) p.FillColor = ReadColor(*it);
+    if (const auto it = j.find("fill_color"); it != j.end()) p.SkinOverride.ProgressFill = ReadColor(*it);
 }
 
 static void ApplyScrollPanel(UIWidget& w, const json& j)

@@ -42,18 +42,22 @@ static void PushRect(FramePacket&        packet, const UIRect&    r, const Color
 }
 
 // Apply effective opacity to a color.
-static Color WithAlpha(Color c, const f32 alpha) { c.A *= alpha; return c; }
+static Color WithAlpha(Color c, const f32 alpha)
+{
+    c.A *= alpha;
+    return c;
+}
 
 // Push a textured quad (arbitrary UV) into UISprites.
-static void PushTexturedRect(FramePacket& packet, const UIRect& r, const UVRect& uv,
-                              const Color& c, const TextureHandle tex, const SamplerHandle samp, const i32 layer)
+static void PushTexturedRect(FramePacket& packet, const UIRect&  r, const UVRect&         uv,
+                             const Color& c, const TextureHandle tex, const SamplerHandle samp, const i32 layer)
 {
     if (r.W <= 0.0f || r.H <= 0.0f) return;
     Sprite s{};
     s.Texture  = tex;
     s.Sampler  = samp;
-    s.Position = { r.X + r.W * 0.5f, r.Y + r.H * 0.5f };
-    s.Size     = { r.W, r.H };
+    s.Position = {r.X + r.W * 0.5f, r.Y + r.H * 0.5f};
+    s.Size     = {r.W, r.H};
     s.UV       = uv;
     s.Tint     = c;
     s.Layer    = layer;
@@ -62,7 +66,7 @@ static void PushTexturedRect(FramePacket& packet, const UIRect& r, const UVRect&
 
 // Word-wrap text to fit within maxWidth pixels, preserving explicit newlines.
 static std::string WrapText(const FontAtlas& font, const std::string_view text,
-                             const f32 maxWidth, const f32 scale)
+                            const f32        maxWidth, const f32          scale)
 {
     const GlyphInfo* spGlyph = font.GetGlyph(' ');
     const f32        spaceW  = spGlyph ? spGlyph->Advance * scale : 0.0f;
@@ -85,13 +89,16 @@ static std::string WrapText(const FontAtlas& font, const std::string_view text,
 
             if (!lineStart && lineWidth + addW > maxWidth) {
                 result    += '\n';
-                lineWidth  = 0.0f;
-                lineStart  = true;
+                lineWidth = 0.0f;
+                lineStart = true;
             }
-            if (!lineStart) { result += ' '; lineWidth += spaceW; }
+            if (!lineStart) {
+                result    += ' ';
+                lineWidth += spaceW;
+            }
             result    += std::string(word);
             lineWidth += wordW;
-            lineStart  = false;
+            lineStart = false;
 
             if (sp == std::string_view::npos) break;
             para = para.substr(sp + 1);
@@ -111,15 +118,14 @@ void Panel::OnCollect(FramePacket&        packet, const UIRect          myRect, 
                       const TextureHandle whiteTex, const SamplerHandle whiteSampler,
                       const UISkin&       skin)
 {
-    const Color base = BackgroundColor.A > 0.0f ? BackgroundColor : skin.PanelBg;
-    Collect(packet, myRect, effectiveOpacity, whiteTex, whiteSampler, skin, base);
+    Collect(packet, myRect, effectiveOpacity, whiteTex, whiteSampler, skin, skin.PanelBg);
 }
 
 void Panel::Collect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity, const TextureHandle whiteTex,
-    const SamplerHandle whiteSampler, const UISkin& skin, const Color baseColor) const
+                    const SamplerHandle whiteSampler, const UISkin& skin, const Color baseColor) const
 {
     PushRect(packet, myRect, WithAlpha(baseColor, effectiveOpacity),
-         whiteTex, whiteSampler, BgLayer(*this, skin));
+             whiteTex, whiteSampler, BgLayer(*this, skin));
 
     if (DrawBorder) {
         // Simple 1px border — four thin rects around the edge.
@@ -134,11 +140,11 @@ void Panel::Collect(FramePacket& packet, const UIRect myRect, const f32 effectiv
     }
 }
 
-void Scrim::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity, const TextureHandle whiteTex,
-                        const SamplerHandle whiteSampler, const UISkin& skin)
+void Scrim::OnCollect(FramePacket&        packet, const UIRect myRect, const f32 effectiveOpacity,
+                      const TextureHandle whiteTex,
+                      const SamplerHandle whiteSampler, const UISkin& skin)
 {
-    const Color base = BackgroundColor.A > 0.0f ? BackgroundColor : skin.OverlayColor;
-    Collect(packet, myRect, effectiveOpacity, whiteTex, whiteSampler, skin, base);
+    Collect(packet, myRect, effectiveOpacity, whiteTex, whiteSampler, skin, skin.OverlayColor);
 }
 
 // ---------------------------------------------------------------------------
@@ -151,17 +157,16 @@ void Label::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effect
 {
     if (!skin.Font || Text.empty()) return;
 
-    const Color base = (TextColor.A > 0.0f) ? TextColor
-                                             : (Enabled ? skin.TextLabel : skin.TextDisabled);
-    const Color col  = WithAlpha(base, effectiveOpacity);
+    const Color col = WithAlpha(Enabled ? skin.TextLabel : skin.TextDisabled, effectiveOpacity);
 
     f32 textX = myRect.X;
     if (Align == TextAlign::Center || AutoCenter) textX = myRect.X + myRect.W * 0.5f;
-    else if (Align == TextAlign::Right)           textX = myRect.X + myRect.W;
+    else if (Align == TextAlign::Right) textX = myRect.X + myRect.W;
 
-    const std::string& display = WordWrap ? WrapText(*skin.Font, Text, myRect.W, skin.FontScale)
-                                          : Text;
-    DrawTextUI(packet, *skin.Font, display, { textX, myRect.Y }, skin.FontScale, col,
+    const std::string& display = WordWrap
+                                 ? WrapText(*skin.Font, Text, myRect.W, skin.FontScale)
+                                 : Text;
+    DrawTextUI(packet, *skin.Font, display, {textX, myRect.Y}, skin.FontScale, col,
                TextLayer(*this, skin), Align);
 }
 
@@ -198,20 +203,18 @@ void Button::OnCollect(FramePacket&        packet, const UIRect          myRect,
                        const UISkin&       skin)
 {
     Color bg;
-    if (!Enabled)              bg = skin.ButtonDisabled;
-    else if (_pressed)         bg = skin.ButtonPressed;
+    if (!Enabled) bg = skin.ButtonDisabled;
+    else if (_pressed) bg = skin.ButtonPressed;
     else if (_hovered || _focused) bg = skin.ButtonHovered;
-    else                       bg = skin.ButtonNormal;
+    else bg                           = skin.ButtonNormal;
 
     PushRect(packet, myRect, WithAlpha(bg, effectiveOpacity),
              whiteTex, whiteSampler, BgLayer(*this, skin));
 
     if (skin.Font && !Text.empty()) {
-        const Color base = (TextColor.A > 0.0f) ? TextColor
-                                             : (Enabled ? skin.TextLabel : skin.TextDisabled);
-        const Color col  = WithAlpha(base, effectiveOpacity);
+        const Color col = WithAlpha(Enabled ? skin.TextLabel : skin.TextDisabled, effectiveOpacity);
 
-        const Vec2  pos = {
+        const Vec2 pos = {
             myRect.X + myRect.W * 0.5f, myRect.Y + myRect.H * 0.5f
             - skin.Font->GetAscent() * skin.FontScale * 0.5f
         };
@@ -246,34 +249,38 @@ void Image::OnCollect(FramePacket& packet, UIRect myRect, const f32 effectiveOpa
 // ---------------------------------------------------------------------------
 
 void NineSlice::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity,
-                           TextureHandle /*whiteTex*/, SamplerHandle /*whiteSampler*/,
-                           const UISkin& skin)
+                          TextureHandle /*whiteTex*/, SamplerHandle /*whiteSampler*/,
+                          const UISkin& skin)
 {
     if (!Texture.IsValid()) return;
     const Color tint  = WithAlpha(Tint, effectiveOpacity);
     const i32   layer = FillLayer(*this, skin);
 
-    const f32 pL = std::min(PixelLeft,   myRect.W * 0.5f);
-    const f32 pR = std::min(PixelRight,  myRect.W * 0.5f);
-    const f32 pT = std::min(PixelTop,    myRect.H * 0.5f);
-    const f32 pB = std::min(PixelBottom, myRect.H * 0.5f);
-    const f32 cX = myRect.X + pL,           cY = myRect.Y + pT;
-    const f32 cW = myRect.W - pL - pR,      cH = myRect.H - pT - pB;
-    const f32 rX = myRect.X + myRect.W - pR, bY = myRect.Y + myRect.H - pB;
-    const f32 uvL = UVBorderLeft,  uvT = UVBorderTop;
-    const f32 uvR = 1.0f - UVBorderRight, uvB = 1.0f - UVBorderBottom;
+    const f32 pL  = std::min(PixelLeft, myRect.W * 0.5f);
+    const f32 pR  = std::min(PixelRight, myRect.W * 0.5f);
+    const f32 pT  = std::min(PixelTop, myRect.H * 0.5f);
+    const f32 pB  = std::min(PixelBottom, myRect.H * 0.5f);
+    const f32 cX  = myRect.X + pL,            cY  = myRect.Y + pT;
+    const f32 cW  = myRect.W - pL - pR,       cH  = myRect.H - pT - pB;
+    const f32 rX  = myRect.X + myRect.W - pR, bY  = myRect.Y + myRect.H - pB;
+    const f32 uvL = UVBorderLeft,             uvT = UVBorderTop;
+    const f32 uvR = 1.0f - UVBorderRight,     uvB = 1.0f - UVBorderBottom;
 
-    struct Slice { UIRect s; UVRect uv; };
+    struct Slice
+    {
+        UIRect s;
+        UVRect uv;
+    };
     const Slice slices[9] = {
-        {{ myRect.X, myRect.Y, pL, pT }, { 0,   0,   uvL, uvT }},
-        {{ cX,       myRect.Y, cW, pT }, { uvL, 0,   uvR, uvT }},
-        {{ rX,       myRect.Y, pR, pT }, { uvR, 0,   1,   uvT }},
-        {{ myRect.X, cY,       pL, cH }, { 0,   uvT, uvL, uvB }},
-        {{ cX,       cY,       cW, cH }, { uvL, uvT, uvR, uvB }},
-        {{ rX,       cY,       pR, cH }, { uvR, uvT, 1,   uvB }},
-        {{ myRect.X, bY,       pL, pB }, { 0,   uvB, uvL, 1   }},
-        {{ cX,       bY,       cW, pB }, { uvL, uvB, uvR, 1   }},
-        {{ rX,       bY,       pR, pB }, { uvR, uvB, 1,   1   }},
+        {{myRect.X, myRect.Y, pL, pT}, {0, 0, uvL, uvT}},
+        {{cX, myRect.Y, cW, pT}, {uvL, 0, uvR, uvT}},
+        {{rX, myRect.Y, pR, pT}, {uvR, 0, 1, uvT}},
+        {{myRect.X, cY, pL, cH}, {0, uvT, uvL, uvB}},
+        {{cX, cY, cW, cH}, {uvL, uvT, uvR, uvB}},
+        {{rX, cY, pR, cH}, {uvR, uvT, 1, uvB}},
+        {{myRect.X, bY, pL, pB}, {0, uvB, uvL, 1}},
+        {{cX, bY, cW, pB}, {uvL, uvB, uvR, 1}},
+        {{rX, bY, pR, pB}, {uvR, uvB, 1, 1}},
     };
     for (const auto& [sr, uv] : slices)
         PushTexturedRect(packet, sr, uv, tint, Texture, Sampler, layer);
@@ -291,9 +298,8 @@ void ProgressBar::OnCollect(FramePacket&        packet, const UIRect          my
              whiteTex, whiteSampler, BgLayer(*this, skin));
 
     const f32    fillW = myRect.W * std::clamp(Value, 0.0f, 1.0f);
-    const Color  fillC = (FillColor.A > 0.0f) ? FillColor : skin.ProgressFill;
     const UIRect fillR = {myRect.X, myRect.Y, fillW, myRect.H};
-    PushRect(packet, fillR, WithAlpha(fillC, effectiveOpacity),
+    PushRect(packet, fillR, WithAlpha(skin.ProgressFill, effectiveOpacity),
              whiteTex, whiteSampler, FillLayer(*this, skin));
 }
 
@@ -307,14 +313,14 @@ UIRect ScrollPanel::ThumbRect(const UIRect track, const f32 panelH) const
     const f32 viewRatio = std::min(1.0f, panelH / ContentHeight);
     const f32 thumbH    = std::max(20.0f, track.H * viewRatio);
     const f32 thumbT    = (maxScroll > 0.0f)
-        ? (ScrollOffset / maxScroll) * (track.H - thumbH)
-        : 0.0f;
-    return { track.X, track.Y + thumbT, track.W, thumbH };
+                          ? (ScrollOffset / maxScroll) * (track.H - thumbH)
+                          : 0.0f;
+    return {track.X, track.Y + thumbT, track.W, thumbH};
 }
 
-void ScrollPanel::UpdateTree(const f32 dt, const UIRect parent, const Vec2 mousePos,
-                              const bool mouseDown, const bool mouseJustDown, const bool mouseJustUp,
-                              bool& consumed, const f32 scrollDelta)
+void ScrollPanel::UpdateTree(const f32  dt, const UIRect      parent, const Vec2        mousePos,
+                             const bool mouseDown, const bool mouseJustDown, const bool mouseJustUp,
+                             bool&      consumed, const f32   scrollDelta)
 {
     if (!Visible) return;
     const UIRect myRect = ComputeRect(parent);
@@ -338,36 +344,42 @@ void ScrollPanel::UpdateTree(const f32 dt, const UIRect parent, const Vec2 mouse
     // Mouse wheel scroll — apply when cursor is over the panel.
     if (scrollDelta != 0.0f && myRect.Contains(mousePos)) {
         constexpr f32 ScrollSpeed = 48.0f;
-        ScrollOffset = std::clamp(ScrollOffset - scrollDelta * ScrollSpeed, 0.0f, maxScroll);
+        ScrollOffset              = std::clamp(ScrollOffset - scrollDelta * ScrollSpeed, 0.0f, maxScroll);
     }
 
     // Scrollbar interaction (inlined to avoid redundant rect recompute)
-    if (!_needsScrollbar) { _dragging = _thumbHovered = false; return; }
+    if (!_needsScrollbar) {
+        _dragging = _thumbHovered = false;
+        return;
+    }
     const UIRect track = {myRect.X + myRect.W - ScrollbarWidth, myRect.Y, ScrollbarWidth, myRect.H};
     const UIRect thumb = ThumbRect(track, myRect.H);
-    _thumbHovered = thumb.Contains(mousePos);
+    _thumbHovered      = thumb.Contains(mousePos);
 
     if (mouseJustDown && _thumbHovered) {
-        _dragging = true; _dragStartY = mousePos.Y; _dragStartOffset = ScrollOffset;
+        _dragging        = true;
+        _dragStartY      = mousePos.Y;
+        _dragStartOffset = ScrollOffset;
     }
     if (mouseJustUp) _dragging = false;
     if (_dragging && mouseDown) {
         const f32 trackH = track.H - thumb.H;
         const f32 ratio  = trackH > 0.0f ? maxScroll / trackH : 0.0f;
-        ScrollOffset = std::clamp(_dragStartOffset + (mousePos.Y - _dragStartY) * ratio, 0.0f, maxScroll);
+        ScrollOffset     = std::clamp(_dragStartOffset + (mousePos.Y - _dragStartY) * ratio, 0.0f, maxScroll);
     }
 }
 
-void ScrollPanel::CollectTree(FramePacket& packet, const UIRect parent, const f32 parentOpacity,
-                               const TextureHandle whiteTex, const SamplerHandle whiteSampler,
-                               const UISkin& skin)
+void ScrollPanel::CollectTree(FramePacket&        packet, const UIRect          parent, const f32 parentOpacity,
+                              const TextureHandle whiteTex, const SamplerHandle whiteSampler,
+                              const UISkin&       skin)
 {
     if (!Visible) return;
-    const UIRect myRect = ComputeRect(parent);
-    const f32    alpha  = Opacity * parentOpacity;
-    _needsScrollbar     = ContentHeight > myRect.H && ScrollbarWidth > 0.0f;
+    const UIRect myRect        = ComputeRect(parent);
+    const f32    alpha         = Opacity * parentOpacity;
+    const UISkin effectiveSkin = GetEffectiveSkin(skin);
+    _needsScrollbar            = ContentHeight > myRect.H && ScrollbarWidth > 0.0f;
 
-    OnCollect(packet, myRect, alpha, whiteTex, whiteSampler, skin);
+    OnCollect(packet, myRect, alpha, whiteTex, whiteSampler, effectiveSkin);
 
     if (_children.empty()) return;
 
@@ -393,9 +405,9 @@ void ScrollPanel::CollectTree(FramePacket& packet, const UIRect parent, const f3
             packet.UISprites[i].ClipIndex = clipIdx;
 }
 
-void ScrollPanel::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity,
-                             const TextureHandle whiteTex, const SamplerHandle whiteSampler,
-                             const UISkin& skin)
+void ScrollPanel::OnCollect(FramePacket&        packet, const UIRect          myRect, const f32 effectiveOpacity,
+                            const TextureHandle whiteTex, const SamplerHandle whiteSampler,
+                            const UISkin&       skin)
 {
     PushRect(packet, myRect, WithAlpha(skin.PanelBg, effectiveOpacity),
              whiteTex, whiteSampler, BgLayer(*this, skin));

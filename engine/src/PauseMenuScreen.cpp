@@ -4,7 +4,6 @@
 
 namespace Arcbit
 {
-
 void PauseMenuScreen::OnEnter()
 {
     _roots.clear();
@@ -39,10 +38,7 @@ void PauseMenuScreen::OnEnter()
         btn->OnClick = OnQuit;
 }
 
-void PauseMenuScreen::OnBackPressed()
-{
-    if (OnResume) OnResume();
-}
+void PauseMenuScreen::OnBackPressed() { if (OnResume) OnResume(); }
 
 // ---------------------------------------------------------------------------
 // BuildFallback — inline layout used when the .arcui file is unavailable.
@@ -53,9 +49,9 @@ void PauseMenuScreen::BuildFallback()
     Add<Scrim>();
 
     const i32 btnCount = 2
-        + (ShowControls         ? 1 : 0)
-        + (ShowAudioSettings    ? 1 : 0)
-        + (ShowGraphicsSettings ? 1 : 0);
+            + (ShowControls ? 1 : 0)
+            + (ShowAudioSettings ? 1 : 0)
+            + (ShowGraphicsSettings ? 1 : 0);
 
     const f32 panelW = 360.0f;
     const f32 panelH = 80.0f + static_cast<f32>(btnCount) * 56.0f + 20.0f;
@@ -98,7 +94,7 @@ void PauseMenuScreen::BuildFallback()
     const f32 gap  = 56.0f;
 
     auto MakeButton = [&](const char* label, f32 yOffset, std::function<void()> cb,
-                          Color textColor = {0, 0, 0, 0}) {
+                          Color       textColor = {0, 0, 0, 0}) {
         auto* btn      = bg->AddChild<Button>();
         btn->Text      = label;
         btn->Size      = {btnW, btnH};
@@ -107,16 +103,25 @@ void PauseMenuScreen::BuildFallback()
         btn->Offset    = {0.0f, yOffset};
         btn->Focusable = true;
         btn->ZOrder    = 2;
-        btn->TextColor = textColor;
-        btn->OnClick   = std::move(cb);
+        if (textColor.A > 0.0f) btn->SkinOverride.TextLabel = textColor;
+        btn->OnClick = std::move(cb);
     };
 
     f32 y = 72.0f;
-    MakeButton("Resume",   y, OnResume); y += gap;
-    if (ShowControls)         { MakeButton("Controls", y, OnControls);         y += gap; }
-    if (ShowAudioSettings)    { MakeButton("Audio",    y, OnAudioSettings);    y += gap; }
-    if (ShowGraphicsSettings) { MakeButton("Graphics", y, OnGraphicsSettings); y += gap; }
+    MakeButton("Resume", y, OnResume);
+    y += gap;
+    if (ShowControls) {
+        MakeButton("Controls", y, OnControls);
+        y += gap;
+    }
+    if (ShowAudioSettings) {
+        MakeButton("Audio", y, OnAudioSettings);
+        y += gap;
+    }
+    if (ShowGraphicsSettings) {
+        MakeButton("Graphics", y, OnGraphicsSettings);
+        y += gap;
+    }
     MakeButton("Quit", y, OnQuit, {0.88f, 0.30f, 0.30f, 1.0f});
 }
-
 } // namespace Arcbit
