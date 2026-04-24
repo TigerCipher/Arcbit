@@ -64,6 +64,42 @@ static void PushTexturedRect(FramePacket& packet, const UIRect&  r, const UVRect
     packet.UISprites.push_back(s);
 }
 
+// Emit nine quads for a nine-slice sprite into UISprites.
+static void PushNineSlice(FramePacket&        packet, const UIRect     rect, const Color tint,
+                          const TextureHandle tex, const SamplerHandle samp, const i32   layer,
+                          const f32           uvBL, const f32          uvBR, const f32   uvBT, const f32 uvBB,
+                          const f32           pxL, const f32           pxR, const f32    pxT, const f32  pxB)
+{
+    const f32 pL  = std::min(pxL, rect.W * 0.5f);
+    const f32 pR  = std::min(pxR, rect.W * 0.5f);
+    const f32 pT  = std::min(pxT, rect.H * 0.5f);
+    const f32 pB  = std::min(pxB, rect.H * 0.5f);
+    const f32 cX  = rect.X + pL,          cY  = rect.Y + pT;
+    const f32 cW  = rect.W - pL - pR,     cH  = rect.H - pT - pB;
+    const f32 rX  = rect.X + rect.W - pR, bY  = rect.Y + rect.H - pB;
+    const f32 uvL = uvBL,                 uvT = uvBT;
+    const f32 uvR = 1.0f - uvBR,          uvB = 1.0f - uvBB;
+
+    struct Slice
+    {
+        UIRect s;
+        UVRect uv;
+    };
+    const Slice slices[9] = {
+        {{rect.X, rect.Y, pL, pT}, {0, 0, uvL, uvT}},
+        {{cX, rect.Y, cW, pT}, {uvL, 0, uvR, uvT}},
+        {{rX, rect.Y, pR, pT}, {uvR, 0, 1, uvT}},
+        {{rect.X, cY, pL, cH}, {0, uvT, uvL, uvB}},
+        {{cX, cY, cW, cH}, {uvL, uvT, uvR, uvB}},
+        {{rX, cY, pR, cH}, {uvR, uvT, 1, uvB}},
+        {{rect.X, bY, pL, pB}, {0, uvB, uvL, 1}},
+        {{cX, bY, cW, pB}, {uvL, uvB, uvR, 1}},
+        {{rX, bY, pR, pB}, {uvR, uvB, 1, 1}},
+    };
+    for (const auto& [sr, uv] : slices)
+        PushTexturedRect(packet, sr, uv, tint, tex, samp, layer);
+}
+
 // Word-wrap text to fit within maxWidth pixels, preserving explicit newlines.
 static std::string WrapText(const FontAtlas& font, const std::string_view text,
                             const f32        maxWidth, const f32          scale)
@@ -253,37 +289,87 @@ void NineSlice::OnCollect(FramePacket& packet, const UIRect myRect, const f32 ef
                           const UISkin& skin)
 {
     if (!Texture.IsValid()) return;
-    const Color tint  = WithAlpha(Tint, effectiveOpacity);
-    const i32   layer = FillLayer(*this, skin);
+    PushNineSlice(packet, myRect, WithAlpha(Tint, effectiveOpacity), Texture, Sampler,
+                  FillLayer(*this, skin),
+                  UVBorderLeft, UVBorderRight, UVBorderTop, UVBorderBottom,
+                  PixelLeft, PixelRight, PixelTop, PixelBottom);
+}
 
-    const f32 pL  = std::min(PixelLeft, myRect.W * 0.5f);
-    const f32 pR  = std::min(PixelRight, myRect.W * 0.5f);
-    const f32 pT  = std::min(PixelTop, myRect.H * 0.5f);
-    const f32 pB  = std::min(PixelBottom, myRect.H * 0.5f);
-    const f32 cX  = myRect.X + pL,            cY  = myRect.Y + pT;
-    const f32 cW  = myRect.W - pL - pR,       cH  = myRect.H - pT - pB;
-    const f32 rX  = myRect.X + myRect.W - pR, bY  = myRect.Y + myRect.H - pB;
-    const f32 uvL = UVBorderLeft,             uvT = UVBorderTop;
-    const f32 uvR = 1.0f - UVBorderRight,     uvB = 1.0f - UVBorderBottom;
+// ---------------------------------------------------------------------------
+// NineSliceButton
+// ---------------------------------------------------------------------------
 
-    struct Slice
-    {
-        UIRect s;
-        UVRect uv;
-    };
-    const Slice slices[9] = {
-        {{myRect.X, myRect.Y, pL, pT}, {0, 0, uvL, uvT}},
-        {{cX, myRect.Y, cW, pT}, {uvL, 0, uvR, uvT}},
-        {{rX, myRect.Y, pR, pT}, {uvR, 0, 1, uvT}},
-        {{myRect.X, cY, pL, cH}, {0, uvT, uvL, uvB}},
-        {{cX, cY, cW, cH}, {uvL, uvT, uvR, uvB}},
-        {{rX, cY, pR, cH}, {uvR, uvT, 1, uvB}},
-        {{myRect.X, bY, pL, pB}, {0, uvB, uvL, 1}},
-        {{cX, bY, cW, pB}, {uvL, uvB, uvR, 1}},
-        {{rX, bY, pR, pB}, {uvR, uvB, 1, 1}},
-    };
-    for (const auto& [sr, uv] : slices)
-        PushTexturedRect(packet, sr, uv, tint, Texture, Sampler, layer);
+void NineSliceButton::OnUpdate(f32 /*dt*/, const UIRect myRect, const Vec2                            mousePos,
+                               const bool               mouseDown, bool /*mouseJustDown*/, const bool mouseJustUp,
+                               bool&                    consumed)
+{
+    if (consumed) {
+        _hovered = _pressed = false;
+        return;
+    }
+    _hovered = myRect.Contains(mousePos);
+    if (!_hovered) {
+        _pressed = false;
+        return;
+    }
+    if (mouseDown) _pressed = true;
+    if (mouseJustUp && _pressed) {
+        _pressed = false;
+        consumed = true;
+        if (OnClick) OnClick();
+    }
+}
+
+void NineSliceButton::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity,
+                                TextureHandle /*whiteTex*/, SamplerHandle /*whiteSampler*/,
+                                const UISkin& skin)
+{
+    if (Texture.IsValid()) {
+        Color tint;
+        if (!Enabled) tint = TintDisabled;
+        else if (_pressed) tint = TintPressed;
+        else if (_hovered || _focused) tint = TintHovered;
+        else tint                           = TintNormal;
+
+        PushNineSlice(packet, myRect, WithAlpha(tint, effectiveOpacity), Texture, Sampler,
+                      BgLayer(*this, skin),
+                      UVBorderLeft, UVBorderRight, UVBorderTop, UVBorderBottom,
+                      PixelLeft, PixelRight, PixelTop, PixelBottom);
+    }
+
+    if (skin.Font && !Text.empty()) {
+        const Color col = WithAlpha(Enabled ? skin.TextLabel : skin.TextDisabled, effectiveOpacity);
+        const Vec2  pos = {
+            myRect.X + myRect.W * 0.5f,
+            myRect.Y + myRect.H * 0.5f - skin.Font->GetAscent() * skin.FontScale * 0.5f
+        };
+        DrawTextUI(packet, *skin.Font, Text, pos, skin.FontScale, col,
+                   TextLayer(*this, skin), TextAlign::Center);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// NineSliceProgressBar
+// ---------------------------------------------------------------------------
+
+void NineSliceProgressBar::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity,
+                                     TextureHandle /*whiteTex*/, SamplerHandle /*whiteSampler*/,
+                                     const UISkin& skin)
+{
+    if (TrackTexture.IsValid())
+        PushNineSlice(packet, myRect, WithAlpha(TrackTint, effectiveOpacity),
+                      TrackTexture, TrackSampler, BgLayer(*this, skin),
+                      UVBorderLeft, UVBorderRight, UVBorderTop, UVBorderBottom,
+                      PixelLeft, PixelRight, PixelTop, PixelBottom);
+
+    if (FillTexture.IsValid()) {
+        const f32    fillW = myRect.W * std::clamp(Value, 0.0f, 1.0f);
+        const UIRect fillR = {myRect.X, myRect.Y, fillW, myRect.H};
+        PushNineSlice(packet, fillR, WithAlpha(FillTint, effectiveOpacity),
+                      FillTexture, FillSampler, FillLayer(*this, skin),
+                      UVBorderLeft, UVBorderRight, UVBorderTop, UVBorderBottom,
+                      PixelLeft, PixelRight, PixelTop, PixelBottom);
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -185,18 +185,46 @@ static void ApplyScrollPanel(UIWidget& w, const json& j)
     if (const auto it = j.find("scrollbar_width"); it != j.end()) s.ScrollbarWidth = it->get<f32>();
 }
 
+// Read the shared UV/pixel border fields that all nine-slice widgets expose.
+template <typename T>
+static void ApplyNineSliceBorders(T& w, const json& j)
+{
+    if (auto it = j.find("uv_border_left"); it != j.end()) w.UVBorderLeft = it->get<f32>();
+    if (auto it = j.find("uv_border_right"); it != j.end()) w.UVBorderRight = it->get<f32>();
+    if (auto it = j.find("uv_border_top"); it != j.end()) w.UVBorderTop = it->get<f32>();
+    if (auto it = j.find("uv_border_bottom"); it != j.end()) w.UVBorderBottom = it->get<f32>();
+    if (auto it = j.find("pixel_left"); it != j.end()) w.PixelLeft = it->get<f32>();
+    if (auto it = j.find("pixel_right"); it != j.end()) w.PixelRight = it->get<f32>();
+    if (auto it = j.find("pixel_top"); it != j.end()) w.PixelTop = it->get<f32>();
+    if (auto it = j.find("pixel_bottom"); it != j.end()) w.PixelBottom = it->get<f32>();
+}
+
 static void ApplyNineSlice(UIWidget& w, const json& j)
 {
     auto& n = dynamic_cast<NineSlice&>(w);
     if (auto it = j.find("tint"); it != j.end()) n.Tint = ReadColor(*it);
-    if (auto it = j.find("uv_border_left"); it != j.end()) n.UVBorderLeft = it->get<f32>();
-    if (auto it = j.find("uv_border_right"); it != j.end()) n.UVBorderRight = it->get<f32>();
-    if (auto it = j.find("uv_border_top"); it != j.end()) n.UVBorderTop = it->get<f32>();
-    if (auto it = j.find("uv_border_bottom"); it != j.end()) n.UVBorderBottom = it->get<f32>();
-    if (auto it = j.find("pixel_left"); it != j.end()) n.PixelLeft = it->get<f32>();
-    if (auto it = j.find("pixel_right"); it != j.end()) n.PixelRight = it->get<f32>();
-    if (auto it = j.find("pixel_top"); it != j.end()) n.PixelTop = it->get<f32>();
-    if (auto it = j.find("pixel_bottom"); it != j.end()) n.PixelBottom = it->get<f32>();
+    ApplyNineSliceBorders(n, j);
+}
+
+static void ApplyNineSliceButton(UIWidget& w, const json& j)
+{
+    auto& b = dynamic_cast<NineSliceButton&>(w);
+    if (auto it = j.find("text"); it != j.end()) b.Text = it->get<std::string>();
+    if (auto it = j.find("text_key"); it != j.end()) b.Text = Loc::Get(it->get<std::string>());
+    if (auto it = j.find("tint_normal"); it != j.end()) b.TintNormal = ReadColor(*it);
+    if (auto it = j.find("tint_hovered"); it != j.end()) b.TintHovered = ReadColor(*it);
+    if (auto it = j.find("tint_pressed"); it != j.end()) b.TintPressed = ReadColor(*it);
+    if (auto it = j.find("tint_disabled"); it != j.end()) b.TintDisabled = ReadColor(*it);
+    ApplyNineSliceBorders(b, j);
+}
+
+static void ApplyNineSliceProgressBar(UIWidget& w, const json& j)
+{
+    auto& p = dynamic_cast<NineSliceProgressBar&>(w);
+    if (auto it = j.find("value"); it != j.end()) p.Value = it->get<f32>();
+    if (auto it = j.find("track_tint"); it != j.end()) p.TrackTint = ReadColor(*it);
+    if (auto it = j.find("fill_tint"); it != j.end()) p.FillTint = ReadColor(*it);
+    ApplyNineSliceBorders(p, j);
 }
 
 static void ApplyImage(UIWidget& w, const json& j)
@@ -275,20 +303,22 @@ void UILoader::EnsureBuiltins()
     auto& r = Registry();
     if (!r.empty()) return; // already registered
 
-    r["Panel"]       = {[] { return std::make_unique<Panel>(); }, ApplyPanel};
-    r["Scrim"]       = {[] { return std::make_unique<Scrim>(); }, ApplyPanel}; // inherits Panel
-    r["Label"]       = {[] { return std::make_unique<Label>(); }, ApplyLabel};
-    r["Button"]      = {[] { return std::make_unique<Button>(); }, ApplyButton};
-    r["Image"]       = {[] { return std::make_unique<Image>(); }, ApplyImage};
-    r["NineSlice"]   = {[] { return std::make_unique<NineSlice>(); }, ApplyNineSlice};
-    r["ProgressBar"] = {[] { return std::make_unique<ProgressBar>(); }, ApplyProgressBar};
-    r["ScrollPanel"] = {[] { return std::make_unique<ScrollPanel>(); }, ApplyScrollPanel};
-    r["TextInput"]   = {[] { return std::make_unique<TextInput>(); }, ApplyTextInput};
-    r["Slider"]      = {[] { return std::make_unique<Slider>(); }, ApplySlider};
-    r["Dropdown"]    = {[] { return std::make_unique<Dropdown>(); }, ApplyDropdown};
-    r["Checkbox"]    = {[] { return std::make_unique<Checkbox>(); }, ApplyCheckbox};
-    r["RadioGroup"]  = {[] { return std::make_unique<RadioGroup>(); }, ApplyRadioGroup};
-    r["Switch"]      = {[] { return std::make_unique<Switch>(); }, ApplySwitch};
+    r["Panel"]                = {[] { return std::make_unique<Panel>(); }, ApplyPanel};
+    r["Scrim"]                = {[] { return std::make_unique<Scrim>(); }, ApplyPanel}; // inherits Panel
+    r["Label"]                = {[] { return std::make_unique<Label>(); }, ApplyLabel};
+    r["Button"]               = {[] { return std::make_unique<Button>(); }, ApplyButton};
+    r["Image"]                = {[] { return std::make_unique<Image>(); }, ApplyImage};
+    r["NineSlice"]            = {[] { return std::make_unique<NineSlice>(); }, ApplyNineSlice};
+    r["NineSliceButton"]      = {[] { return std::make_unique<NineSliceButton>(); }, ApplyNineSliceButton};
+    r["NineSliceProgressBar"] = {[] { return std::make_unique<NineSliceProgressBar>(); }, ApplyNineSliceProgressBar};
+    r["ProgressBar"]          = {[] { return std::make_unique<ProgressBar>(); }, ApplyProgressBar};
+    r["ScrollPanel"]          = {[] { return std::make_unique<ScrollPanel>(); }, ApplyScrollPanel};
+    r["TextInput"]            = {[] { return std::make_unique<TextInput>(); }, ApplyTextInput};
+    r["Slider"]               = {[] { return std::make_unique<Slider>(); }, ApplySlider};
+    r["Dropdown"]             = {[] { return std::make_unique<Dropdown>(); }, ApplyDropdown};
+    r["Checkbox"]             = {[] { return std::make_unique<Checkbox>(); }, ApplyCheckbox};
+    r["RadioGroup"]           = {[] { return std::make_unique<RadioGroup>(); }, ApplyRadioGroup};
+    r["Switch"]               = {[] { return std::make_unique<Switch>(); }, ApplySwitch};
 }
 
 // ---------------------------------------------------------------------------

@@ -428,10 +428,13 @@ define *how* it gets there. Any controller pairs with any style.
 *A shared `arcbit-content` DLL consumed by both the engine and the AvaloniaUI editor, ensuring identical read/write logic for all binary asset formats.*
 
 - [ ] `.arcasset` binary container format: magic bytes, version, table of contents, compressed payload sections
-- [ ] Supported asset types in v1: `Texture` (raw pixels + metadata), `SpriteSheet` (texture + UV table), `AnimationClip` (frame list + events), `TileAtlas` (texture + tile property table), `AudioClip` (decoded PCM + loop points)
+- [ ] Supported asset types in v1: `Texture` (raw pixels + metadata), `SpriteSheet` (texture + UV table), `AnimationClip` (frame list + events), `TileAtlas` (texture + tile property table), `AudioClip` (decoded PCM + loop points), `FontAtlas` (glyph texture + metrics), `UILayout` (compiled `.arcui` data blob)
 - [ ] **Texture atlas packer**: bin individual sprites and spritesheets into power-of-two atlas pages grouped by sampler type (nearest / linear); output UV mapping table in `.arcasset` so game code still refers to sprites by name; `arcbit-pack` supports `--atlas` mode for batch packing
-- [ ] Import pipeline: source file (PNG, JSON, WAV, etc.) → validated → packed into `.arcasset`
-- [ ] Export pipeline: `.arcasset` → engine `TextureHandle` / `AudioClip` / etc. at runtime
+- [ ] Import pipeline: source file (PNG, JSON, WAV, TTF, `.arcui`, etc.) → validated → packed into `.arcasset`
+- [ ] Export pipeline: `.arcasset` → engine `TextureHandle` / `AudioClip` / `FontAtlas` / etc. at runtime
+- [ ] **Migration — font registry**: `UILoader::FontRegistry` (currently populated by manual `UILoader::RegisterFont()` calls at startup) should be replaced by asset-driven loading — `FontAtlas` assets are loaded through the content pipeline and auto-registered under their asset key so `.arcui` skin blocks can reference them by name without any hand-wiring in game code
+- [ ] **Migration — UI texture references**: `NineSliceButton`, `NineSliceProgressBar`, and `Image` widgets currently require texture/sampler handles to be assigned in code (no asset registry exists yet); once the content pipeline is in place, `.arcui` files should support a `"texture": "ui/button_normal"` key that resolves to a `TextureHandle` through the asset registry at load time
+- [ ] **Everything through arcbit-pack**: `.arcui` layout files, tilemap atlases, fonts, and all other engine-consumed data must be packed and loaded exclusively via the `arcbit-pack` / `.arcasset` pipeline — no raw file reads at runtime outside of the content tools themselves
 - [ ] **Two-key asset protection system**:
   - *Dev key*: generated per project, stored in the dev's `project.arcbit` (never shipped with the game); baked into the game binary by the packaging step at build time; required to open `.arcasset` files in full editor mode
   - *Mod key*: a separate per-project key included in the shipped `project.arcbit` only when `mod_support = true`; used to sign assets produced by end users in mod editor mode; engine distinguishes mod assets from dev assets by key

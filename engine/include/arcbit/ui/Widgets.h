@@ -105,10 +105,11 @@ protected:
 };
 
 // ---------------------------------------------------------------------------
-// NineSlice — a panel drawn from a 9-patch texture.
+// NineSlice — a static panel drawn from a 9-patch texture.
 //
 // The texture is divided into a 3×3 grid by UV-space border fractions.
 // Corners are emitted at PixelBorder* sizes; the center stretches to fill.
+// Can hold child widgets. For an interactive nine-slice, use NineSliceButton.
 // ---------------------------------------------------------------------------
 class NineSlice : public UIWidget
 {
@@ -128,6 +129,96 @@ public:
     f32 PixelRight  = 16.0f;
     f32 PixelTop    = 16.0f;
     f32 PixelBottom = 16.0f;
+
+protected:
+    void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
+                   TextureHandle whiteTex, SamplerHandle whiteSampler,
+                   const UISkin& skin) override;
+};
+
+// ---------------------------------------------------------------------------
+// NineSliceButton — interactive button drawn from a 9-patch texture.
+//
+// A single texture covers all states; per-state tint colors provide visual
+// feedback. Texture/Sampler must be assigned in code — the loader cannot
+// resolve asset paths yet.
+// ---------------------------------------------------------------------------
+class NineSliceButton : public UIWidget
+{
+public:
+    TextureHandle Texture;
+    SamplerHandle Sampler;
+
+    // Per-state tints. Default white = use artwork colors unchanged.
+    Color TintNormal   = {1.0f, 1.0f, 1.0f, 1.0f};
+    Color TintHovered  = {0.85f, 0.85f, 0.85f, 1.0f};
+    Color TintPressed  = {0.70f, 0.70f, 0.70f, 1.0f};
+    Color TintDisabled = {0.50f, 0.50f, 0.50f, 1.0f};
+
+    // Source UV-space borders (fraction of texture, 0–1).
+    f32 UVBorderLeft   = 0.25f;
+    f32 UVBorderRight  = 0.25f;
+    f32 UVBorderTop    = 0.25f;
+    f32 UVBorderBottom = 0.25f;
+
+    // Rendered border sizes in screen pixels.
+    f32 PixelLeft   = 16.0f;
+    f32 PixelRight  = 16.0f;
+    f32 PixelTop    = 16.0f;
+    f32 PixelBottom = 16.0f;
+
+    std::string           Text;
+    std::function<void()> OnClick;
+
+    NineSliceButton() { Focusable = true; }
+
+protected:
+    void OnUpdate(f32   dt, UIRect      myRect, Vec2        mousePos,
+                  bool  mouseDown, bool mouseJustDown, bool mouseJustUp,
+                  bool& consumed) override;
+
+    void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
+                   TextureHandle whiteTex, SamplerHandle whiteSampler,
+                   const UISkin& skin) override;
+
+    void OnActivate() override { if (OnClick) OnClick(); }
+
+private:
+    bool _hovered = false;
+    bool _pressed = false;
+};
+
+// ---------------------------------------------------------------------------
+// NineSliceProgressBar — horizontal fill bar drawn from 9-patch textures.
+//
+// Track (background) and fill (foreground) each use an independent texture.
+// The fill nine-slice is rendered at value * width so the right cap tracks
+// the fill edge naturally. Texture/Sampler must be assigned in code.
+// ---------------------------------------------------------------------------
+class NineSliceProgressBar : public UIWidget
+{
+public:
+    f32 Value = 0.5f; // 0 = empty, 1 = full
+
+    TextureHandle TrackTexture;
+    SamplerHandle TrackSampler;
+    Color         TrackTint = {1.0f, 1.0f, 1.0f, 1.0f};
+
+    TextureHandle FillTexture;
+    SamplerHandle FillSampler;
+    Color         FillTint = {1.0f, 1.0f, 1.0f, 1.0f};
+
+    // UV-space borders shared between track and fill (fraction of texture, 0–1).
+    f32 UVBorderLeft   = 0.25f;
+    f32 UVBorderRight  = 0.25f;
+    f32 UVBorderTop    = 0.25f;
+    f32 UVBorderBottom = 0.25f;
+
+    // Rendered border sizes in screen pixels.
+    f32 PixelLeft   = 8.0f;
+    f32 PixelRight  = 8.0f;
+    f32 PixelTop    = 8.0f;
+    f32 PixelBottom = 8.0f;
 
 protected:
     void OnCollect(FramePacket&  packet, UIRect          myRect, f32 effectiveOpacity,
