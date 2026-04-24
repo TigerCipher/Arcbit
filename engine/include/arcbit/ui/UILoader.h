@@ -8,7 +8,7 @@ namespace Arcbit
 {
 class UIWidget;
 class UIScreen;
-struct FontAtlas;
+class FontAtlas;
 
 // ---------------------------------------------------------------------------
 // UILoader — deserializes .arcui JSON files into UIScreen widget trees.
