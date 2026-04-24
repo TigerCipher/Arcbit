@@ -196,7 +196,11 @@ void UIScreen::FocusPrev()
 
 void UIScreen::ActivateFocused()
 {
-    if (_focusedWidget) _focusedWidget->OnActivate();
+    LOG_DEBUG(UI, "ActivateFocused");
+    if (_focusedWidget) {
+        LOG_DEBUG(UI, "Activate: {}", _focusedWidget->Name);
+        _focusedWidget->OnActivate();
+    }
 }
 
 void UIScreen::ClearFocus()

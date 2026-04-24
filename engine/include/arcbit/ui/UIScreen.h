@@ -29,6 +29,10 @@ public:
     virtual void OnEnter() {}
     virtual void OnExit()  {}
 
+    // Fired by UIManager when Escape or gamepad East is pressed and no
+    // text-consuming widget is focused. Override to implement back navigation.
+    virtual void OnBackPressed() {}
+
     // Called once per game tick before widget UpdateTree.
     // Override in screens that need direct input access (e.g. InputRebindScreen).
     virtual void OnTick(f32 /*dt*/, const InputManager& /*input*/) {}
@@ -116,6 +120,7 @@ private:
     std::unordered_map<std::string, std::string>  _metaStr;
 
     bool            _visible           = true;
+    bool            _skipInputThisFrame = false; // true on the frame the screen was pushed
     TransitionState _transitionState   = TransitionState::Idle;
     f32             _transitionOpacity = 1.0f;
     UIWidget*       _focusedWidget     = nullptr;

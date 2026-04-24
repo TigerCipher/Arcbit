@@ -76,4 +76,9 @@ void GraphicsSettingsScreen::OnEnter()
         back->OnClick = [this] { if (OnBack) OnBack(); };
 }
 
+void GraphicsSettingsScreen::OnBackPressed()
+{
+    if (OnBack) OnBack();
+}
+
 } // namespace Arcbit

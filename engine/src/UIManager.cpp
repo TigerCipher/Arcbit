@@ -42,6 +42,7 @@ void UIManager::Init(const RenderThread& rt, const FontAtlas& font, InputManager
     input.RegisterAction(ActionTabNext, "UI_TabNext");
     input.RegisterAction(ActionShiftMod, "UI_ShiftMod");
     input.RegisterAction(ActionCtrlMod, "UI_CtrlMod");
+    input.RegisterAction(ActionBack, "UI_Back");
 
     input.BindKey(ActionTextLeft, Key::Left);
     input.BindKey(ActionTextRight, Key::Right);
@@ -55,6 +56,8 @@ void UIManager::Init(const RenderThread& rt, const FontAtlas& font, InputManager
     input.BindKey(ActionShiftMod, Key::RightShift);
     input.BindKey(ActionCtrlMod, Key::LeftCtrl);
     input.BindKey(ActionCtrlMod, Key::RightCtrl);
+
+    input.BindGamepadButton(ActionBack, GamepadButton::East);
 }
 
 // ---------------------------------------------------------------------------
@@ -67,6 +70,7 @@ void UIManager::Push(std::unique_ptr<UIScreen> screen)
         screen->_transitionOpacity = 0.0f;
         screen->_transitionState   = UIScreen::TransitionState::FadingIn;
     }
+    screen->_skipInputThisFrame = true;
     screen->OnEnter();
     _stack.push_back(std::move(screen));
 }
@@ -131,15 +135,30 @@ void UIManager::Update(const f32 dt, const Vec2 windowSize, const InputManager& 
     UIScreen* active = ActiveInputScreen();
     if (!active) return;
 
+    // Screens set this flag on the frame they are pushed so that the key event
+    // that caused the push (e.g. Escape to open a menu) is not also processed
+    // as a back-press on the newly-visible screen.
+    const bool skipInput = active->_skipInputThisFrame;
+    active->_skipInputThisFrame = false;
+
     const UIRect screenRect = {0.0f, 0.0f, windowSize.X, windowSize.Y};
     active->OnTick(dt, input);
     active->Update(dt, screenRect, _mousePos, _mouseDown, _mouseJustDown, _mouseJustUp,
                    input.GetScrollDelta());
 
+    if (skipInput) return;
+
     // Suppress arrow-key focus navigation when a text-consuming widget is focused.
     // Tab is always routed through ActionTabNext and never suppressed.
     const bool consumesNav = active->GetFocusedWidget() &&
             active->GetFocusedWidget()->ConsumesFocusNav();
+
+    // Toggle SDL text input mode when focus transitions to/from a text widget.
+    // Keeping it always-on lets Windows TSF intercept Enter even for non-text widgets.
+    if (consumesNav != _textInputActive) {
+        _textInputActive = consumesNav;
+        if (_textInputActiveCallback) _textInputActiveCallback(_textInputActive);
+    }
 
     // Tab always moves focus regardless of whether a text widget is focused.
     if (input.JustPressed(ActionTabNext)) active->FocusNext();
@@ -151,8 +170,15 @@ void UIManager::Update(const f32 dt, const Vec2 windowSize, const InputManager& 
     // Enter activates the focused widget (fires OnClick for buttons, OnConfirm for TextInput).
     if (input.JustPressed(ActionConfirm)) active->ActivateFocused();
 
-    // Escape clears focus on a text-consuming widget (cancels editing).
-    if (consumesNav && input.JustPressed(ActionTextEscape)) active->ClearFocus();
+    // Escape / gamepad East: clear text focus or navigate back.
+    // ActionTextEscape = Key::Escape; ActionBack = GamepadButton::East.
+    // Both share the same behavior: cancel text editing when focused, else back.
+    const bool backPressed = input.JustPressed(ActionTextEscape) ||
+                             input.JustPressed(ActionBack);
+    if (backPressed) {
+        if (consumesNav) active->ClearFocus();
+        else             active->OnBackPressed();
+    }
 
     // Forward typed characters to the focused widget.
     if (!input.GetTextInput().empty()) active->DispatchTextInput(input.GetTextInput());

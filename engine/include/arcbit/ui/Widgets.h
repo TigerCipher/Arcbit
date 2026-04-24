@@ -71,6 +71,8 @@ public:
     std::function<void()> OnClick;
     Color                 TextColor = {0, 0, 0, 0}; // {0,0,0,0} = use skin default
 
+    Button() { Focusable = true; }
+
 protected:
     void OnUpdate(f32   dt, UIRect      myRect, Vec2        mousePos,
                   bool  mouseDown, bool mouseJustDown, bool mouseJustUp,

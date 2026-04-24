@@ -376,8 +376,8 @@ void Settings::SaveInputBindings(const InputManager& input)
     for (const ActionID id : input.GetAllActions())
     {
         const std::string_view name = input.GetActionName(id);
-        if (name.empty())
-            continue; // skip unnamed actions — no stable key for the file
+        if (name.empty() || name.starts_with("UI_"))
+            continue; // skip unnamed and internal UI_ actions
 
         nlohmann::json bindingArray = nlohmann::json::array();
         for (const Binding& b : input.GetBindings(id))
@@ -401,8 +401,8 @@ bool Settings::LoadInputBindings(InputManager& input)
     for (const ActionID id : input.GetAllActions())
     {
         const std::string_view name = input.GetActionName(id);
-        if (name.empty())
-            continue;
+        if (name.empty() || name.starts_with("UI_"))
+            continue; // internal UI_ actions always use their default bindings
 
         const std::string nameStr(name);
         if (!s_InputSection["bindings"].contains(nameStr))

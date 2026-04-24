@@ -28,6 +28,7 @@ public:
     GraphicsSettingsScreen() { BlocksInput = true; TransitionSpeed = 6.0f; }
 
     void OnEnter() override;
+    void OnBackPressed() override;
 
 private:
     Button* _fullscreenBtn = nullptr;

@@ -29,10 +29,6 @@ Window::Window(const Desc& desc)
     _width  = desc.Width;
     _height = desc.Height;
 
-    // Enable SDL text input so SDL_EVENT_TEXT_INPUT fires for composed characters.
-    // On desktop this is a no-op; on mobile it shows the virtual keyboard.
-    SDL_StartTextInput(win);
-
     LOG_INFO(Platform, "Window created: '{}' ({}x{})", desc.Title, desc.Width, desc.Height);
 }
 
@@ -152,6 +148,13 @@ void Window::SetGamepadButtonCallback(std::function<void(u32, i32, bool)> fn)
 void Window::SetTextInputCallback(std::function<void(const char*)> fn)
 {
     _textInputFn = std::move(fn);
+}
+
+void Window::SetTextInputActive(const bool active)
+{
+    SDL_Window* win = ToSDL(_window);
+    if (active) SDL_StartTextInput(win);
+    else        SDL_StopTextInput(win);
 }
 
 } // namespace Arcbit

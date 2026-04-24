@@ -39,6 +39,11 @@ void PauseMenuScreen::OnEnter()
         btn->OnClick = OnQuit;
 }
 
+void PauseMenuScreen::OnBackPressed()
+{
+    if (OnResume) OnResume();
+}
+
 // ---------------------------------------------------------------------------
 // BuildFallback — inline layout used when the .arcui file is unavailable.
 // ---------------------------------------------------------------------------

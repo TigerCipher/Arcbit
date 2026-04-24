@@ -295,4 +295,11 @@ void InputRebindScreen::OnTick(const f32 dt, const InputManager& input)
     StopListening(true);
 }
 
+void InputRebindScreen::OnBackPressed()
+{
+    // Cancel any in-flight listen before navigating away.
+    if (_isListening) { StopListening(false); return; }
+    if (OnBack) OnBack();
+}
+
 } // namespace Arcbit

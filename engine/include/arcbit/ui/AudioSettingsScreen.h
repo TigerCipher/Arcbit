@@ -25,6 +25,7 @@ public:
     AudioSettingsScreen() { BlocksInput = true; TransitionSpeed = 6.0f; }
 
     void OnEnter() override;
+    void OnBackPressed() override;
 
 private:
     void WireVolumeRow(std::string_view prefix,

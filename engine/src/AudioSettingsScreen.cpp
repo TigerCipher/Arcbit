@@ -66,4 +66,9 @@ void AudioSettingsScreen::OnEnter()
         back->OnClick = [this] { if (OnBack) OnBack(); };
 }
 
+void AudioSettingsScreen::OnBackPressed()
+{
+    if (OnBack) OnBack();
+}
+
 } // namespace Arcbit

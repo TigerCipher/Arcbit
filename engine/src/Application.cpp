@@ -142,6 +142,7 @@ void Application::Run()
     });
     _window->SetScrollCallback([this](f32 delta) { _input.InjectMouseScroll(delta); });
     _window->SetTextInputCallback([this](const char* text) { _input.InjectTextInput(text); });
+    _ui.SetTextInputActiveCallback([this](bool active) { _window->SetTextInputActive(active); });
 
     // High-resolution wall-clock timer for accurate delta time.
     using Clock    = std::chrono::steady_clock;
