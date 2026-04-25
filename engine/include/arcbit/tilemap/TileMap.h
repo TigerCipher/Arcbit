@@ -4,6 +4,7 @@
 #include <arcbit/tilemap/TileDef.h>
 #include <arcbit/core/Math.h>
 #include <arcbit/core/Types.h>
+#include <arcbit/physics/TileColliderRect.h>
 #include <arcbit/render/RenderHandle.h>
 
 #include <string>
@@ -74,6 +75,18 @@ public:
     [[nodiscard]] const TileAtlasEntry*                     FindAtlas(u32 tileId) const;
     [[nodiscard]] const TileDef*                            FindTileDef(u32 tileId) const;
 
+    // ---- Tile collision (Phase 22A) ---------------------------------------
+    // Returns the greedy-meshed solid rectangles for the given chunk. Built
+    // lazily on first request and cached; the cache for a chunk is invalidated
+    // automatically by SetTile when that chunk changes. Empty result for chunks
+    // with no solid tiles or chunks that have not been allocated.
+    [[nodiscard]] const std::vector<TileColliderRect>& GetChunkColliders(i32 chunkX,
+                                                                         i32 chunkY) const;
+
+    // Constants exposed so PhysicsWorld can compute the chunk range overlapping
+    // a query AABB without duplicating the chunk-coord math.
+    [[nodiscard]] static constexpr u32 GetChunkSize() { return ChunkSize; }
+
     // Log a summary of the current map state: chunk count, tile counts per layer,
     // registered atlases, and registered tile defs. Use after map generation.
     void LogStats() const;
@@ -101,11 +114,23 @@ private:
     TileChunk&                     GetOrCreateChunk(i32 chunkX, i32 chunkY);
     [[nodiscard]] const TileChunk* GetChunk(i32 chunkX, i32 chunkY) const;
 
+    // Picks the first solid TileDef across layers (Ground → Objects → Overlay)
+    // for one cell, or nullptr if no layer is solid. Used by the greedy mesher.
+    [[nodiscard]] const TileDef* GetCollisionDef(i32 tileX, i32 tileY) const;
+
+    // Build (or rebuild) the greedy-meshed collider list for one chunk.
+    void BuildChunkColliders(i32 chunkX, i32 chunkY,
+                             std::vector<TileColliderRect>& out) const;
+
     f32 _tileSize = 32.0f;
 
     // Sorted ascending by BaseId for binary-search lookups.
     std::vector<TileAtlasEntry>        _atlases;
     std::unordered_map<u32, TileDef>   _tileDefs;
     std::unordered_map<u64, TileChunk> _chunks;
+
+    // Per-chunk greedy-meshed collider cache. `mutable` so GetChunkColliders
+    // can lazy-fill while staying const. Invalidated by SetTile.
+    mutable std::unordered_map<u64, std::vector<TileColliderRect>> _chunkColliders;
 };
 } // namespace Arcbit

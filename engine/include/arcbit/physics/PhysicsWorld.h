@@ -6,6 +6,7 @@
 #include <arcbit/physics/AABB.h>
 #include <arcbit/physics/Collider2D.h>
 #include <arcbit/physics/SpatialHash.h>
+#include <arcbit/physics/TileColliderRect.h>
 
 #include <vector>
 
@@ -54,6 +55,12 @@ public:
 
     // Pure broadphase query. Caller must run a narrowphase test on each result.
     void QueryAABB(const AABB& worldAABB, std::vector<ColliderId>& out) const { _hash.Query(worldAABB, out); }
+
+    // Append all greedy-meshed tile collider rects whose chunks overlap the
+    // query AABB. Cleared first. No-op (just clears `out`) if no TileMap is
+    // attached. Caller still narrowphases each rect — chunk overlap doesn't
+    // mean the individual rect overlaps the query.
+    void QueryTileColliders(const AABB& worldAABB, std::vector<TileColliderRect>& out) const;
 
     // Tilemap pointer for the (future) tile-synthesized collider path. Non-owning;
     // the Scene owns the tilemap and outlives the PhysicsWorld.

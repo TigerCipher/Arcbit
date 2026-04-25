@@ -41,6 +41,9 @@ void TileMap::SetTile(const i32 tileX, const i32 tileY, const u32 layerIndex, co
 
     auto& [Tiles]                = GetOrCreateChunk(chunkX, chunkY);
     Tiles[layerIndex][cellIndex] = tileId;
+
+    // Invalidate the greedy collider mesh for this chunk; next query rebuilds.
+    _chunkColliders.erase(ChunkKey(chunkX, chunkY));
 }
 
 u32 TileMap::GetTile(const i32 tileX, const i32 tileY, const u32 layerIndex) const
@@ -114,6 +117,119 @@ const TileDef* TileMap::FindTileDef(const u32 tileId) const
 {
     const auto it = _tileDefs.find(tileId);
     return it != _tileDefs.end() ? &it->second : nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// Tile collision — greedy meshing per chunk
+// ---------------------------------------------------------------------------
+
+const TileDef* TileMap::GetCollisionDef(const i32 tileX, const i32 tileY) const
+{
+    // First solid TileDef across layers wins (Ground → Objects → Overlay order).
+    // Documented limitation: a cell with conflicting solid TileDefs across layers
+    // collapses to a single collider class. Fine for 22A; multi-layer trigger
+    // composition is a 22F concern.
+    for (u32 layer = 0; layer < LayerCount; ++layer) {
+        const u32 id = GetTile(tileX, tileY, layer);
+        if (id == 0) continue;
+        const TileDef* def = FindTileDef(id);
+        if (def && def->Solid) return def;
+    }
+    return nullptr;
+}
+
+void TileMap::BuildChunkColliders(const i32                      chunkX, const i32 chunkY,
+                                  std::vector<TileColliderRect>& out) const
+{
+    out.clear();
+    const TileChunk* chunk = GetChunk(chunkX, chunkY);
+    if (!chunk) return;
+
+    // Cache the collision def per cell in the chunk; lookups are otherwise
+    // repeated O(layers) per cell during the merge scan.
+    const TileDef* defs[ChunkSize * ChunkSize] = {};
+    bool           anySolid                    = false;
+    const i32      baseTileX                   = chunkX * static_cast<i32>(ChunkSize);
+    const i32      baseTileY                   = chunkY * static_cast<i32>(ChunkSize);
+    for (u32 y = 0; y < ChunkSize; ++y) {
+        for (u32 x = 0; x < ChunkSize; ++x) {
+            const TileDef* def = GetCollisionDef(baseTileX + static_cast<i32>(x),
+                                                 baseTileY + static_cast<i32>(y));
+            defs[y * ChunkSize + x] = def;
+            if (def) anySolid = true;
+        }
+    }
+    if (!anySolid) return;
+
+    // Two TileDefs merge into the same rect iff they describe the same
+    // collision class. Pointer identity is the fast path; if pointers differ,
+    // deep-compare only the collision-relevant fields.
+    auto sameClass = [](const TileDef* a, const TileDef* b) noexcept {
+        if (a == b) return true;
+        if (!a || !b) return false;
+        return a->Layer == b->Layer && a->BlockedFrom == b->BlockedFrom;
+    };
+
+    bool visited[ChunkSize * ChunkSize] = {};
+
+    for (u32 y = 0; y < ChunkSize; ++y) {
+        for (u32 x = 0; x < ChunkSize; ++x) {
+            const u32      idx = y * ChunkSize + x;
+            const TileDef* def = defs[idx];
+            if (visited[idx] || !def) continue;
+
+            // Expand right while still in the same collision class and not visited.
+            u32 w = 1;
+            while (x + w < ChunkSize) {
+                const u32 ridx = y * ChunkSize + (x + w);
+                if (visited[ridx] || !sameClass(defs[ridx], def)) break;
+                ++w;
+            }
+
+            // Expand down — every cell in [x, x+w) on row (y+h) must match.
+            u32 h = 1;
+            while (y + h < ChunkSize) {
+                bool rowMatches = true;
+                for (u32 dx = 0; dx < w; ++dx) {
+                    const u32 ridx = (y + h) * ChunkSize + (x + dx);
+                    if (visited[ridx] || !sameClass(defs[ridx], def)) {
+                        rowMatches = false;
+                        break;
+                    }
+                }
+                if (!rowMatches) break;
+                ++h;
+            }
+
+            // Mark the rectangle as visited and emit a TileColliderRect.
+            for (u32 dy = 0; dy < h; ++dy)
+                for (u32 dx = 0; dx < w; ++dx)
+                    visited[(y + dy) * ChunkSize + (x + dx)] = true;
+
+            const f32 worldX0 = static_cast<f32>(baseTileX + static_cast<i32>(x)) * _tileSize;
+            const f32 worldY0 = static_cast<f32>(baseTileY + static_cast<i32>(y)) * _tileSize;
+            const f32 worldX1 = worldX0 + static_cast<f32>(w) * _tileSize;
+            const f32 worldY1 = worldY0 + static_cast<f32>(h) * _tileSize;
+
+            out.push_back(TileColliderRect{
+                .BlockedFrom = def->BlockedFrom,
+                .WorldAABB   = AABB::FromMinMax({worldX0, worldY0}, {worldX1, worldY1}),
+                .Layer       = def->Layer,
+            });
+        }
+    }
+}
+
+const std::vector<TileColliderRect>& TileMap::GetChunkColliders(const i32 chunkX,
+                                                                const i32 chunkY) const
+{
+    const u64 key = ChunkKey(chunkX, chunkY);
+    if (const auto it = _chunkColliders.find(key); it != _chunkColliders.end())
+        return it->second;
+
+    auto& list = _chunkColliders[key];
+    BuildChunkColliders(chunkX, chunkY, list);
+    return list;
 }
 
 void TileMap::LogStats() const
@@ -272,9 +388,9 @@ bool TileMap::LoadAtlasJson(const u32           baseId, const std::string_view  
     for (const auto& t : j.value("tiles", nlohmann::json::array())) {
         const u32 localId = t.at("local_id").get<u32>();
         TileDef   def{};
-        if (t.contains("solid"))        def.Solid       = t["solid"].get<bool>();
+        if (t.contains("solid")) def.Solid = t["solid"].get<bool>();
         if (t.contains("blocks_light")) def.BlocksLight = t["blocks_light"].get<bool>();
-        if (t.contains("flat"))         def.Flat        = t["flat"].get<bool>();
+        if (t.contains("flat")) def.Flat = t["flat"].get<bool>();
         if (t.contains("uv_scroll")) {
             def.UVScroll.X = t["uv_scroll"].value("x", 0.0f);
             def.UVScroll.Y = t["uv_scroll"].value("y", 0.0f);

@@ -21,20 +21,18 @@ struct DirectionArc
     f32 CenterDegrees    = 0.0f;
     f32 HalfWidthDegrees = 180.0f; // 180 = full coverage (always block)
 
+    // Field-wise equality; required for comparing BlockedFrom vectors when the
+    // tile collider greedy-mesher decides whether two tiles can merge.
+    bool operator==(const DirectionArc&) const = default;
+
     // Returns true when an arc spans the entire circle and never needs to be
     // tested in the narrowphase — useful as a fast-path check.
-    [[nodiscard]] constexpr bool IsFullCoverage() const noexcept
-    {
-        return HalfWidthDegrees >= 180.0f;
-    }
+    [[nodiscard]] constexpr bool IsFullCoverage() const noexcept { return HalfWidthDegrees >= 180.0f; }
 
     // Preset: a single arc covering the full 360°. Equivalent to leaving
     // Collider2D::BlockedFrom empty (the cheaper default), but available if a
     // caller wants to be explicit, or as a base to mutate.
-    [[nodiscard]] static std::vector<DirectionArc> AllDirections()
-    {
-        return { { 0.0f, 180.0f } };
-    }
+    [[nodiscard]] static std::vector<DirectionArc> AllDirections() { return {{0.0f, 180.0f}}; }
 
     // Additional presets (Vertical, Horizontal, NorthOnly, ...) land in
     // Phase 22D alongside the narrowphase that consumes them.
