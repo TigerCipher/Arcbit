@@ -80,7 +80,7 @@ UISkin UIWidget::GetEffectiveSkin(const UISkin& base) const
     if (o.ScrollThumb)        s.ScrollThumb        = *o.ScrollThumb;
     if (o.ScrollThumbHovered) s.ScrollThumbHovered = *o.ScrollThumbHovered;
     if (o.AccentColor)        s.AccentColor        = *o.AccentColor;
-    if (o.OverlayColor)       s.OverlayColor       = *o.OverlayColor;
+    if (o.ScrimColor)         s.ScrimColor         = *o.ScrimColor;
     if (o.InputBg)            s.InputBg            = *o.InputBg;
     if (o.InputBorder)        s.InputBorder        = *o.InputBorder;
     if (o.InputFocusBorder)   s.InputFocusBorder   = *o.InputFocusBorder;
@@ -94,9 +94,7 @@ UISkin UIWidget::GetEffectiveSkin(const UISkin& base) const
     if (o.SwitchOn)           s.SwitchOn           = *o.SwitchOn;
     if (o.SwitchOff)          s.SwitchOff          = *o.SwitchOff;
     if (o.SwitchThumb)        s.SwitchThumb        = *o.SwitchThumb;
-    if (o.SoundFocusMove)     s.SoundFocusMove     = *o.SoundFocusMove;
     if (o.SoundActivate)      s.SoundActivate      = *o.SoundActivate;
-    if (o.SoundBack)          s.SoundBack          = *o.SoundBack;
     if (o.SoundSliderTick)    s.SoundSliderTick    = *o.SoundSliderTick;
     if (o.SoundToggle)        s.SoundToggle        = *o.SoundToggle;
     return s;

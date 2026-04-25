@@ -73,17 +73,19 @@ bool    Focusable   = false;    // participates in keyboard/gamepad nav
 
 ### `Panel`
 
-Solid-color background rect. `BackgroundColor` alpha=0 uses the skin default.
+Solid-color background rect. Defaults to `skin.PanelBg`; override via the
+per-widget `SkinOverride.PanelBg` (`background_color` in `.arcui`).
 
 ```cpp
-bool  DrawBorder      = false;
-Color BackgroundColor = {0, 0, 0, 0};
+bool DrawBorder = false;
 ```
 
-### `Overlay`
+### `Scrim`
 
-Full-screen `Panel` (pre-set to `SizePercent={1,1}`, `Anchor={0,0}`). Used as
-a semi-transparent scrim behind modal screens.
+Full-screen `Panel` (pre-set to `SizePercent={1,1}`, `Anchor={0,0}`) used as
+a semi-transparent darkening overlay behind modal screens. Renders from
+`skin.ScrimColor`; override via `SkinOverride.ScrimColor` (`background_color`
+in `.arcui` is routed there).
 
 ### `NineSlice`
 
@@ -99,28 +101,26 @@ f32 PixelLeft, PixelRight, PixelTop, PixelBottom;             // screen pixels
 
 ### `Label`
 
-Single- or multi-line SDF text.
+Single- or multi-line SDF text. Color comes from `skin.TextLabel`; override via
+`SkinOverride.TextLabel` (`text_color` in `.arcui`).
 
 ```cpp
 std::string Text;
 TextAlign   Align      = TextAlign::Left;
 bool        WordWrap   = false;
 bool        AutoCenter = false;
-Color       TextColor  = {0,0,0,0}; // {0,0,0,0} = use skin default
 ```
 
 ### `Button`
 
 Clickable rect with label. Fires `OnClick` on mouse-up inside, or `OnActivate`
-when confirmed via keyboard/gamepad.
+when confirmed via keyboard/gamepad. States: Normal → Hovered → Pressed →
+Disabled, all resolved from the effective skin (`ButtonNormal` etc.).
 
 ```cpp
 std::string            Text;
 std::function<void()>  OnClick;
-Color                  TextColor = {0,0,0,0};
 ```
-
-States: Normal → Hovered → Pressed → Disabled. Colors resolved from `UISkin`.
 
 ### `Image`
 
@@ -134,11 +134,12 @@ UVRect UV   = {0,0,1,1};
 
 ### `ProgressBar`
 
-Two-layer horizontal fill bar.
+Two-layer horizontal fill bar. Track from `skin.ProgressBg`, fill from
+`skin.ProgressFill`; override either via `SkinOverride` (`fill_color` in
+`.arcui` maps to `ProgressFill`).
 
 ```cpp
-f32   Value     = 0.5f;
-Color FillColor = {0,0,0,0}; // {0,0,0,0} = use skin default
+f32 Value = 0.5f;
 ```
 
 ### `ScrollPanel`
@@ -182,7 +183,7 @@ Every widget object has a required `"type"` field and any subset of:
 
 | Field          | Type         | Default      | Description                                                                                               |
 |----------------|--------------|--------------|-----------------------------------------------------------------------------------------------------------|
-| `type`         | string       | required     | `"Panel"`, `"Overlay"`, `"Label"`, `"Button"`, `"Image"`, `"NineSlice"`, `"ProgressBar"`, `"ScrollPanel"` |
+| `type`         | string       | required     | One of: `"Panel"`, `"Scrim"`, `"Label"`, `"Button"`, `"Image"`, `"NineSlice"`, `"NineSliceButton"`, `"NineSliceProgressBar"`, `"ProgressBar"`, `"ScrollPanel"`, `"TextInput"`, `"Slider"`, `"Dropdown"`, `"Checkbox"`, `"RadioGroup"`, `"Switch"` |
 | `name`         | string       | —            | Identifier for `FindWidget<T>(name)`                                                                      |
 | `size`         | `[w, h]`     | `[100, 100]` | Pixel size                                                                                                |
 | `size_percent` | `[x, y]`     | `[0, 0]`     | Overrides `size` as fraction of parent when > 0                                                           |
@@ -195,19 +196,28 @@ Every widget object has a required `"type"` field and any subset of:
 | `enabled`      | bool         | true         |                                                                                                           |
 | `focusable`    | bool         | false        | Keyboard/gamepad navigation                                                                               |
 | `children`     | array        | —            | Nested widget objects                                                                                     |
-| `tab_order`    | unsigned int | 0            | Sets focus keyboard/gamepad order                                                                         |
+| `tab_order`    | unsigned int | 0            | Focus order for keyboard/gamepad navigation. Equal values keep tree order.                                |
+| `skin`         | object       | —            | Per-widget skin override block (see [Per-widget skin overrides](#per-widget-skin-overrides))              |
 
-* Note: Defaults listed are the base defaults. Specific widgets may override them. I.e., default `focusable` for a dropdown is `true`
+* Defaults listed are the base defaults. Specific widgets may override them — e.g., `focusable` defaults to `true` on `Button`, `Dropdown`, `Switch`, `Checkbox`, `Slider`, `TextInput`, and `RadioGroup`.
 * All colors are `[r, g, b, a]` floats in 0–1 range.
+* Setting any color/font field on a widget — either through a per-type property like `background_color` or via the `skin` override block — is an explicit override. To use the skin default, omit the field entirely; do **not** pass `[0,0,0,0]`.
 
 ### Per-type properties
 
-**Panel / Overlay**
+**Panel**
 
-| Field              | Type        | Description                           |
-|--------------------|-------------|---------------------------------------|
-| `background_color` | `[r,g,b,a]` | Fill color; alpha=0 uses skin default |
-| `draw_border`      | bool        | Render skin border                    |
+| Field              | Type        | Description                                    |
+|--------------------|-------------|------------------------------------------------|
+| `background_color` | `[r,g,b,a]` | Fill color (overrides `skin.PanelBg`)          |
+| `draw_border`      | bool        | Render the skin border                         |
+
+**Scrim**
+
+| Field              | Type        | Description                                    |
+|--------------------|-------------|------------------------------------------------|
+| `background_color` | `[r,g,b,a]` | Overlay color (overrides `skin.ScrimColor`)    |
+| `draw_border`      | bool        | Render the skin border                         |
 
 **Label**
 
@@ -216,24 +226,24 @@ Every widget object has a required `"type"` field and any subset of:
 | `text`        | string                            | Literal display text                             |
 | `text_key`    | string                            | Localization key — overrides `text` when present |
 | `align`       | `"left"` / `"center"` / `"right"` | Horizontal alignment                             |
-| `text_color`  | `[r,g,b,a]`                       | Alpha=0 uses skin default                        |
+| `text_color`  | `[r,g,b,a]`                       | Overrides `skin.TextLabel`                       |
 | `word_wrap`   | bool                              | Wrap at widget width                             |
 | `auto_center` | bool                              | Center text vertically in widget                 |
 
 **Button**
 
-| Field        | Type        | Description               |
-|--------------|-------------|---------------------------|
-| `text`       | string      | Label text                |
-| `text_key`   | string      | Localization key          |
-| `text_color` | `[r,g,b,a]` | Alpha=0 uses skin default |
+| Field        | Type        | Description                |
+|--------------|-------------|----------------------------|
+| `text`       | string      | Label text                 |
+| `text_key`   | string      | Localization key           |
+| `text_color` | `[r,g,b,a]` | Overrides `skin.TextLabel` |
 
 **ProgressBar**
 
-| Field        | Type        | Description               |
-|--------------|-------------|---------------------------|
-| `value`      | float       | Fill fraction 0–1         |
-| `fill_color` | `[r,g,b,a]` | Alpha=0 uses skin default |
+| Field        | Type        | Description                  |
+|--------------|-------------|------------------------------|
+| `value`      | float       | Fill fraction 0–1            |
+| `fill_color` | `[r,g,b,a]` | Overrides `skin.ProgressFill`|
 
 **ScrollPanel**
 
@@ -250,12 +260,118 @@ Every widget object has a required `"type"` field and any subset of:
 | `uv_border_left/right/top/bottom` | float       | UV-space border fractions (0–1)        |
 | `pixel_left/right/top/bottom`     | float       | Rendered border sizes in screen pixels |
 
+**NineSliceButton**
+
+Inherits `NineSlice` border fields and adds button text + per-state tints.
+Texture/sampler must currently be wired in code (Phase 36 will move this to the
+asset registry).
+
+| Field           | Type        | Description                                     |
+|-----------------|-------------|-------------------------------------------------|
+| `text`          | string      | Label text                                      |
+| `text_key`      | string      | Localization key                                |
+| `tint_normal`   | `[r,g,b,a]` | Tint applied in the idle state                  |
+| `tint_hovered`  | `[r,g,b,a]` | Tint applied while hovered                      |
+| `tint_pressed`  | `[r,g,b,a]` | Tint applied while pressed                      |
+| `tint_disabled` | `[r,g,b,a]` | Tint applied when `enabled = false`             |
+
+**NineSliceProgressBar**
+
+Inherits `NineSlice` border fields. Texture/sampler wired in code.
+
+| Field        | Type        | Description                                  |
+|--------------|-------------|----------------------------------------------|
+| `value`      | float       | Fill fraction 0–1                            |
+| `track_tint` | `[r,g,b,a]` | Tint of the track texture                    |
+| `fill_tint`  | `[r,g,b,a]` | Tint of the fill texture                     |
+
 **Image**
 
 | Field  | Type            | Description |
 |--------|-----------------|-------------|
 | `tint` | `[r,g,b,a]`     | Color tint  |
 | `uv`   | `[u0,v0,u1,v1]` | UV rect     |
+
+**TextInput**
+
+| Field         | Type                              | Description                                      |
+|---------------|-----------------------------------|--------------------------------------------------|
+| `placeholder` | string                            | Greyed text shown when the field is empty        |
+| `max_length`  | unsigned int                      | Maximum character count (0 = unlimited)          |
+| `mode`        | `"text"` / `"numeric"` / `"regex"` | Input filter (`regex` uses `pattern`)            |
+| `pattern`     | string                            | Regex used by `mode = "regex"`                   |
+
+**Slider**
+
+| Field   | Type  | Description                                 |
+|---------|-------|---------------------------------------------|
+| `value` | float | Current value, clamped to `[min, max]`      |
+| `min`   | float | Minimum value                               |
+| `max`   | float | Maximum value                               |
+| `step`  | float | Quantization step (0 = continuous)          |
+
+**Dropdown**
+
+| Field      | Type            | Description                                  |
+|------------|-----------------|----------------------------------------------|
+| `selected` | int             | Index of the initially selected item         |
+| `items`    | array of string | Selectable item labels                       |
+
+**Checkbox**
+
+| Field       | Type   | Description                                |
+|-------------|--------|--------------------------------------------|
+| `checked`   | bool   | Initial state                              |
+| `label`     | string | Inline label text                          |
+| `label_key` | string | Localization key — overrides `label`       |
+
+**RadioGroup**
+
+| Field         | Type            | Description                                  |
+|---------------|-----------------|----------------------------------------------|
+| `selected`    | int             | Index of the initially selected option       |
+| `item_height` | float           | Height of each option row in pixels          |
+| `items`       | array of string | Option labels                                |
+
+**Switch**
+
+| Field        | Type  | Description                                              |
+|--------------|-------|----------------------------------------------------------|
+| `on`         | bool  | Initial state                                            |
+| `anim_speed` | float | Speed of the on/off thumb tween (units/sec)              |
+
+### Per-widget skin overrides
+
+Any widget may carry a `"skin"` block that overrides individual fields of the
+active `UISkin` for just that widget (and only that widget — overrides do
+**not** cascade to children). Keys match the field names in `UISkin` exactly:
+
+```json
+{
+  "type": "Button", "name": "danger-btn", "text_key": "ui.delete",
+  "skin": {
+    "ButtonNormal":  [0.50, 0.15, 0.15, 1.0],
+    "ButtonHovered": [0.65, 0.20, 0.20, 1.0],
+    "TextLabel":     [1.0, 1.0, 1.0, 1.0]
+  }
+}
+```
+
+Supported keys: `Font` (string — looks up a font registered with
+`UILoader::RegisterFont`), `FontScale` (float), and any of the color fields
+listed in `UISkin` (`PanelBg`, `PanelBorder`, `ButtonNormal`, `ButtonHovered`,
+`ButtonPressed`, `ButtonDisabled`, `TextNormal`, `TextDisabled`, `TextLabel`,
+`ProgressBg`, `ProgressFill`, `ScrollTrack`, `ScrollThumb`, `ScrollThumbHovered`,
+`AccentColor`, `ScrimColor`, `InputBg`, `InputBorder`, `InputFocusBorder`,
+`InputCursor`, `InputPlaceholder`, `SliderThumb`, `SliderThumbHovered`,
+`CheckboxBg`, `CheckboxHovered`, `CheckboxCheck`, `SwitchOn`, `SwitchOff`,
+`SwitchThumb`).
+
+Sound keys may also be overridden per widget for interaction events that are
+*driven by the widget itself*: `SoundActivate` (button confirm / click),
+`SoundToggle` (checkbox / switch), `SoundSliderTick` (slider value step).
+`SoundFocusMove` and `SoundBack` are screen/global UX events handled by
+`UIManager` from the active skin and cannot be overridden per widget.
 
 ### Meta section
 
@@ -291,7 +407,7 @@ The fallback if a key has no translation is the key string itself, which makes
 ```json
 {
   "widgets": [
-    { "type": "Overlay" },
+    { "type": "Scrim" },
     {
       "type": "Panel", "name": "bg",
       "size": [360, 280], "anchor": [0.5, 0.5], "pivot": [0.5, 0.5], "zorder": 1,
@@ -466,7 +582,7 @@ Color TextNormal, TextDisabled, TextLabel;
 Color ProgressBg, ProgressFill;
 Color ScrollTrack, ScrollThumb, ScrollThumbHovered;
 Color AccentColor;  // focused/listening states
-Color OverlayColor; // Overlay widget default
+Color ScrimColor;   // Scrim widget default
 
 // Sound keys — empty string = no sound; resolved via AudioManager at interaction time
 std::string SoundFocusMove;   // keyboard/gamepad focus navigation
@@ -505,31 +621,40 @@ engine/
     UIScreen.h
     UIWidget.h
     UILoader.h              — .arcui parser, type registry
-    Widgets.h               — Panel, Overlay, Label, Button, Image,
-                              NineSlice, ProgressBar, ScrollPanel
+    Widgets.h               — Panel, Scrim, Label, Button, Image,
+                              NineSlice, NineSliceButton, NineSliceProgressBar,
+                              ProgressBar, ScrollPanel
+    InputWidgets.h          — TextInput, Slider, Dropdown, Checkbox,
+                              RadioGroup, Switch
     UISkin.h
     HudScreen.h
     PauseMenuScreen.h
     InputRebindScreen.h
     AudioSettingsScreen.h
     GraphicsSettingsScreen.h
+    SplashScreen.h
+    MainMenuScreen.h
   src/
     UIManager.cpp
     UIScreen.cpp
     UIWidget.cpp
     UILoader.cpp
     Widgets.cpp
+    InputWidgets.cpp
     UISkin.cpp
     HudScreen.cpp
     PauseMenuScreen.cpp
     InputRebindScreen.cpp
     AudioSettingsScreen.cpp
     GraphicsSettingsScreen.cpp
+    SplashScreen.cpp
+    MainMenuScreen.cpp
   assets/ui/                — engine-provided .arcui defaults
     pause_menu.arcui
     audio_settings.arcui
     graphics_settings.arcui
     input_rebind.arcui
+    main_menu.arcui
   assets/fonts/             — engine fonts (deployed to assets/engine/fonts/)
     Roboto-Regular.ttf
   assets/skins/             — engine default skin (deployed to assets/engine/skins/)

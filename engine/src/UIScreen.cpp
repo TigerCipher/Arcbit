@@ -153,11 +153,14 @@ std::vector<UIWidget*> UIScreen::GatherFocusables() const
     std::vector<UIWidget*> result;
     for (auto& root : _roots)
         CollectFocusables(*root, result);
-    
-    std::ranges::sort(result, [](const UIWidget* a, const UIWidget* b) {
-       return a->TabOrder < b->TabOrder; 
+
+    // Stable sort so widgets with equal TabOrder (typically the default 0) keep
+    // their tree-traversal order — otherwise nav order is arbitrary on screens
+    // that don't explicitly set tab_order on every focusable.
+    std::ranges::stable_sort(result, [](const UIWidget* a, const UIWidget* b) {
+        return a->TabOrder < b->TabOrder;
     });
-    
+
     return result;
 }
 

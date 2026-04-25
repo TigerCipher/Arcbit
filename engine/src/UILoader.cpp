@@ -105,7 +105,7 @@ static void ApplySkinBlock(UISkinOverride& o, const json& j)
     if (auto it = j.find("ScrollThumb"); it != j.end()) o.ScrollThumb = ReadColor(*it);
     if (auto it = j.find("ScrollThumbHovered"); it != j.end()) o.ScrollThumbHovered = ReadColor(*it);
     if (auto it = j.find("AccentColor"); it != j.end()) o.AccentColor = ReadColor(*it);
-    if (auto it = j.find("OverlayColor"); it != j.end()) o.OverlayColor = ReadColor(*it);
+    if (auto it = j.find("ScrimColor"); it != j.end()) o.ScrimColor = ReadColor(*it);
     if (auto it = j.find("InputBg"); it != j.end()) o.InputBg = ReadColor(*it);
     if (auto it = j.find("InputBorder"); it != j.end()) o.InputBorder = ReadColor(*it);
     if (auto it = j.find("InputFocusBorder"); it != j.end()) o.InputFocusBorder = ReadColor(*it);
@@ -119,9 +119,9 @@ static void ApplySkinBlock(UISkinOverride& o, const json& j)
     if (auto it = j.find("SwitchOn"); it != j.end()) o.SwitchOn = ReadColor(*it);
     if (auto it = j.find("SwitchOff"); it != j.end()) o.SwitchOff = ReadColor(*it);
     if (auto it = j.find("SwitchThumb"); it != j.end()) o.SwitchThumb = ReadColor(*it);
-    if (auto it = j.find("SoundFocusMove");  it != j.end()) o.SoundFocusMove  = it->get<std::string>();
+    // SoundFocusMove and SoundBack are global UX events handled by UIManager
+    // from the active skin; per-widget overrides aren't supported.
     if (auto it = j.find("SoundActivate");   it != j.end()) o.SoundActivate   = it->get<std::string>();
-    if (auto it = j.find("SoundBack");       it != j.end()) o.SoundBack       = it->get<std::string>();
     if (auto it = j.find("SoundSliderTick"); it != j.end()) o.SoundSliderTick = it->get<std::string>();
     if (auto it = j.find("SoundToggle");     it != j.end()) o.SoundToggle     = it->get<std::string>();
 }
@@ -148,6 +148,15 @@ static void ApplyPanel(UIWidget& w, const json& j)
     auto& p = dynamic_cast<Panel&>(w);
     if (const auto it = j.find("background_color"); it != j.end()) p.SkinOverride.PanelBg = ReadColor(*it);
     if (const auto it = j.find("draw_border"); it != j.end()) p.DrawBorder = it->get<bool>();
+}
+
+// Scrim renders from skin.ScrimColor (not PanelBg), so background_color on a
+// Scrim must route to ScrimColor — using ApplyPanel here would silently drop the value.
+static void ApplyScrim(UIWidget& w, const json& j)
+{
+    auto& s = dynamic_cast<Scrim&>(w);
+    if (const auto it = j.find("background_color"); it != j.end()) s.SkinOverride.ScrimColor = ReadColor(*it);
+    if (const auto it = j.find("draw_border"); it != j.end()) s.DrawBorder = it->get<bool>();
 }
 
 static void ApplyLabel(UIWidget& w, const json& j)
@@ -309,7 +318,7 @@ void UILoader::EnsureBuiltins()
     if (!r.empty()) return; // already registered
 
     r["Panel"]                = {[] { return std::make_unique<Panel>(); }, ApplyPanel};
-    r["Scrim"]                = {[] { return std::make_unique<Scrim>(); }, ApplyPanel}; // inherits Panel
+    r["Scrim"]                = {[] { return std::make_unique<Scrim>(); }, ApplyScrim};
     r["Label"]                = {[] { return std::make_unique<Label>(); }, ApplyLabel};
     r["Button"]               = {[] { return std::make_unique<Button>(); }, ApplyButton};
     r["Image"]                = {[] { return std::make_unique<Image>(); }, ApplyImage};

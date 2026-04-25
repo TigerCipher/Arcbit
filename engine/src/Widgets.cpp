@@ -183,7 +183,7 @@ void Scrim::OnCollect(FramePacket&        packet, const UIRect myRect, const f32
                       const TextureHandle whiteTex,
                       const SamplerHandle whiteSampler, const UISkin& skin)
 {
-    Collect(packet, myRect, effectiveOpacity, whiteTex, whiteSampler, skin, skin.OverlayColor);
+    Collect(packet, myRect, effectiveOpacity, whiteTex, whiteSampler, skin, skin.ScrimColor);
 }
 
 // ---------------------------------------------------------------------------

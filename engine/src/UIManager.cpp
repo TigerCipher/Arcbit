@@ -158,28 +158,26 @@ void UIManager::Update(const f32 dt, const Vec2 windowSize, const InputManager& 
 
     if (skipInput) return;
 
-    // Suppress arrow-key focus navigation when a text-consuming widget is focused.
-    // Tab is always routed through ActionTabNext and never suppressed.
-    const bool consumesNav = active->GetFocusedWidget() &&
-            active->GetFocusedWidget()->ConsumesFocusNav();
-
-    // Toggle SDL text input mode when focus transitions to/from a text widget.
-    // Keeping it always-on lets Windows TSF intercept Enter even for non-text widgets.
-    if (consumesNav != _textInputActive) {
-        _textInputActive = consumesNav;
-        if (_textInputActiveCallback) _textInputActiveCallback(_textInputActive);
-    }
+    // Snapshot focus state before any navigation/back input runs. Used to:
+    //  - gate arrow-key navigation (text-consuming widgets swallow arrows)
+    //  - decide whether back-press cancels editing or pops the screen
+    //  - detect focus changes for the focus-move sound below
+    UIWidget* const prevFocused      = active->GetFocusedWidget();
+    const bool      prevConsumesNav  = prevFocused && prevFocused->ConsumesFocusNav();
 
     // Tab always moves focus regardless of whether a text widget is focused.
-    // Track the focused widget before any navigation so we can detect changes.
-    UIWidget* const prevFocused = active->GetFocusedWidget();
     if (input.JustPressed(ActionTabNext)) active->FocusNext();
-    else if (!consumesNav) {
+    else if (!prevConsumesNav) {
         if (input.JustPressed(ActionFocusNext)) active->FocusNext();
         if (input.JustPressed(ActionFocusPrev)) active->FocusPrev();
     }
-    if (active->GetFocusedWidget() != prevFocused && !_skin.SoundFocusMove.empty())
-        AudioManager::PlayOneShot(_skin.SoundFocusMove);
+
+    // Focus-move sound — read from the newly-focused widget's effective skin so
+    // per-widget overrides apply.
+    if (UIWidget* const nowFocused = active->GetFocusedWidget(); nowFocused != prevFocused) {
+        const UISkin src = nowFocused ? nowFocused->GetEffectiveSkin(_skin) : _skin;
+        if (!src.SoundFocusMove.empty()) AudioManager::PlayOneShot(src.SoundFocusMove);
+    }
 
     // Enter activates the focused widget (fires OnClick for buttons, OnConfirm for TextInput).
     if (input.JustPressed(ActionConfirm)) active->ActivateFocused();
@@ -190,7 +188,7 @@ void UIManager::Update(const f32 dt, const Vec2 windowSize, const InputManager& 
     const bool backPressed = input.JustPressed(ActionTextEscape) ||
             input.JustPressed(ActionBack);
     if (backPressed) {
-        if (consumesNav) active->ClearFocus();
+        if (prevConsumesNav) active->ClearFocus();
         else {
             if (!_skin.SoundBack.empty()) AudioManager::PlayOneShot(_skin.SoundBack);
             active->OnBackPressed();
@@ -226,6 +224,16 @@ void UIManager::Update(const f32 dt, const Vec2 windowSize, const InputManager& 
                  UIControlKey::End, UIControlKey::ShiftEnd);
     if (input.JustPressed(ActionTextBackspace)) active->DispatchControlKey(UIControlKey::Backspace);
     if (input.JustPressed(ActionTextDelete)) active->DispatchControlKey(UIControlKey::Delete);
+
+    // Sync SDL text input mode against the *final* focus state for the frame.
+    // Done last so any focus change above (Tab/arrow nav, ClearFocus on back,
+    // ActivateFocused) is reflected before the next SDL pump.
+    UIWidget* const finalFocused = active->GetFocusedWidget();
+    const bool      consumesNav  = finalFocused && finalFocused->ConsumesFocusNav();
+    if (consumesNav != _textInputActive) {
+        _textInputActive = consumesNav;
+        if (_textInputActiveCallback) _textInputActiveCallback(_textInputActive);
+    }
 }
 
 // ---------------------------------------------------------------------------

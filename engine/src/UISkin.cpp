@@ -72,8 +72,10 @@ UISkin UISkin::LoadFromFile(const std::string_view path)
         skin.ScrollThumb        = GetColor(sb, "thumb", skin.ScrollThumb);
         skin.ScrollThumbHovered = GetColor(sb, "thumbHovered", skin.ScrollThumbHovered);
     }
-    skin.AccentColor  = GetColor(j, "accentColor", skin.AccentColor);
-    skin.OverlayColor = GetColor(j, "overlayColor", skin.OverlayColor);
+    skin.AccentColor = GetColor(j, "accentColor", skin.AccentColor);
+    // Accept legacy "overlayColor" key as a fallback so existing skin files keep working.
+    skin.ScrimColor = GetColor(j, "scrimColor",
+                               GetColor(j, "overlayColor", skin.ScrimColor));
 
     if (j.contains("sounds")) {
         const auto& s = j["sounds"];
@@ -108,7 +110,7 @@ bool UISkin::SaveToFile(const std::string_view path) const
         {"thumbHovered", ColorToJson(ScrollThumbHovered)}
     };
     j["accentColor"] = ColorToJson(AccentColor);
-    j["overlayColor"] = ColorToJson(OverlayColor);
+    j["scrimColor"]  = ColorToJson(ScrimColor);
     j["sounds"] = {
         {"focusMove",  SoundFocusMove},
         {"activate",   SoundActivate},

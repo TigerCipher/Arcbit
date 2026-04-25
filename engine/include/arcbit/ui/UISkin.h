@@ -43,7 +43,8 @@ struct UISkin
     // Accent — used for focused/listening states (e.g. rebind screen row)
     Color AccentColor = {0.38f, 0.60f, 0.90f, 1.00f};
 
-    Color OverlayColor = {0.10f, 0.10f, 0.12f, 0.20f};
+    // Scrim — full-screen darkening overlay rendered behind modal screens
+    Color ScrimColor = {0.10f, 0.10f, 0.12f, 0.20f};
 
     // Text input
     Color InputBg          = {0.08f, 0.08f, 0.10f, 1.00f};
@@ -127,7 +128,7 @@ struct UISkinOverride
     std::optional<Color> ScrollThumbHovered;
 
     std::optional<Color> AccentColor;
-    std::optional<Color> OverlayColor;
+    std::optional<Color> ScrimColor;
 
     std::optional<Color> InputBg;
     std::optional<Color> InputBorder;
@@ -146,9 +147,9 @@ struct UISkinOverride
     std::optional<Color> SwitchOff;
     std::optional<Color> SwitchThumb;
 
-    std::optional<std::string> SoundFocusMove;
+    // Note: SoundFocusMove and SoundBack are intentionally NOT overridable per-widget.
+    // They are screen/global UX events handled by UIManager from the active skin.
     std::optional<std::string> SoundActivate;
-    std::optional<std::string> SoundBack;
     std::optional<std::string> SoundSliderTick;
     std::optional<std::string> SoundToggle;
 };
