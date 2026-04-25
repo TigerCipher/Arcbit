@@ -28,8 +28,9 @@ struct DirectionArc
         return HalfWidthDegrees >= 180.0f;
     }
 
-    // Preset: a single arc covering the full 360°. Used as the default for new
-    // colliders so collision behaviour matches the pre-arc baseline.
+    // Preset: a single arc covering the full 360°. Equivalent to leaving
+    // Collider2D::BlockedFrom empty (the cheaper default), but available if a
+    // caller wants to be explicit, or as a base to mutate.
     [[nodiscard]] static std::vector<DirectionArc> AllDirections()
     {
         return { { 0.0f, 180.0f } };

@@ -38,6 +38,7 @@ add_library(arcbit-engine STATIC
     src/InputWidgets.cpp
     src/Loc.cpp
     src/SpatialHash.cpp
+    src/PhysicsWorld.cpp
 )
 
 target_include_directories(arcbit-engine

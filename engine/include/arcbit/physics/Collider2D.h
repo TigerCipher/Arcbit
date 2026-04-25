@@ -30,9 +30,12 @@ enum class ColliderShape : u8
 // COLLIDE WITH; the resolver pairs two colliders only when both
 // (a.Layer & b.Mask) and (b.Layer & a.Mask) are non-zero.
 //
-// BlockedFrom carries the directional arcs that gate which approach
-// directions are treated as blocking contacts; defaults to full coverage. The
-// arc check is wired in Phase 22D — until then the field is inert.
+// BlockedFrom carries the directional arcs that gate which approach directions
+// are treated as blocking contacts. **An empty list means "block from all
+// directions"** (the common case — and avoids per-collider heap allocation for
+// the default). Add explicit arcs only when the prop should pass through some
+// approach directions (trees, ledges, bushes — see DirectionArc.h presets).
+// The arc check itself is wired in Phase 22D — until then the field is inert.
 struct Collider2D
 {
     ColliderShape Shape       = ColliderShape::Box;
@@ -45,6 +48,6 @@ struct Collider2D
     u32                       Layer       = CollisionLayers::Default;
     u32                       Mask        = CollisionLayers::AllLayers;
     bool                      IsTrigger   = false;
-    std::vector<DirectionArc> BlockedFrom = DirectionArc::AllDirections();
+    std::vector<DirectionArc> BlockedFrom = {}; // empty = block from all directions
 };
 } // namespace Arcbit
