@@ -37,6 +37,7 @@ add_library(arcbit-engine STATIC
     src/UILoader.cpp
     src/InputWidgets.cpp
     src/Loc.cpp
+    src/SpatialHash.cpp
 )
 
 target_include_directories(arcbit-engine

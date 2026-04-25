@@ -2,6 +2,7 @@
 #include <arcbit/app/Window.h>
 #include <arcbit/assets/TextureManager.h>
 #include <arcbit/audio/AudioManager.h>
+#include <arcbit/physics/SpatialHash.h>
 #include <arcbit/scene/Scene.h>
 #include <arcbit/settings/Settings.h>
 #include <arcbit/ui/SplashScreen.h>
@@ -24,6 +25,12 @@ Application::Application(const ApplicationConfig& config) : _config(config)
 {
     Log::Init();
     LOG_INFO(Engine, "Arcbit starting");
+
+#ifdef ARCBIT_DEBUG
+    // Cheap startup sanity check on physics broadphase data structures.
+    // Stripped from release builds along with all assertions.
+    SpatialHash::SelfTest();
+#endif
 
     // Seed Settings with config defaults so that GraphicsSettings has sensible
     // values even when no settings file exists yet. ReadFile() will then
