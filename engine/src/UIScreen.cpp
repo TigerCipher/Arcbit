@@ -153,6 +153,14 @@ std::vector<UIWidget*> UIScreen::GatherFocusables() const
     std::vector<UIWidget*> result;
     for (auto& root : _roots)
         CollectFocusables(*root, result);
+
+    // Stable sort so widgets with equal TabOrder (typically the default 0) keep
+    // their tree-traversal order — otherwise nav order is arbitrary on screens
+    // that don't explicitly set tab_order on every focusable.
+    std::ranges::stable_sort(result, [](const UIWidget* a, const UIWidget* b) {
+        return a->TabOrder < b->TabOrder;
+    });
+
     return result;
 }
 
@@ -161,7 +169,11 @@ void UIScreen::ApplyFocus(UIWidget* widget)
     if (_focusedWidget == widget) return;
     if (_focusedWidget) { _focusedWidget->_focused = false; _focusedWidget->OnFocusLost(); }
     _focusedWidget = widget;
-    if (_focusedWidget) { _focusedWidget->_focused = true;  _focusedWidget->OnFocusGained(); }
+    if (_focusedWidget) {
+        LOG_DEBUG(UI, "Focus: {}", _focusedWidget->Name);
+        _focusedWidget->_focused = true;  
+        _focusedWidget->OnFocusGained();
+    }
 }
 
 void UIScreen::FocusNext()
@@ -187,7 +199,11 @@ void UIScreen::FocusPrev()
 
 void UIScreen::ActivateFocused()
 {
-    if (_focusedWidget) _focusedWidget->OnActivate();
+    LOG_DEBUG(UI, "ActivateFocused");
+    if (_focusedWidget) {
+        LOG_DEBUG(UI, "Activate: {}", _focusedWidget->Name);
+        _focusedWidget->OnActivate();
+    }
 }
 
 void UIScreen::ClearFocus()

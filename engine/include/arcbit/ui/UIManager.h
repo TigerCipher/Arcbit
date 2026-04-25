@@ -4,6 +4,7 @@
 #include <arcbit/ui/UISkin.h>
 #include <arcbit/input/InputTypes.h>
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -41,6 +42,10 @@ public:
     // Tab-only focus navigation — active even when a text widget is focused.
     static constexpr ActionID ActionTabNext  = MakeAction("UI_TabNext");
 
+    // Back / cancel — Escape on keyboard, East face button (B/Circle) on gamepad.
+    // Fires UIScreen::OnBackPressed() when no text widget has focus.
+    static constexpr ActionID ActionBack     = MakeAction("UI_Back");
+
     // Modifier state — used to dispatch Shift/Ctrl variants of control keys.
     static constexpr ActionID ActionShiftMod = MakeAction("UI_ShiftMod");
     static constexpr ActionID ActionCtrlMod  = MakeAction("UI_CtrlMod");
@@ -69,6 +74,19 @@ public:
     // Use this in OnUpdate to suppress game input when a menu is open.
     [[nodiscard]] bool HasBlockingScreen() const;
 
+    // Returns true if any screen on the stack has BlocksGame = true.
+    // Application uses this to suppress OnUpdate, OnRender, and scene rendering.
+    [[nodiscard]] bool HasGameBlockingScreen() const;
+
+    // Called with true when a text-consuming widget gains focus, false when it
+    // loses focus. Wire to Window::SetTextInputActive so SDL text input mode is
+    // only active while the user is typing — prevents TSF on Windows from
+    // intercepting Enter and blocking it from reaching SDL_EVENT_KEY_DOWN.
+    void SetTextInputActiveCallback(std::function<void(bool)> fn)
+    {
+        _textInputActiveCallback = std::move(fn);
+    }
+
     void Update(f32 dt, Vec2 windowSize, const InputManager& input);
     void CollectRenderData(FramePacket& packet, Vec2 windowSize);
 
@@ -82,6 +100,9 @@ private:
     bool _mouseDown     = false;
     bool _mouseJustDown = false;
     bool _mouseJustUp   = false;
+
+    std::function<void(bool)> _textInputActiveCallback;
+    bool _textInputActive = false; // tracks current SDL text input mode
 
     // Returns the topmost screen that is not fading out (receives input).
     [[nodiscard]] UIScreen* ActiveInputScreen() const;

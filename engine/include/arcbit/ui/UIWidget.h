@@ -5,6 +5,8 @@
 #include <arcbit/render/RenderHandle.h>
 #include <arcbit/ui/UIRect.h>
 
+#include <arcbit/ui/UISkin.h>
+
 #include <functional>
 #include <memory>
 #include <string>
@@ -14,7 +16,6 @@
 namespace Arcbit
 {
 struct FramePacket;
-struct UISkin;
 
 // Control keys forwarded to focused interactive widgets (e.g. TextInput).
 // Shift variants extend the selection; Ctrl variants jump word boundaries.
@@ -80,9 +81,16 @@ public:
 
     // Whether this widget participates in keyboard/gamepad focus navigation.
     bool Focusable = false;
+    
+    // Sort order for keyboard/gamepad & tab focus navigation. Lower values are focused first.
+    u32 TabOrder = 0;
 
     // Optional identifier used by UIScreen::FindWidget to locate this widget.
     std::string Name;
+
+    // Per-widget skin overrides. Set any field to override that skin property
+    // for this widget's OnCollect call. See UISkinOverride in UISkin.h.
+    UISkinOverride SkinOverride;
 
     virtual ~UIWidget() = default;
 
@@ -96,6 +104,11 @@ public:
 
     // Compute this widget's pixel rect relative to parentRect.
     [[nodiscard]] UIRect ComputeRect(UIRect parent) const;
+
+    // Returns a copy of base with this widget's SkinOverride fields applied.
+    // Called automatically by CollectTree before OnCollect — no need to call
+    // this manually inside OnCollect implementations.
+    [[nodiscard]] UISkin GetEffectiveSkin(const UISkin& base) const;
 
     // Add a child widget. Returns a raw pointer for convenience; ownership
     // stays with this widget.
@@ -149,6 +162,11 @@ protected:
     // True while this widget is the focused widget in its screen.
     // Read in OnCollect to apply a focus highlight (e.g. Button uses it).
     bool _focused = false;
+
+    // Sound key cached from the effective skin during the last OnCollect pass.
+    // Interactive widgets set this in their OnCollect; OnActivate and mouse-click
+    // paths play it via AudioManager::PlayOneShot when the key is non-empty.
+    std::string _interactSound;
 
     std::vector<std::unique_ptr<UIWidget>> _children;
 

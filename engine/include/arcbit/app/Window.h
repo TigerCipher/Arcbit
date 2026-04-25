@@ -102,8 +102,13 @@ public:
     void SetScrollCallback       (std::function<void(f32 deltaY)>                        fn);
 
     // Fires for each SDL_EVENT_TEXT_INPUT event — UTF-8 composed characters.
-    // SDL text input is always active on desktop; enables IME on mobile/console.
     void SetTextInputCallback    (std::function<void(const char* utf8)>                  fn);
+
+    // Enable or disable SDL text input mode. When active, the OS routes
+    // composed characters through SDL_EVENT_TEXT_INPUT; on Windows this also
+    // activates TSF which can intercept Enter. Disable when no text widget is
+    // focused so Enter reliably reaches SDL_EVENT_KEY_DOWN.
+    void SetTextInputActive(bool active);
 
 private:
     // SDL_Window* stored as void* to avoid including SDL3/SDL.h in this header.

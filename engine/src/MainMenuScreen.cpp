@@ -1,23 +1,28 @@
-#include <arcbit/ui/PauseMenuScreen.h>
+#include <arcbit/ui/MainMenuScreen.h>
 #include <arcbit/ui/Widgets.h>
 #include <arcbit/core/Log.h>
+#include <arcbit/core/Loc.h>
 
 namespace Arcbit
 {
-void PauseMenuScreen::OnEnter()
+
+void MainMenuScreen::OnEnter()
 {
     _roots.clear();
 
-    // Load visual layout from file; fall back to built-in if the file is absent.
     if (!LoadLayout(LayoutPath)) {
-        LOG_WARN(UI, "PauseMenuScreen: '{}' not found, using built-in layout", LayoutPath);
+        LOG_WARN(UI, "MainMenuScreen: '{}' not found, using built-in layout", LayoutPath);
         BuildFallback();
         return;
     }
 
-    // Wire callbacks — layout is data, behavior is code.
-    if (auto* btn = FindWidget<Button>("resume-btn"))
-        btn->OnClick = OnResume;
+    if (auto* btn = FindWidget<Button>("new-game-btn"))
+        btn->OnClick = OnNewGame;
+
+    if (auto* btn = FindWidget<Button>("continue-btn")) {
+        btn->Visible = ShowContinue;
+        btn->OnClick = OnContinue;
+    }
 
     if (auto* btn = FindWidget<Button>("controls-btn")) {
         btn->Visible = ShowControls;
@@ -38,65 +43,54 @@ void PauseMenuScreen::OnEnter()
         btn->OnClick = OnQuit;
 }
 
-void PauseMenuScreen::OnBackPressed() { if (OnResume) OnResume(); }
+void MainMenuScreen::OnBackPressed() { if (OnQuit) OnQuit(); }
 
 // ---------------------------------------------------------------------------
 // BuildFallback — inline layout used when the .arcui file is unavailable.
 // ---------------------------------------------------------------------------
 
-void PauseMenuScreen::BuildFallback()
+void MainMenuScreen::BuildFallback()
 {
-    Add<Scrim>();
-
-    const i32 btnCount = 2
-            + (ShowControls ? 1 : 0)
-            + (ShowAudioSettings ? 1 : 0)
-            + (ShowGraphicsSettings ? 1 : 0);
+    const i32 btnCount = 1
+        + (ShowContinue ? 1 : 0)
+        + (ShowControls ? 1 : 0)
+        + (ShowAudioSettings ? 1 : 0)
+        + (ShowGraphicsSettings ? 1 : 0)
+        + 1; // quit
 
     const f32 panelW = 360.0f;
-    const f32 panelH = 80.0f + static_cast<f32>(btnCount) * 56.0f + 20.0f;
+    const f32 panelH = 80.0f + static_cast<f32>(btnCount) * 52.0f + 20.0f;
 
-    UIWidget* bg;
-    if (PanelTexture.IsValid()) {
-        auto* ns         = Add<NineSlice>();
-        ns->Texture      = PanelTexture;
-        ns->Sampler      = PanelSampler;
-        ns->UVBorderLeft = ns->UVBorderRight  = 0.125f;
-        ns->UVBorderTop  = ns->UVBorderBottom = 0.125f;
-        ns->PixelLeft    = ns->PixelRight     = 16.0f;
-        ns->PixelTop     = ns->PixelBottom    = 16.0f;
-        bg               = ns;
-    }
-    else { bg = Add<Panel>(); }
+    auto* bg    = Add<Panel>();
     bg->Size   = {panelW, panelH};
     bg->Anchor = {0.5f, 0.5f};
     bg->Pivot  = {0.5f, 0.5f};
     bg->ZOrder = 1;
 
     auto* title   = bg->AddChild<Label>();
-    title->Text   = "PAUSED";
+    title->Text   = Loc::Get("ui.mainmenu.title");
     title->Align  = TextAlign::Center;
     title->Size   = {panelW, 32.0f};
     title->Anchor = {0.5f, 0.0f};
     title->Pivot  = {0.5f, 0.0f};
-    title->Offset = {0.0f, 20.0f};
+    title->Offset = {0.0f, 16.0f};
     title->ZOrder = 2;
 
     auto* sep   = bg->AddChild<Panel>();
     sep->Size   = {panelW - 40.0f, 1.0f};
     sep->Anchor = {0.5f, 0.0f};
     sep->Pivot  = {0.5f, 0.0f};
-    sep->Offset = {0.0f, 62.0f};
+    sep->Offset = {0.0f, 58.0f};
     sep->ZOrder = 2;
 
-    const f32 btnW = 240.0f;
+    const f32 btnW = 260.0f;
     const f32 btnH = 44.0f;
-    const f32 gap  = 56.0f;
+    const f32 gap  = 52.0f;
 
-    auto MakeButton = [&](const char* label, f32 yOffset, std::function<void()> cb,
-                          Color       textColor = {0, 0, 0, 0}) {
+    auto MakeButton = [&](const char* labelKey, f32 yOffset, std::function<void()> cb,
+                          Color textColor = {0, 0, 0, 0}) {
         auto* btn      = bg->AddChild<Button>();
-        btn->Text      = label;
+        btn->Text      = Loc::Get(labelKey);
         btn->Size      = {btnW, btnH};
         btn->Anchor    = {0.5f, 0.0f};
         btn->Pivot     = {0.5f, 0.0f};
@@ -107,21 +101,26 @@ void PauseMenuScreen::BuildFallback()
         btn->OnClick = std::move(cb);
     };
 
-    f32 y = 72.0f;
-    MakeButton("Resume", y, OnResume);
+    f32 y = 70.0f;
+    MakeButton("ui.mainmenu.new_game", y, OnNewGame);
     y += gap;
+    if (ShowContinue) {
+        MakeButton("ui.mainmenu.continue", y, OnContinue);
+        y += gap;
+    }
     if (ShowControls) {
-        MakeButton("Controls", y, OnControls);
+        MakeButton("ui.pause.controls", y, OnControls);
         y += gap;
     }
     if (ShowAudioSettings) {
-        MakeButton("Audio", y, OnAudioSettings);
+        MakeButton("ui.pause.audio", y, OnAudioSettings);
         y += gap;
     }
     if (ShowGraphicsSettings) {
-        MakeButton("Graphics", y, OnGraphicsSettings);
+        MakeButton("ui.pause.graphics", y, OnGraphicsSettings);
         y += gap;
     }
-    MakeButton("Quit", y, OnQuit, {0.88f, 0.30f, 0.30f, 1.0f});
+    MakeButton("ui.mainmenu.quit", y, OnQuit, {0.88f, 0.30f, 0.30f, 1.0f});
 }
+
 } // namespace Arcbit

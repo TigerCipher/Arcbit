@@ -4,8 +4,8 @@ add_executable(arcbit-game
 )
 
 target_link_libraries(arcbit-game PRIVATE
-    arcbit-engine      # pulls in arcbit-core transitively
-    arcbit_vulkan      # renderer backend DLL (implicit link)
+    arcbit-engine      # pulls in arcbit-core transitively 
+    arcbit-vulkan      # renderer backend DLL (implicit link)
     SDL3::SDL3
 )
 
@@ -70,7 +70,7 @@ add_custom_target(arcbit-assets ALL
 add_dependencies(arcbit-game arcbit-assets)
 
 # arcbit-engine-shaders and arcbit-engine-fonts are defined in engine/CMakeLists.txt.
-add_dependencies(arcbit-game arcbit-engine-shaders arcbit-engine-fonts arcbit-engine-locale-assets arcbit-engine-ui-assets)
+add_dependencies(arcbit-game arcbit-engine-shaders arcbit-engine-fonts arcbit-engine-skins arcbit-engine-locale-assets arcbit-engine-ui-assets)
 
 # Windows: suppress the console window in Release builds.
 if(WIN32)

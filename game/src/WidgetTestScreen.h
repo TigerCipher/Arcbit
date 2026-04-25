@@ -27,6 +27,7 @@ public:
 
 protected:
     void OnEnter() override;
+    void OnBackPressed() override;
     void OnTick(f32 dt, const InputManager& input) override;
 
 private:

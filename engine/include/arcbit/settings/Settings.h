@@ -29,6 +29,9 @@ struct GraphicsSettings
     // Maximum frames per second when VSync is off. 0 = unlimited.
     // Typical values: 60, 120, 144, 165, 240, 250.
     u32  FpsLimit         = 0;
+
+    bool ShowFps       = false; // show the HUD FPS label
+    bool ShowDebugInfo = false; // show the engine debug overlay (sprites, lights, etc.)
 };
 
 // ---------------------------------------------------------------------------

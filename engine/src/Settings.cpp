@@ -287,6 +287,8 @@ void Settings::ReadFile()
         Graphics.ResolutionHeight = g.value("resolution_height", Graphics.ResolutionHeight);
         Graphics.Fullscreen       = g.value("fullscreen",        Graphics.Fullscreen);
         Graphics.FpsLimit         = g.value("fps_limit",         Graphics.FpsLimit);
+        Graphics.ShowFps          = g.value("show_fps",          Graphics.ShowFps);
+        Graphics.ShowDebugInfo    = g.value("show_debug_info",   Graphics.ShowDebugInfo);
     }
 
     // --- Audio ---
@@ -327,6 +329,8 @@ void Settings::WriteFile()
     doc["graphics"]["resolution_height"] = Graphics.ResolutionHeight;
     doc["graphics"]["fullscreen"]        = Graphics.Fullscreen;
     doc["graphics"]["fps_limit"]         = Graphics.FpsLimit;
+    doc["graphics"]["show_fps"]          = Graphics.ShowFps;
+    doc["graphics"]["show_debug_info"]   = Graphics.ShowDebugInfo;
 
     // --- Audio ---
     doc["audio"]["master_volume"] = Audio.MasterVolume;
@@ -376,8 +380,8 @@ void Settings::SaveInputBindings(const InputManager& input)
     for (const ActionID id : input.GetAllActions())
     {
         const std::string_view name = input.GetActionName(id);
-        if (name.empty())
-            continue; // skip unnamed actions — no stable key for the file
+        if (name.empty() || name.starts_with("UI_"))
+            continue; // skip unnamed and internal UI_ actions
 
         nlohmann::json bindingArray = nlohmann::json::array();
         for (const Binding& b : input.GetBindings(id))
@@ -401,8 +405,8 @@ bool Settings::LoadInputBindings(InputManager& input)
     for (const ActionID id : input.GetAllActions())
     {
         const std::string_view name = input.GetActionName(id);
-        if (name.empty())
-            continue;
+        if (name.empty() || name.starts_with("UI_"))
+            continue; // internal UI_ actions always use their default bindings
 
         const std::string nameStr(name);
         if (!s_InputSection["bindings"].contains(nameStr))

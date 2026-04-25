@@ -38,6 +38,7 @@ public:
     PauseMenuScreen() { BlocksInput = true; TransitionSpeed = 6.0f; }
 
     void OnEnter() override;
+    void OnBackPressed() override;
 
 private:
     void BuildFallback(); // inline layout used when LayoutPath file is absent

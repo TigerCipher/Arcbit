@@ -213,20 +213,31 @@ define *how* it gets there. Any controller pairs with any style.
 - [x] Bitmap font atlas generation at startup (bake glyphs into a `TextureHandle`)
 - [x] `DrawText` helper — lays out a string into sprite-batch quads with correct UVs; supports `\n`, `\t`, and `TextAlign` (Left / Center / Right)
 - [x] SDF font variant — dedicated screen-space pipeline; engine ships Roboto-Regular for the built-in debug overlay
-- [x] Debug overlay — FPS, sprite/batch counts, draw calls, lights, chunk culling stats; toggle via `_showDebugOverlay`
+- [x] Debug overlay — FPS, sprite/batch counts, draw calls, lights, chunk culling stats; toggled via `Settings::Graphics.ShowDebugInfo`
 
 ---
 
-## Phase 21: GUI / UI System
-- [ ] Retained-mode widget tree (`Panel`, `Label`, `Button`, `Image`, `ProgressBar`, `NineSlice`)
-- [ ] Anchoring + relative layout (top-left, center, stretch, etc.)
-- [ ] Input routing — UI consumes events before the game when a widget is focused
-- [ ] Theming: font, colors, padding, border textures defined per skin file
-- [ ] `Screen` abstraction — push / pop named screens (title, pause, HUD, dialog)
-- [ ] HUD layer: health bars, minimap placeholder, action icons, status effects
-- [ ] Input rebinding UI (reuses Phase 9 runtime rebind API)
-- [ ] Splash screen system: ordered sequence of logo images shown at startup before the main menu; duration, fade-in/out, and skip-on-input configurable per entry in `project.arcbit`
+## Phase 21: GUI / UI System ✓
+- [x] Retained-mode widget tree (`Panel`, `Scrim`, `Label`, `Button`, `Image`, `ProgressBar`, `NineSlice`, `NineSliceButton`, `NineSliceProgressBar`, `ScrollPanel`)
+- [x] Input widgets: `TextInput`, `Slider`, `Dropdown`, `Checkbox`, `RadioGroup`, `Switch`
+- [x] Anchoring + relative layout (anchor/pivot/offset/size/size-percent per widget)
+- [x] Input routing — `BlocksInput` screens consume input before the game; tab/arrow/confirm/back navigation
+- [x] Theming: `UISkin` JSON with full color palette + sound key fields; per-widget `SkinOverride`; `.arcui` `"skin"` block
+- [x] `Screen` abstraction — push/pop with fade transitions; `BlocksInput` and `BlocksGame` flags
+- [x] `.arcui` JSON layout format + `UILoader`; `text_key` localization; `UILoader::RegisterType` for custom widgets
+- [x] HUD layer (`HudScreen`): FPS label, controlled by `Settings::Graphics.ShowFps`
+- [x] Pause menu (`PauseMenuScreen`): resume, controls, audio, graphics, quit
+- [x] Input rebinding UI (`InputRebindScreen`): multi-binding chip list, key/mouse/gamepad columns
+- [x] Audio settings (`AudioSettingsScreen`): master/music/SFX sliders
+- [x] Graphics settings (`GraphicsSettingsScreen`): VSync, Show FPS, Show Debug Info via `Switch` widgets
+- [x] Splash screen (`SplashScreen`): ordered image sequence, per-entry fade-in/hold/fade-out, skip on confirm, `BlocksGame`
+- [x] Main menu (`MainMenuScreen`): data-driven `.arcui`, hideable buttons, C++ fallback
+- [x] Engine splash: `ArcbitA_withbackground.png` pushed automatically in `Application::Run` before game content
+- [x] Skin sound keys wired: `SoundFocusMove` on nav, `SoundActivate` on button, `SoundToggle` on switch/checkbox, `SoundSliderTick` on slider step, `SoundBack` on back-press
+- [x] Localization: `Loc::Get(key)`, `en.json` engine strings, `text_key` in `.arcui`
+- [x] Engine asset pipeline: `.arcui`, fonts, skins, locale deployed under `assets/engine/` via CMake
 - [ ] Editor integration: GUI layouts designed and previewed in the AvaloniaUI editor (Phase 40)
+- [ ] Dialog screen (Phase 27), Inventory screen (Phase 25)
 
 ---
 
@@ -428,10 +439,13 @@ define *how* it gets there. Any controller pairs with any style.
 *A shared `arcbit-content` DLL consumed by both the engine and the AvaloniaUI editor, ensuring identical read/write logic for all binary asset formats.*
 
 - [ ] `.arcasset` binary container format: magic bytes, version, table of contents, compressed payload sections
-- [ ] Supported asset types in v1: `Texture` (raw pixels + metadata), `SpriteSheet` (texture + UV table), `AnimationClip` (frame list + events), `TileAtlas` (texture + tile property table), `AudioClip` (decoded PCM + loop points)
+- [ ] Supported asset types in v1: `Texture` (raw pixels + metadata), `SpriteSheet` (texture + UV table), `AnimationClip` (frame list + events), `TileAtlas` (texture + tile property table), `AudioClip` (decoded PCM + loop points), `FontAtlas` (glyph texture + metrics), `UILayout` (compiled `.arcui` data blob)
 - [ ] **Texture atlas packer**: bin individual sprites and spritesheets into power-of-two atlas pages grouped by sampler type (nearest / linear); output UV mapping table in `.arcasset` so game code still refers to sprites by name; `arcbit-pack` supports `--atlas` mode for batch packing
-- [ ] Import pipeline: source file (PNG, JSON, WAV, etc.) → validated → packed into `.arcasset`
-- [ ] Export pipeline: `.arcasset` → engine `TextureHandle` / `AudioClip` / etc. at runtime
+- [ ] Import pipeline: source file (PNG, JSON, WAV, TTF, `.arcui`, etc.) → validated → packed into `.arcasset`
+- [ ] Export pipeline: `.arcasset` → engine `TextureHandle` / `AudioClip` / `FontAtlas` / etc. at runtime
+- [ ] **Migration — font registry**: `UILoader::FontRegistry` (currently populated by manual `UILoader::RegisterFont()` calls at startup) should be replaced by asset-driven loading — `FontAtlas` assets are loaded through the content pipeline and auto-registered under their asset key so `.arcui` skin blocks can reference them by name without any hand-wiring in game code
+- [ ] **Migration — UI texture references**: `NineSliceButton`, `NineSliceProgressBar`, and `Image` widgets currently require texture/sampler handles to be assigned in code (no asset registry exists yet); once the content pipeline is in place, `.arcui` files should support a `"texture": "ui/button_normal"` key that resolves to a `TextureHandle` through the asset registry at load time
+- [ ] **Everything through arcbit-pack**: `.arcui` layout files, tilemap atlases, fonts, and all other engine-consumed data must be packed and loaded exclusively via the `arcbit-pack` / `.arcasset` pipeline — no raw file reads at runtime outside of the content tools themselves
 - [ ] **Two-key asset protection system**:
   - *Dev key*: generated per project, stored in the dev's `project.arcbit` (never shipped with the game); baked into the game binary by the packaging step at build time; required to open `.arcasset` files in full editor mode
   - *Mod key*: a separate per-project key included in the shipped `project.arcbit` only when `mod_support = true`; used to sign assets produced by end users in mod editor mode; engine distinguishes mod assets from dev assets by key
@@ -494,6 +508,7 @@ define *how* it gets there. Any controller pairs with any style.
 - [ ] Dialog graph editor (node canvas for Phase 27 conversation trees)
 - [ ] Event sequence editor (timeline view for Phase 35 cutscene commands)
 - [ ] GUI layout designer (drag-and-drop widget canvas for Phase 21 screens)
+- [ ] **Font registry panel** (part of asset browser): register loaded `FontAtlas` instances under string keys so `.arcui` skin blocks can reference fonts by name (`"Font": "roboto"`); call `UILoader::RegisterFont(key, atlas)` at startup from game code or project config; editor needs UI to add/remove/rename entries and preview each registered font
 - [ ] Particle emitter preview panel (live preview of Phase 33 emitter configs)
 - [ ] Visual effects panel: light animator curve editor, weather overlay preview, material effect preview (Phase 34)
 - [ ] Localization tools: key picker, `en.json` export, per-locale coverage report (Phase 28)

@@ -1,14 +1,10 @@
 #include "WidgetTestScreen.h"
 
 #include <arcbit/input/InputManager.h>
-#include <arcbit/ui/UIManager.h>
 
 #include <format>
 
 namespace Arcbit {
-
-// Escape key action registered by UIManager — we reuse it here.
-static constexpr ActionID ActionEsc = MakeAction("UI_TextEscape");
 
 void WidgetTestScreen::OnEnter()
 {
@@ -17,12 +13,13 @@ void WidgetTestScreen::OnEnter()
     UpdateOutput();
 }
 
-void WidgetTestScreen::OnTick(const f32 /*dt*/, const InputManager& input)
+void WidgetTestScreen::OnBackPressed()
 {
-    // Escape closes the screen only when no widget is focused.
-    // (First Escape dismisses TextInput focus; second Escape closes.)
-    if (input.JustPressed(ActionEsc) && !GetFocusedWidget())
-        if (OnClose) OnClose();
+    if (OnClose) OnClose();
+}
+
+void WidgetTestScreen::OnTick(const f32 /*dt*/, const InputManager& /*input*/)
+{
 }
 
 void WidgetTestScreen::WireWidgets()

@@ -23,6 +23,8 @@
 #include <cmath>
 #include <vector>
 
+#include "arcbit/settings/Settings.h"
+
 using namespace Arcbit;
 
 // ---------------------------------------------------------------------------
@@ -106,7 +108,6 @@ protected:
     {
         GetScene().GetConfig().TileSize = TileSize;
         GetScene().GetCamera().Zoom     = InitialZoom;
-        _showDebugOverlay               = false; // FPS shown in HUD instead
 
         RegisterInputActions();
         CreateSamplers();
@@ -119,7 +120,7 @@ protected:
         RegisterWhirlpoolAI();
         CreateMouseLight();
 
-        _bitmapFont.Load("assets/fonts/Roboto-Regular.ttf", 32.0f, FontMode::Bitmap, GetDevice());
+        _bitmapFont.Load("assets/engine/fonts/Roboto-Regular.ttf", 32.0f, FontMode::Bitmap, GetDevice());
 
         // Preload UI textures before the render thread starts (loading in OnUpdate races the queue).
         _uiPanelTex = GetTextures().Load("assets/textures/ui_panel.png");
@@ -750,14 +751,14 @@ private:
 
     void InitScreens()
     {
-        GetUI().SetSkin(UISkin::LoadFromFile("assets/skins/default.skin.json"));
+        GetUI().SetSkin(UISkin::LoadFromFile("assets/engine/skins/default.skin.json"));
 
         auto hud = std::make_unique<HudScreen>();
         _hud = hud.get();
         GetUI().Push(std::move(hud));
 
         // Enable FPS label after Push so the widget pointer is valid.
-        _hud->GetFpsLabel()->Visible = true;
+        _hud->GetFpsLabel()->Visible = Settings::Graphics.ShowFps;
     }
 
     void UpdateHud(const f32 dt)
@@ -770,7 +771,8 @@ private:
         // MP: slightly faster 12-second cycle, offset phase.
         _hud->GetManaBar()->Value   = 0.425f + 0.375f * std::sin(_simTime * 0.524f + 1.0f);
 
-        _hud->GetFpsLabel()->Text = std::format("FPS: {:.0f}", GetFPS());
+        _hud->GetFpsLabel()->Visible = Settings::Graphics.ShowFps;
+        _hud->GetFpsLabel()->Text    = std::format("FPS: {:.0f}", GetFPS());
     }
 
     void ShowPauseMenu()

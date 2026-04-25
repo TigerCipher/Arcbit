@@ -58,6 +58,48 @@ void UIWidget::UpdateTree(const f32  dt, const UIRect      parent, const Vec2   
         OnUpdate(dt, myRect, mousePos, mouseDown, mouseJustDown, mouseJustUp, consumed);
 }
 
+UISkin UIWidget::GetEffectiveSkin(const UISkin& base) const
+{
+    // NOTE: When adding a field to UISkin / UISkinOverride, add a merge line here.
+    const auto& o = SkinOverride;
+    UISkin s = base;
+    if (o.Font)               s.Font               = *o.Font;
+    if (o.FontScale)          s.FontScale          = *o.FontScale;
+    if (o.PanelBg)            s.PanelBg            = *o.PanelBg;
+    if (o.PanelBorder)        s.PanelBorder        = *o.PanelBorder;
+    if (o.ButtonNormal)       s.ButtonNormal       = *o.ButtonNormal;
+    if (o.ButtonHovered)      s.ButtonHovered      = *o.ButtonHovered;
+    if (o.ButtonPressed)      s.ButtonPressed      = *o.ButtonPressed;
+    if (o.ButtonDisabled)     s.ButtonDisabled     = *o.ButtonDisabled;
+    if (o.TextNormal)         s.TextNormal         = *o.TextNormal;
+    if (o.TextDisabled)       s.TextDisabled       = *o.TextDisabled;
+    if (o.TextLabel)          s.TextLabel          = *o.TextLabel;
+    if (o.ProgressBg)         s.ProgressBg         = *o.ProgressBg;
+    if (o.ProgressFill)       s.ProgressFill       = *o.ProgressFill;
+    if (o.ScrollTrack)        s.ScrollTrack        = *o.ScrollTrack;
+    if (o.ScrollThumb)        s.ScrollThumb        = *o.ScrollThumb;
+    if (o.ScrollThumbHovered) s.ScrollThumbHovered = *o.ScrollThumbHovered;
+    if (o.AccentColor)        s.AccentColor        = *o.AccentColor;
+    if (o.ScrimColor)         s.ScrimColor         = *o.ScrimColor;
+    if (o.InputBg)            s.InputBg            = *o.InputBg;
+    if (o.InputBorder)        s.InputBorder        = *o.InputBorder;
+    if (o.InputFocusBorder)   s.InputFocusBorder   = *o.InputFocusBorder;
+    if (o.InputCursor)        s.InputCursor        = *o.InputCursor;
+    if (o.InputPlaceholder)   s.InputPlaceholder   = *o.InputPlaceholder;
+    if (o.SliderThumb)        s.SliderThumb        = *o.SliderThumb;
+    if (o.SliderThumbHovered) s.SliderThumbHovered = *o.SliderThumbHovered;
+    if (o.CheckboxBg)         s.CheckboxBg         = *o.CheckboxBg;
+    if (o.CheckboxHovered)    s.CheckboxHovered    = *o.CheckboxHovered;
+    if (o.CheckboxCheck)      s.CheckboxCheck      = *o.CheckboxCheck;
+    if (o.SwitchOn)           s.SwitchOn           = *o.SwitchOn;
+    if (o.SwitchOff)          s.SwitchOff          = *o.SwitchOff;
+    if (o.SwitchThumb)        s.SwitchThumb        = *o.SwitchThumb;
+    if (o.SoundActivate)      s.SoundActivate      = *o.SoundActivate;
+    if (o.SoundSliderTick)    s.SoundSliderTick    = *o.SoundSliderTick;
+    if (o.SoundToggle)        s.SoundToggle        = *o.SoundToggle;
+    return s;
+}
+
 void UIWidget::CollectTree(FramePacket&        packet, const UIRect          parent, const f32 parentOpacity,
                            const TextureHandle whiteTex, const SamplerHandle whiteSampler,
                            const UISkin&       skin)
@@ -66,10 +108,12 @@ void UIWidget::CollectTree(FramePacket&        packet, const UIRect          par
 
     const UIRect myRect         = ComputeRect(parent);
     const f32    effectiveAlpha = Opacity * parentOpacity;
+    const UISkin effectiveSkin  = GetEffectiveSkin(skin);
 
-    OnCollect(packet, myRect, effectiveAlpha, whiteTex, whiteSampler, skin);
+    OnCollect(packet, myRect, effectiveAlpha, whiteTex, whiteSampler, effectiveSkin);
 
     // Children sorted by ascending ZOrder so higher values render on top.
+    // Children receive the original skin — overrides are per-widget, not cascading.
     std::vector<UIWidget*> sorted;
     sorted.reserve(_children.size());
     for (auto& c : _children) sorted.push_back(c.get());

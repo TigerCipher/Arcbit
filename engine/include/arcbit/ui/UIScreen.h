@@ -29,6 +29,10 @@ public:
     virtual void OnEnter() {}
     virtual void OnExit()  {}
 
+    // Fired by UIManager when Escape or gamepad East is pressed and no
+    // text-consuming widget is focused. Override to implement back navigation.
+    virtual void OnBackPressed() {}
+
     // Called once per game tick before widget UpdateTree.
     // Override in screens that need direct input access (e.g. InputRebindScreen).
     virtual void OnTick(f32 /*dt*/, const InputManager& /*input*/) {}
@@ -39,6 +43,11 @@ public:
     // When true, UIManager::HasBlockingScreen() returns true while this screen
     // is on the stack. Use for pause menus / dialogs; leave false for HUDs.
     bool BlocksInput = false;
+
+    // When true, Application suppresses OnUpdate, OnRender, and scene
+    // update/render while this screen is on the stack. Use for splash screens
+    // and any screen that must appear before game content is visible.
+    bool BlocksGame = false;
 
     // Add a root-level widget. Returns raw ptr; ownership stays here.
     template<typename T, typename... Args>
@@ -116,6 +125,7 @@ private:
     std::unordered_map<std::string, std::string>  _metaStr;
 
     bool            _visible           = true;
+    bool            _skipInputThisFrame = false; // true on the frame the screen was pushed
     TransitionState _transitionState   = TransitionState::Idle;
     f32             _transitionOpacity = 1.0f;
     UIWidget*       _focusedWidget     = nullptr;
