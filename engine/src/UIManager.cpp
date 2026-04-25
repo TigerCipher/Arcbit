@@ -1,5 +1,6 @@
 #include <arcbit/ui/UIManager.h>
 #include <arcbit/ui/UILoader.h>
+#include <arcbit/audio/AudioManager.h>
 #include <arcbit/render/RenderThread.h>
 #include <arcbit/input/InputManager.h>
 #include <arcbit/input/InputTypes.h>
@@ -170,11 +171,15 @@ void UIManager::Update(const f32 dt, const Vec2 windowSize, const InputManager& 
     }
 
     // Tab always moves focus regardless of whether a text widget is focused.
+    // Track the focused widget before any navigation so we can detect changes.
+    UIWidget* const prevFocused = active->GetFocusedWidget();
     if (input.JustPressed(ActionTabNext)) active->FocusNext();
     else if (!consumesNav) {
         if (input.JustPressed(ActionFocusNext)) active->FocusNext();
         if (input.JustPressed(ActionFocusPrev)) active->FocusPrev();
     }
+    if (active->GetFocusedWidget() != prevFocused && !_skin.SoundFocusMove.empty())
+        AudioManager::PlayOneShot(_skin.SoundFocusMove);
 
     // Enter activates the focused widget (fires OnClick for buttons, OnConfirm for TextInput).
     if (input.JustPressed(ActionConfirm)) active->ActivateFocused();
@@ -186,7 +191,10 @@ void UIManager::Update(const f32 dt, const Vec2 windowSize, const InputManager& 
             input.JustPressed(ActionBack);
     if (backPressed) {
         if (consumesNav) active->ClearFocus();
-        else active->OnBackPressed();
+        else {
+            if (!_skin.SoundBack.empty()) AudioManager::PlayOneShot(_skin.SoundBack);
+            active->OnBackPressed();
+        }
     }
 
     // Forward typed characters to the focused widget.

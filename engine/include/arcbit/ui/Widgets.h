@@ -79,8 +79,7 @@ protected:
                    TextureHandle whiteTex, SamplerHandle whiteSampler,
                    const UISkin& skin) override;
 
-    // Fires OnClick when activated by keyboard/gamepad confirm input.
-    void OnActivate() override { if (OnClick) OnClick(); }
+    void OnActivate() override; // fires sound + OnClick
 
 private:
     bool _hovered = false;
@@ -181,7 +180,7 @@ protected:
                    TextureHandle whiteTex, SamplerHandle whiteSampler,
                    const UISkin& skin) override;
 
-    void OnActivate() override { if (OnClick) OnClick(); }
+    void OnActivate() override; // fires sound + OnClick
 
 private:
     bool _hovered = false;

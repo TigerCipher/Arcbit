@@ -1,10 +1,13 @@
 #include <arcbit/ui/Widgets.h>
 #include <arcbit/ui/UISkin.h>
+#include <arcbit/audio/AudioManager.h>
 #include <arcbit/render/RenderThread.h>
 #include <arcbit/render/Font.h>
 
 #include <algorithm>
 #include <string>
+
+namespace { void PlaySound(const std::string& key) { if (!key.empty()) Arcbit::AudioManager::PlayOneShot(key); } }
 
 namespace Arcbit
 {
@@ -230,14 +233,22 @@ void Button::OnUpdate(f32 /*dt*/, const UIRect myRect, const Vec2               
     if (mouseJustUp && _pressed) {
         _pressed = false;
         consumed = true;
+        PlaySound(_interactSound);
         if (OnClick) OnClick();
     }
+}
+
+void Button::OnActivate()
+{
+    PlaySound(_interactSound);
+    if (OnClick) OnClick();
 }
 
 void Button::OnCollect(FramePacket&        packet, const UIRect          myRect, const f32 effectiveOpacity,
                        const TextureHandle whiteTex, const SamplerHandle whiteSampler,
                        const UISkin&       skin)
 {
+    _interactSound = skin.SoundActivate;
     Color bg;
     if (!Enabled) bg = skin.ButtonDisabled;
     else if (_pressed) bg = skin.ButtonPressed;
@@ -316,14 +327,22 @@ void NineSliceButton::OnUpdate(f32 /*dt*/, const UIRect myRect, const Vec2      
     if (mouseJustUp && _pressed) {
         _pressed = false;
         consumed = true;
+        PlaySound(_interactSound);
         if (OnClick) OnClick();
     }
+}
+
+void NineSliceButton::OnActivate()
+{
+    PlaySound(_interactSound);
+    if (OnClick) OnClick();
 }
 
 void NineSliceButton::OnCollect(FramePacket& packet, const UIRect myRect, const f32 effectiveOpacity,
                                 TextureHandle /*whiteTex*/, SamplerHandle /*whiteSampler*/,
                                 const UISkin& skin)
 {
+    _interactSound = skin.SoundActivate;
     if (Texture.IsValid()) {
         Color tint;
         if (!Enabled) tint = TintDisabled;

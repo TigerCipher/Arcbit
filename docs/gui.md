@@ -581,16 +581,20 @@ Game assets go in `game/assets/`.
 - [x] Migrate `AudioSettingsScreen`, `GraphicsSettingsScreen`, `InputRebindScreen` chrome to `.arcui`
 - [ ] Editor integration: load/save `.arcui` from AvaloniaUI editor
 
-### Phase 21D — Engine Screens (planned)
-- [ ] `DialogScreen`: portrait + speaker name + scrolling text + choice buttons
-- [ ] `SplashScreen`: ordered logo/image sequence before main menu - progress bar for loading assets (maybe need to load assets in parallel thread)
-- [ ] `MainMenuScreen` similar to `PauseMenuScreen` with optional image, animation, or video background - music too
-- [ ] `InventoryScreen` stub (populated by Phase 25 item system)
+### Phase 21D — Engine Screens ✓
+- [x] `SplashScreen`: ordered image sequence; per-entry fade-in/hold/fade-out; skip on confirm; `BlocksGame` suppresses game scene and UI below while active
+- [x] `MainMenuScreen`: data-driven via `main_menu.arcui`; `ShowContinue` / `ShowControls` / `ShowAudioSettings` / `ShowGraphicsSettings` flags; C++ fallback
+- [ ] `DialogScreen`: portrait + speaker name + scrolling text + choice buttons (deferred to Phase 27 dialog system)
+- [ ] `InventoryScreen` stub (deferred to Phase 25 item system)
+- [x] `GraphicsSettingsScreen` extended: VSync, Show FPS, and Show Debug Info all use `Switch` widgets; `Settings::Graphics.ShowFps` and `ShowDebugInfo` drive live HUD and debug overlay
+- [x] `UIScreen::BlocksGame` flag + `UIManager::HasGameBlockingScreen()` — suppresses `OnUpdate`, `OnRender`, scene render, and debug overlay; `CollectRenderData` skips screens below the lowest active blocking screen
 
-### Phase 21E — Skin Sounds (planned)
+### Phase 21E — Skin Sounds ✓
 - [x] Sound key fields added to `UISkin`: `SoundFocusMove`, `SoundActivate`, `SoundBack`, `SoundSliderTick`, `SoundToggle`
 - [x] Matching `std::optional<std::string>` in `UISkinOverride`; merge in `GetEffectiveSkin`, deserialize in `ApplySkinBlock`
 - [x] `UISkin::LoadFromFile` / `SaveToFile` handle `"sounds"` JSON block
 - [x] `default.skin.json` ships with all sound keys empty (no sound by default)
-- [ ] Wire sound playback into widget interaction handlers: focus move, button activate, slider tick, toggle
-- [ ] Engine SFX pack: optional `engine-sounds.skin.json` overlay with default sound keys for engine screens
+- [x] Sound key cached per widget in `UIWidget::_interactSound` (set in `OnCollect` from effective skin); played in `OnActivate` and mouse-click paths — no skin access needed at interaction time
+- [x] Button / NineSliceButton → `SoundActivate`; Switch / Checkbox → `SoundToggle`; Slider → `SoundSliderTick` on value step
+- [x] `UIManager` plays `SoundFocusMove` when the focused widget changes (keyboard/gamepad nav); plays `SoundBack` before `OnBackPressed`
+- [ ] Engine SFX pack: optional `engine-sounds.skin.json` overlay with default sound keys for engine screens (deferred — requires audio assets)

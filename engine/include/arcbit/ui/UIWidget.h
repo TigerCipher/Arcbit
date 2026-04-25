@@ -163,6 +163,11 @@ protected:
     // Read in OnCollect to apply a focus highlight (e.g. Button uses it).
     bool _focused = false;
 
+    // Sound key cached from the effective skin during the last OnCollect pass.
+    // Interactive widgets set this in their OnCollect; OnActivate and mouse-click
+    // paths play it via AudioManager::PlayOneShot when the key is non-empty.
+    std::string _interactSound;
+
     std::vector<std::unique_ptr<UIWidget>> _children;
 
 private:

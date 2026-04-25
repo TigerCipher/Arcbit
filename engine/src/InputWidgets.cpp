@@ -1,5 +1,6 @@
 #include <arcbit/ui/InputWidgets.h>
 #include <arcbit/ui/UISkin.h>
+#include <arcbit/audio/AudioManager.h>
 #include <arcbit/render/Font.h>
 #include <arcbit/render/RenderThread.h>
 
@@ -7,6 +8,8 @@
 #include <cmath>
 #include <regex>
 #include <string>
+
+namespace { void PlaySound(const std::string& key) { if (!key.empty()) Arcbit::AudioManager::PlayOneShot(key); } }
 
 namespace Arcbit
 {
@@ -295,11 +298,13 @@ UIRect Slider::ThumbRect(const UIRect track) const
 
 void Slider::SetFromMouseX(const f32 mouseX, const UIRect track)
 {
+    const f32 prevValue = Value;
     f32 t   = (mouseX - track.X) / track.W;
     t       = std::clamp(t, 0.0f, 1.0f);
     f32 raw = Min + t * (Max - Min);
     if (Step > 0.0f) raw = std::round(raw / Step) * Step;
     Value = std::clamp(raw, Min, Max);
+    if (Value != prevValue) PlaySound(_interactSound);
     if (OnChanged) OnChanged(Value);
 }
 
@@ -332,6 +337,7 @@ void Slider::OnCollect(FramePacket&        packet, const UIRect          myRect,
                        const TextureHandle whiteTex, const SamplerHandle whiteSampler,
                        const UISkin&       skin)
 {
+    _interactSound = skin.SoundSliderTick;
     const UIRect track = {
         myRect.X + _thumbHalf, myRect.Y + myRect.H * 0.5f - 3.0f,
         myRect.W - _thumbHalf * 2.0f, 6.0f
@@ -469,6 +475,7 @@ void Dropdown::CollectTree(FramePacket&        packet, const UIRect          par
 
 void Checkbox::OnActivate()
 {
+    PlaySound(_interactSound);
     Checked = !Checked;
     if (OnChanged) OnChanged(Checked);
 }
@@ -491,6 +498,7 @@ void Checkbox::OnCollect(FramePacket&        packet, const UIRect          myRec
                          const TextureHandle whiteTex, const SamplerHandle whiteSampler,
                          const UISkin&       skin)
 {
+    _interactSound = skin.SoundToggle;
     const f32    boxSize = std::min(myRect.H, 18.0f);
     const UIRect box     = {myRect.X, myRect.Y + (myRect.H - boxSize) * 0.5f, boxSize, boxSize};
     const Color  bg      = _hovered ? skin.CheckboxHovered : skin.CheckboxBg;
@@ -570,6 +578,7 @@ void RadioGroup::OnCollect(FramePacket&        packet, const UIRect          myR
 
 void Switch::OnActivate()
 {
+    PlaySound(_interactSound);
     On = !On;
     if (OnChanged) OnChanged(On);
 }
@@ -597,6 +606,7 @@ void Switch::OnCollect(FramePacket&        packet, const UIRect          myRect,
                        const TextureHandle whiteTex, const SamplerHandle whiteSampler,
                        const UISkin&       skin)
 {
+    _interactSound = skin.SoundToggle;
     // Lerp track color between off and on
     const Color trackOff = skin.SwitchOff;
     const Color trackOn  = skin.SwitchOn;

@@ -213,20 +213,31 @@ define *how* it gets there. Any controller pairs with any style.
 - [x] Bitmap font atlas generation at startup (bake glyphs into a `TextureHandle`)
 - [x] `DrawText` helper — lays out a string into sprite-batch quads with correct UVs; supports `\n`, `\t`, and `TextAlign` (Left / Center / Right)
 - [x] SDF font variant — dedicated screen-space pipeline; engine ships Roboto-Regular for the built-in debug overlay
-- [x] Debug overlay — FPS, sprite/batch counts, draw calls, lights, chunk culling stats; toggle via `_showDebugOverlay`
+- [x] Debug overlay — FPS, sprite/batch counts, draw calls, lights, chunk culling stats; toggled via `Settings::Graphics.ShowDebugInfo`
 
 ---
 
-## Phase 21: GUI / UI System
-- [ ] Retained-mode widget tree (`Panel`, `Label`, `Button`, `Image`, `ProgressBar`, `NineSlice`)
-- [ ] Anchoring + relative layout (top-left, center, stretch, etc.)
-- [ ] Input routing — UI consumes events before the game when a widget is focused
-- [ ] Theming: font, colors, padding, border textures defined per skin file
-- [ ] `Screen` abstraction — push / pop named screens (title, pause, HUD, dialog)
-- [ ] HUD layer: health bars, minimap placeholder, action icons, status effects
-- [ ] Input rebinding UI (reuses Phase 9 runtime rebind API)
-- [ ] Splash screen system: ordered sequence of logo images shown at startup before the main menu; duration, fade-in/out, and skip-on-input configurable per entry in `project.arcbit`
+## Phase 21: GUI / UI System ✓
+- [x] Retained-mode widget tree (`Panel`, `Scrim`, `Label`, `Button`, `Image`, `ProgressBar`, `NineSlice`, `NineSliceButton`, `NineSliceProgressBar`, `ScrollPanel`)
+- [x] Input widgets: `TextInput`, `Slider`, `Dropdown`, `Checkbox`, `RadioGroup`, `Switch`
+- [x] Anchoring + relative layout (anchor/pivot/offset/size/size-percent per widget)
+- [x] Input routing — `BlocksInput` screens consume input before the game; tab/arrow/confirm/back navigation
+- [x] Theming: `UISkin` JSON with full color palette + sound key fields; per-widget `SkinOverride`; `.arcui` `"skin"` block
+- [x] `Screen` abstraction — push/pop with fade transitions; `BlocksInput` and `BlocksGame` flags
+- [x] `.arcui` JSON layout format + `UILoader`; `text_key` localization; `UILoader::RegisterType` for custom widgets
+- [x] HUD layer (`HudScreen`): FPS label, controlled by `Settings::Graphics.ShowFps`
+- [x] Pause menu (`PauseMenuScreen`): resume, controls, audio, graphics, quit
+- [x] Input rebinding UI (`InputRebindScreen`): multi-binding chip list, key/mouse/gamepad columns
+- [x] Audio settings (`AudioSettingsScreen`): master/music/SFX sliders
+- [x] Graphics settings (`GraphicsSettingsScreen`): VSync, Show FPS, Show Debug Info via `Switch` widgets
+- [x] Splash screen (`SplashScreen`): ordered image sequence, per-entry fade-in/hold/fade-out, skip on confirm, `BlocksGame`
+- [x] Main menu (`MainMenuScreen`): data-driven `.arcui`, hideable buttons, C++ fallback
+- [x] Engine splash: `ArcbitA_withbackground.png` pushed automatically in `Application::Run` before game content
+- [x] Skin sound keys wired: `SoundFocusMove` on nav, `SoundActivate` on button, `SoundToggle` on switch/checkbox, `SoundSliderTick` on slider step, `SoundBack` on back-press
+- [x] Localization: `Loc::Get(key)`, `en.json` engine strings, `text_key` in `.arcui`
+- [x] Engine asset pipeline: `.arcui`, fonts, skins, locale deployed under `assets/engine/` via CMake
 - [ ] Editor integration: GUI layouts designed and previewed in the AvaloniaUI editor (Phase 40)
+- [ ] Dialog screen (Phase 27), Inventory screen (Phase 25)
 
 ---
 
