@@ -241,12 +241,54 @@ define *how* it gets there. Any controller pairs with any style.
 
 ---
 
-## Phase 22: 2D Physics
-- [ ] Physics library integration (Box2D v3 via vcpkg)
-- [ ] `PhysicsWorld` — fixed-timestep update, gravity config
-- [ ] `Rigidbody2D` + `Collider2D` ECS components (AABB / circle)
-- [ ] Collision event callbacks (enter / stay / exit) forwarded to ECS systems
-- [ ] Debug draw overlay (wireframe collider shapes)
+## Phase 22: 2D Collision
+*Custom kinematic-first collision system — no rigid-body dynamics. Full design
+in `docs/physics.md`. Covers tile collision, sub-tile entity colliders,
+directional arc gating, optional rotation, triggers, and per-style movement
+integration. Box2D was reconsidered and rejected — see `docs/physics.md`
+"Library Choice" for rationale.*
+
+### Phase 22A — Core types & static collision
+- [ ] `BodyKind`, `Collider2D` (Box / Circle, `Rotation` for OBB later, `Layer` / `Mask`, `IsTrigger`) headers + ECS registration
+- [ ] `SpatialHash` (uniform grid keyed on tile size) with insert / remove / query
+- [ ] `PhysicsWorld` skeleton — owns the hash and the tilemap pointer; tick stub
+- [ ] AABB↔AABB and AABB↔Circle narrowphase (rotation==0 fast path)
+- [ ] Tile-synthesized colliders from `TileDef.Solid`, with **greedy-mesh** rectangle merging per chunk; rebuild on tile mutation
+- [ ] Engine default collision layers (`Default`, `Player`, `NPC`, `Enemy`, `Wall`, `Prop`, `Pickup`, `Projectile`, `Trigger`); user layers extensible from bit 9 upward
+- [ ] Debug draw — runtime `PhysicsDebugDraw` flag (kinematic green / static red); toggled from a dev key binding in demo, from the editor IPC channel in Phase 40. **Not** a player-facing setting.
+
+### Phase 22B — `FreeMovement` collision
+- [ ] `PendingMove` component + `FreeMovementIntegrateSystem` writes desired delta into it
+- [ ] `CollisionResolutionSystem` — swept resolution, slide along contact normal, one re-sweep
+- [ ] `Layer` / `Mask` filtering applied in narrowphase
+- [ ] Demo: player can't walk through trees / rocks; slides cleanly along walls
+
+### Phase 22C — Tile movement collision
+- [ ] `PhysicsWorld::QueryTileBlocked(entity, targetTile)` for the plan-then-commit flow
+- [ ] `TileMovementPlanSystem` integrates `SmoothTileMovement` (and `SnapTileMovement` when added) with the query before a tile transition is committed
+- [ ] Demo: tile-style player can't enter solid tiles; queued-input-during-transit semantics preserved
+
+### Phase 22D — Directional collision (arcs)
+- [ ] `DirectionArc` type (`{ centerDeg, halfWidthDeg }`) + preset library (`AllDirections`, `Vertical`, `Horizontal`, `NorthOnly`, ...)
+- [ ] Narrowphase emits a contact direction; arc check filters blocking contacts. Arcs evaluated in the collider's **local frame** so they rotate with the body
+- [ ] `TileDef.BlockedFrom` field (vector of arcs); tile-loader / atlas-spec support
+- [ ] Demo: tree blocks top/bottom approaches but allows walking under from the sides; verify off-axis approach behaviour for free movement
+
+### Phase 22E — Rotated colliders (OBB)
+- [ ] OBB↔OBB narrowphase (SAT) and OBB↔Circle (transform-into-local)
+- [ ] OBB sweep — substepping fallback for Phase 22 (split into N small AABB-of-OBB-bounds steps); promote to true OBB sweep only if profiling demands. Rotation is rare.
+- [ ] Demo: rotated chest blocks correctly; rotating prop carries its directional arc with it
+
+### Phase 22F — Triggers & events
+- [ ] `IsTrigger` flag on `Collider2D`
+- [ ] `TriggerCallback` and `CollisionCallback` ECS components
+- [ ] Per-pair persistent set diffed each tick → `OnEnter` / `OnExit` (and `OnStay` for triggers only)
+- [ ] Demo: door / warp-tile trigger teleports the player on enter
+
+### Phase 22G — Polish & integration
+- [ ] Optional `SmoothTileMovement.AllowPartialMove` — sub-tile stop policy for the rare scenes that want it
+- [ ] Event Bus publishing (`Collision.Started`, `Collision.Ended`, `Trigger.Entered`, `Trigger.Exited`) — wired when Phase 24 lands; callback API is the integration surface until then
+- [ ] Editor integration (Phase 40) — collider authoring panel, live preview, directional-arc arrows on the canvas
 
 ---
 
