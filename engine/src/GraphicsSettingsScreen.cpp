@@ -1,5 +1,6 @@
 #include <arcbit/ui/GraphicsSettingsScreen.h>
 #include <arcbit/ui/Widgets.h>
+#include <arcbit/ui/InputWidgets.h>
 #include <arcbit/settings/Settings.h>
 #include <arcbit/core/Loc.h>
 
@@ -43,9 +44,11 @@ void GraphicsSettingsScreen::OnEnter()
     _roots.clear();
     LoadLayout(LayoutPath);
 
-    _fullscreenBtn = FindWidget<Button>("fullscreen-btn");
-    _vsyncBtn      = FindWidget<Button>("vsync-btn");
-    _fpsLabel      = FindWidget<Label> ("fps-val");
+    _fullscreenBtn   = FindWidget<Button>("fullscreen-btn");
+    _vsyncSwitch     = FindWidget<Switch>("vsync-sw");
+    _showFpsSwitch   = FindWidget<Switch>("show-fps-sw");
+    _showDebugSwitch = FindWidget<Switch>("show-debug-sw");
+    _fpsLabel        = FindWidget<Label> ("fps-val");
 
     if (_fullscreenBtn) {
         _fullscreenBtn->Text    = Settings::Graphics.Fullscreen
@@ -57,14 +60,27 @@ void GraphicsSettingsScreen::OnEnter()
         };
     }
 
-    if (_vsyncBtn) {
-        _vsyncBtn->Text    = Settings::Graphics.VSync
-            ? Loc::Get("ui.common.on") : Loc::Get("ui.common.off");
-        _vsyncBtn->OnClick = [this]() {
-            Settings::Graphics.VSync = !Settings::Graphics.VSync;
+    if (_vsyncSwitch) {
+        _vsyncSwitch->On        = Settings::Graphics.VSync;
+        _vsyncSwitch->OnChanged = [](const bool on) {
+            Settings::Graphics.VSync = on;
             Settings::MarkDirty();
-            if (_vsyncBtn) _vsyncBtn->Text = Settings::Graphics.VSync
-                ? Loc::Get("ui.common.on") : Loc::Get("ui.common.off");
+        };
+    }
+
+    if (_showFpsSwitch) {
+        _showFpsSwitch->On        = Settings::Graphics.ShowFps;
+        _showFpsSwitch->OnChanged = [](const bool on) {
+            Settings::Graphics.ShowFps = on;
+            Settings::MarkDirty();
+        };
+    }
+
+    if (_showDebugSwitch) {
+        _showDebugSwitch->On        = Settings::Graphics.ShowDebugInfo;
+        _showDebugSwitch->OnChanged = [](const bool on) {
+            Settings::Graphics.ShowDebugInfo = on;
+            Settings::MarkDirty();
         };
     }
 

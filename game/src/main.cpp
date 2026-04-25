@@ -23,6 +23,8 @@
 #include <cmath>
 #include <vector>
 
+#include "arcbit/settings/Settings.h"
+
 using namespace Arcbit;
 
 // ---------------------------------------------------------------------------
@@ -106,7 +108,6 @@ protected:
     {
         GetScene().GetConfig().TileSize = TileSize;
         GetScene().GetCamera().Zoom     = InitialZoom;
-        _showDebugOverlay               = false; // FPS shown in HUD instead
 
         RegisterInputActions();
         CreateSamplers();
@@ -757,7 +758,7 @@ private:
         GetUI().Push(std::move(hud));
 
         // Enable FPS label after Push so the widget pointer is valid.
-        _hud->GetFpsLabel()->Visible = true;
+        _hud->GetFpsLabel()->Visible = Settings::Graphics.ShowFps;
     }
 
     void UpdateHud(const f32 dt)
@@ -770,7 +771,8 @@ private:
         // MP: slightly faster 12-second cycle, offset phase.
         _hud->GetManaBar()->Value   = 0.425f + 0.375f * std::sin(_simTime * 0.524f + 1.0f);
 
-        _hud->GetFpsLabel()->Text = std::format("FPS: {:.0f}", GetFPS());
+        _hud->GetFpsLabel()->Visible = Settings::Graphics.ShowFps;
+        _hud->GetFpsLabel()->Text    = std::format("FPS: {:.0f}", GetFPS());
     }
 
     void ShowPauseMenu()

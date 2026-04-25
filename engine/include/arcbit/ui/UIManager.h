@@ -74,6 +74,10 @@ public:
     // Use this in OnUpdate to suppress game input when a menu is open.
     [[nodiscard]] bool HasBlockingScreen() const;
 
+    // Returns true if any screen on the stack has BlocksGame = true.
+    // Application uses this to suppress OnUpdate, OnRender, and scene rendering.
+    [[nodiscard]] bool HasGameBlockingScreen() const;
+
     // Called with true when a text-consuming widget gains focus, false when it
     // loses focus. Wire to Window::SetTextInputActive so SDL text input mode is
     // only active while the user is typing — prevents TSF on Windows from

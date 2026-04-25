@@ -9,13 +9,14 @@ namespace Arcbit
 {
 class Button;
 class Label;
+class Switch;
 
 // ---------------------------------------------------------------------------
-// GraphicsSettingsScreen — toggles for Fullscreen, VSync, and FPS limit.
+// GraphicsSettingsScreen — toggles for Fullscreen, VSync, FPS limit, Show
+// FPS, and Show Debug Info.
 //
-// Visual layout is loaded from LayoutPath (.arcui); callbacks are wired in
-// OnEnter via FindWidget. FPS limit cycles through common presets. Fullscreen
-// fires OnToggleFullscreen so the caller can perform the window swap.
+// VSync, Show FPS, and Show Debug Info are Switch widgets that update
+// Settings::Graphics directly. Fullscreen fires OnToggleFullscreen.
 // Wire OnBack to pop the screen.
 // ---------------------------------------------------------------------------
 class GraphicsSettingsScreen : public UIScreen
@@ -31,9 +32,11 @@ public:
     void OnBackPressed() override;
 
 private:
-    Button* _fullscreenBtn = nullptr;
-    Button* _vsyncBtn      = nullptr;
-    Label*  _fpsLabel      = nullptr;
+    Button* _fullscreenBtn  = nullptr;
+    Switch* _vsyncSwitch    = nullptr;
+    Switch* _showFpsSwitch  = nullptr;
+    Switch* _showDebugSwitch= nullptr;
+    Label*  _fpsLabel       = nullptr;
 
     void CycleFps(int dir);
 };

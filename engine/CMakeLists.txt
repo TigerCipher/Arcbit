@@ -32,6 +32,8 @@ add_library(arcbit-engine STATIC
     src/InputRebindScreen.cpp
     src/AudioSettingsScreen.cpp
     src/GraphicsSettingsScreen.cpp
+    src/SplashScreen.cpp
+    src/MainMenuScreen.cpp
     src/UILoader.cpp
     src/InputWidgets.cpp
     src/Loc.cpp
@@ -106,6 +108,9 @@ add_custom_target(arcbit-engine-ui-assets ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui"
         "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/engine/ui"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ArcbitA_withbackground.png"
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/engine/ui/ArcbitA_withbackground.png"
     COMMENT "Copying engine UI assets to bin/assets/engine/ui/"
     VERBATIM
 )

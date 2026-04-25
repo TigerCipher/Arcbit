@@ -44,6 +44,11 @@ public:
     // is on the stack. Use for pause menus / dialogs; leave false for HUDs.
     bool BlocksInput = false;
 
+    // When true, Application suppresses OnUpdate, OnRender, and scene
+    // update/render while this screen is on the stack. Use for splash screens
+    // and any screen that must appear before game content is visible.
+    bool BlocksGame = false;
+
     // Add a root-level widget. Returns raw ptr; ownership stays here.
     template<typename T, typename... Args>
     T* Add(Args&&... args)

@@ -1,12 +1,12 @@
 {
   "widgets": [
     {
-      "type": "Scrim"
+      "type":   "Scrim"
     },
     {
       "type":   "Panel",
       "name":   "bg",
-      "size":   [420, 300],
+      "size":   [420, 420],
       "anchor": [0.5, 0.5],
       "pivot":  [0.5, 0.5],
       "zorder": 1,
@@ -36,12 +36,18 @@
         { "type": "Button", "name": "fullscreen-btn", "size": [120, 32], "anchor": [0.0, 0.0], "offset": [240, 70],  "focusable": true, "zorder": 2 },
 
         { "type": "Label",  "text_key": "ui.graphics.vsync",      "size": [200, 32], "anchor": [0.0, 0.0], "offset": [20, 118], "zorder": 2 },
-        { "type": "Button", "name": "vsync-btn",      "size": [120, 32], "anchor": [0.0, 0.0], "offset": [240, 118], "focusable": true, "zorder": 2 },
+        { "type": "Switch", "name": "vsync-sw",       "size": [52,  28], "anchor": [0.0, 0.0], "offset": [280, 120], "focusable": true, "zorder": 2 },
 
         { "type": "Label",  "text_key": "ui.graphics.fps_limit",  "size": [200, 32], "anchor": [0.0, 0.0], "offset": [20, 166], "zorder": 2 },
         { "type": "Button", "name": "fps-dec", "text": "<",       "size": [32,  32], "anchor": [0.0, 0.0], "offset": [240, 166], "zorder": 2 },
         { "type": "Label",  "name": "fps-val", "align": "center", "size": [90,  32], "anchor": [0.0, 0.0], "offset": [278, 166], "zorder": 2 },
         { "type": "Button", "name": "fps-inc", "text": ">",       "size": [32,  32], "anchor": [0.0, 0.0], "offset": [374, 166], "zorder": 2 },
+
+        { "type": "Label",  "text_key": "ui.graphics.show_fps",   "size": [200, 32], "anchor": [0.0, 0.0], "offset": [20, 214], "zorder": 2 },
+        { "type": "Switch", "name": "show-fps-sw",    "size": [52,  28], "anchor": [0.0, 0.0], "offset": [280, 216], "focusable": true, "zorder": 2 },
+
+        { "type": "Label",  "text_key": "ui.graphics.show_debug", "size": [200, 32], "anchor": [0.0, 0.0], "offset": [20, 262], "zorder": 2 },
+        { "type": "Switch", "name": "show-debug-sw",  "size": [52,  28], "anchor": [0.0, 0.0], "offset": [280, 264], "focusable": true, "zorder": 2 },
 
         {
           "type":       "Label",
@@ -51,7 +57,7 @@
           "size":       [420, 18],
           "anchor":     [0.5, 0.0],
           "pivot":      [0.5, 0.0],
-          "offset":     [0, 214],
+          "offset":     [0, 310],
           "text_color": [0.50, 0.50, 0.50, 1.0],
           "zorder":     2
         },

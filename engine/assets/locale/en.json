@@ -16,11 +16,18 @@
   "ui.audio.music":  "Music Volume",
   "ui.audio.sfx":    "SFX Volume",
 
-  "ui.graphics.title":      "Graphics Settings",
-  "ui.graphics.fullscreen": "Fullscreen",
-  "ui.graphics.vsync":      "VSync",
-  "ui.graphics.fps_limit":  "FPS Limit",
-  "ui.graphics.vsync_note": "VSync changes apply on restart.",
+  "ui.graphics.title":       "Graphics Settings",
+  "ui.graphics.fullscreen":  "Fullscreen",
+  "ui.graphics.vsync":       "VSync",
+  "ui.graphics.fps_limit":   "FPS Limit",
+  "ui.graphics.show_fps":    "Show FPS",
+  "ui.graphics.show_debug":  "Show Debug Info",
+  "ui.graphics.vsync_note":  "VSync changes apply on restart.",
+
+  "ui.mainmenu.title":    "Main Menu",
+  "ui.mainmenu.new_game": "New Game",
+  "ui.mainmenu.continue": "Continue",
+  "ui.mainmenu.quit":     "Quit",
 
   "ui.rebind.title":      "Input Bindings",
   "ui.rebind.col_action": "Action",

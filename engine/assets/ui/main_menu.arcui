@@ -1,0 +1,52 @@
+{
+  "widgets": [
+    {
+      "type":   "Panel",
+      "name":   "bg",
+      "size":   [360, 400],
+      "anchor": [0.5, 0.5],
+      "pivot":  [0.5, 0.5],
+      "zorder": 1,
+      "children": [
+        {
+          "type":     "Label",
+          "name":     "title",
+          "text_key": "ui.mainmenu.title",
+          "align":    "center",
+          "size":     [360, 32],
+          "anchor":   [0.5, 0.0],
+          "pivot":    [0.5, 0.0],
+          "offset":   [0, 16],
+          "zorder":   2
+        },
+        {
+          "type":   "Panel",
+          "name":   "separator",
+          "size":   [320, 1],
+          "anchor": [0.5, 0.0],
+          "pivot":  [0.5, 0.0],
+          "offset": [0, 58],
+          "zorder": 2
+        },
+
+        { "type": "Button", "name": "new-game-btn", "text_key": "ui.mainmenu.new_game", "size": [260, 44], "anchor": [0.5, 0.0], "pivot": [0.5, 0.0], "offset": [0, 70],  "focusable": true, "zorder": 2 },
+        { "type": "Button", "name": "continue-btn", "text_key": "ui.mainmenu.continue", "size": [260, 44], "anchor": [0.5, 0.0], "pivot": [0.5, 0.0], "offset": [0, 122], "focusable": true, "zorder": 2 },
+        { "type": "Button", "name": "controls-btn", "text_key": "ui.pause.controls",    "size": [260, 44], "anchor": [0.5, 0.0], "pivot": [0.5, 0.0], "offset": [0, 174], "focusable": true, "zorder": 2 },
+        { "type": "Button", "name": "audio-btn",    "text_key": "ui.pause.audio",       "size": [260, 44], "anchor": [0.5, 0.0], "pivot": [0.5, 0.0], "offset": [0, 226], "focusable": true, "zorder": 2 },
+        { "type": "Button", "name": "graphics-btn", "text_key": "ui.pause.graphics",    "size": [260, 44], "anchor": [0.5, 0.0], "pivot": [0.5, 0.0], "offset": [0, 278], "focusable": true, "zorder": 2 },
+        {
+          "type":       "Button",
+          "name":       "quit-btn",
+          "text_key":   "ui.mainmenu.quit",
+          "size":       [260, 44],
+          "anchor":     [0.5, 0.0],
+          "pivot":      [0.5, 0.0],
+          "offset":     [0, 330],
+          "text_color": [0.88, 0.30, 0.30, 1.0],
+          "focusable":  true,
+          "zorder":     2
+        }
+      ]
+    }
+  ]
+}

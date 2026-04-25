@@ -146,14 +146,11 @@ protected:
     // -----------------------------------------------------------------------
 
     // Background clear color used to pre-fill each FramePacket.
-    Color _clearColor = {0.05f, 0.05f, 0.15f, 1.0f};
+    Color _clearColor = {0.0f, 0.0f, 0.0f, 1.0f};
 
     // Target rate for OnUpdate calls. Defaults to 60 Hz.
     // Change before Run() is called; modifying mid-loop is not recommended.
     f32 _fixedTimestep = 1.0f / 60.0f;
-
-    // Show or hide the engine's built-in debug overlay (FPS counter).
-    bool _showDebugOverlay = true;
 
     // The engine's built-in SDF debug font — Roboto loaded at engine startup.
     [[nodiscard]] const FontAtlas& GetDebugFont() const { return _debugFont; }

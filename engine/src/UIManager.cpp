@@ -100,6 +100,13 @@ bool UIManager::HasBlockingScreen() const
     return false;
 }
 
+bool UIManager::HasGameBlockingScreen() const
+{
+    for (const auto& s : _stack)
+        if (s->BlocksGame && !s->IsFadingOut()) return true;
+    return false;
+}
+
 // ---------------------------------------------------------------------------
 // Update
 // ---------------------------------------------------------------------------
@@ -221,7 +228,18 @@ void UIManager::CollectRenderData(FramePacket& packet, const Vec2 windowSize)
 {
     if (_stack.empty()) return;
     const UIRect screenRect = {0.0f, 0.0f, windowSize.X, windowSize.Y};
+
+    // Find the lowest-index game-blocking screen (not fading out).
+    // Skip screens below it — they'd be entirely hidden by the blocker anyway.
+    i32 startIdx = 0;
     for (i32 i = 0; i < static_cast<i32>(_stack.size()); ++i) {
+        if (_stack[i]->BlocksGame && !_stack[i]->IsFadingOut()) {
+            startIdx = i;
+            break;
+        }
+    }
+
+    for (i32 i = startIdx; i < static_cast<i32>(_stack.size()); ++i) {
         UISkin screenSkin          = _skin;
         screenSkin.ScreenLayerBase = i * 1000;
         _stack[i]->Collect(packet, screenRect, screenSkin, _whiteTex, _whiteSampler);

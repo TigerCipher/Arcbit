@@ -1,0 +1,62 @@
+#pragma once
+
+#include <arcbit/ui/UIScreen.h>
+#include <arcbit/render/RenderHandle.h>
+
+#include <functional>
+#include <vector>
+
+namespace Arcbit
+{
+class Image;
+
+// ---------------------------------------------------------------------------
+// SplashEntry — one frame in the splash sequence.
+// ---------------------------------------------------------------------------
+struct SplashEntry
+{
+    TextureHandle Texture;
+    SamplerHandle Sampler;
+    f32 Duration = 2.0f; // total display time including fades
+    f32 FadeIn   = 0.5f; // fade-in duration
+    f32 FadeOut  = 0.5f; // fade-out duration
+};
+
+// ---------------------------------------------------------------------------
+// SplashScreen — plays a sequence of full-screen images before transitioning.
+//
+// Add SplashEntry items to Entries before pushing. Wire OnComplete to push
+// the next screen (and call GetUI().Pop() to remove the splash).
+//
+// The screen appears and fades per-entry via Image.Opacity — the screen-level
+// transition is bypassed (TransitionSpeed = 0). Skip is triggered by Escape
+// or UI_Confirm input (Enter / gamepad South).
+// ---------------------------------------------------------------------------
+class SplashScreen : public UIScreen
+{
+public:
+    std::vector<SplashEntry> Entries;
+    std::function<void()>    OnComplete;
+
+    SplashScreen() { BlocksInput = true; BlocksGame = true; TransitionSpeed = 0.0f; }
+
+    void OnEnter()    override;
+    void OnBackPressed() override;
+
+    void OnTick(f32 dt, const InputManager& input) override;
+
+    // Immediately finish the sequence and fire OnComplete.
+    void Skip();
+
+private:
+    Image* _image        = nullptr;
+    i32    _currentIndex = 0;
+    f32    _entryTimer   = 0.0f;
+    bool   _done         = false;
+
+    void ShowEntry(i32 idx);
+    void Complete();
+
+    [[nodiscard]] f32 ComputeOpacity() const;
+};
+} // namespace Arcbit
