@@ -4,6 +4,7 @@
 #include <arcbit/render/Font.h>
 
 #include <optional>
+#include <string>
 #include <string_view>
 
 namespace Arcbit
@@ -64,6 +65,14 @@ struct UISkin
     Color SwitchOn    = {0.20f, 0.55f, 0.25f, 1.00f};
     Color SwitchOff   = {0.20f, 0.20f, 0.25f, 1.00f};
     Color SwitchThumb = {0.90f, 0.90f, 0.95f, 1.00f};
+
+    // Sound keys — resolved via AudioManager at interaction time; empty = no sound.
+    // Replaced by asset handle references in Phase 36.
+    std::string SoundFocusMove;   // keyboard/gamepad focus navigation
+    std::string SoundActivate;    // button confirm / click
+    std::string SoundBack;        // cancel / close / pop screen
+    std::string SoundSliderTick;  // slider value step
+    std::string SoundToggle;      // checkbox / switch toggle
 
     // Per-screen layer base set by UIManager based on stack index.
     // Ensures sprites from screens higher in the stack always sort above lower ones.
@@ -136,5 +145,11 @@ struct UISkinOverride
     std::optional<Color> SwitchOn;
     std::optional<Color> SwitchOff;
     std::optional<Color> SwitchThumb;
+
+    std::optional<std::string> SoundFocusMove;
+    std::optional<std::string> SoundActivate;
+    std::optional<std::string> SoundBack;
+    std::optional<std::string> SoundSliderTick;
+    std::optional<std::string> SoundToggle;
 };
 } // namespace Arcbit

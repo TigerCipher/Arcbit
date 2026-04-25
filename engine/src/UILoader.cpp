@@ -119,6 +119,11 @@ static void ApplySkinBlock(UISkinOverride& o, const json& j)
     if (auto it = j.find("SwitchOn"); it != j.end()) o.SwitchOn = ReadColor(*it);
     if (auto it = j.find("SwitchOff"); it != j.end()) o.SwitchOff = ReadColor(*it);
     if (auto it = j.find("SwitchThumb"); it != j.end()) o.SwitchThumb = ReadColor(*it);
+    if (auto it = j.find("SoundFocusMove");  it != j.end()) o.SoundFocusMove  = it->get<std::string>();
+    if (auto it = j.find("SoundActivate");   it != j.end()) o.SoundActivate   = it->get<std::string>();
+    if (auto it = j.find("SoundBack");       it != j.end()) o.SoundBack       = it->get<std::string>();
+    if (auto it = j.find("SoundSliderTick"); it != j.end()) o.SoundSliderTick = it->get<std::string>();
+    if (auto it = j.find("SoundToggle");     it != j.end()) o.SoundToggle     = it->get<std::string>();
 }
 
 static void ApplyBase(UIWidget& w, const json& j)

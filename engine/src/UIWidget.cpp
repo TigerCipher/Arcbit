@@ -94,6 +94,11 @@ UISkin UIWidget::GetEffectiveSkin(const UISkin& base) const
     if (o.SwitchOn)           s.SwitchOn           = *o.SwitchOn;
     if (o.SwitchOff)          s.SwitchOff          = *o.SwitchOff;
     if (o.SwitchThumb)        s.SwitchThumb        = *o.SwitchThumb;
+    if (o.SoundFocusMove)     s.SoundFocusMove     = *o.SoundFocusMove;
+    if (o.SoundActivate)      s.SoundActivate      = *o.SoundActivate;
+    if (o.SoundBack)          s.SoundBack          = *o.SoundBack;
+    if (o.SoundSliderTick)    s.SoundSliderTick    = *o.SoundSliderTick;
+    if (o.SoundToggle)        s.SoundToggle        = *o.SoundToggle;
     return s;
 }
 

@@ -75,6 +75,15 @@ UISkin UISkin::LoadFromFile(const std::string_view path)
     skin.AccentColor  = GetColor(j, "accentColor", skin.AccentColor);
     skin.OverlayColor = GetColor(j, "overlayColor", skin.OverlayColor);
 
+    if (j.contains("sounds")) {
+        const auto& s = j["sounds"];
+        if (s.contains("focusMove"))  skin.SoundFocusMove  = s["focusMove"].get<std::string>();
+        if (s.contains("activate"))   skin.SoundActivate   = s["activate"].get<std::string>();
+        if (s.contains("back"))       skin.SoundBack        = s["back"].get<std::string>();
+        if (s.contains("sliderTick")) skin.SoundSliderTick  = s["sliderTick"].get<std::string>();
+        if (s.contains("toggle"))     skin.SoundToggle      = s["toggle"].get<std::string>();
+    }
+
     LOG_DEBUG(Engine, "UISkin: loaded '{}'", path);
     return skin;
 }
@@ -100,6 +109,13 @@ bool UISkin::SaveToFile(const std::string_view path) const
     };
     j["accentColor"] = ColorToJson(AccentColor);
     j["overlayColor"] = ColorToJson(OverlayColor);
+    j["sounds"] = {
+        {"focusMove",  SoundFocusMove},
+        {"activate",   SoundActivate},
+        {"back",       SoundBack},
+        {"sliderTick", SoundSliderTick},
+        {"toggle",     SoundToggle}
+    };
 
     const std::string pathStr(path);
     std::ofstream     file(pathStr);

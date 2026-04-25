@@ -70,7 +70,7 @@ add_custom_target(arcbit-assets ALL
 add_dependencies(arcbit-game arcbit-assets)
 
 # arcbit-engine-shaders and arcbit-engine-fonts are defined in engine/CMakeLists.txt.
-add_dependencies(arcbit-game arcbit-engine-shaders arcbit-engine-fonts arcbit-engine-locale-assets arcbit-engine-ui-assets)
+add_dependencies(arcbit-game arcbit-engine-shaders arcbit-engine-fonts arcbit-engine-skins arcbit-engine-locale-assets arcbit-engine-ui-assets)
 
 # Windows: suppress the console window in Release builds.
 if(WIN32)

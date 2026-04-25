@@ -119,7 +119,7 @@ protected:
         RegisterWhirlpoolAI();
         CreateMouseLight();
 
-        _bitmapFont.Load("assets/fonts/Roboto-Regular.ttf", 32.0f, FontMode::Bitmap, GetDevice());
+        _bitmapFont.Load("assets/engine/fonts/Roboto-Regular.ttf", 32.0f, FontMode::Bitmap, GetDevice());
 
         // Preload UI textures before the render thread starts (loading in OnUpdate races the queue).
         _uiPanelTex = GetTextures().Load("assets/textures/ui_panel.png");
@@ -750,7 +750,7 @@ private:
 
     void InitScreens()
     {
-        GetUI().SetSkin(UISkin::LoadFromFile("assets/skins/default.skin.json"));
+        GetUI().SetSkin(UISkin::LoadFromFile("assets/engine/skins/default.skin.json"));
 
         auto hud = std::make_unique<HudScreen>();
         _hud = hud.get();
