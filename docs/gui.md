@@ -204,58 +204,58 @@ Every widget object has a required `"type"` field and any subset of:
 
 **Panel / Overlay**
 
-| Field | Type | Description |
-|---|---|---|
+| Field              | Type        | Description                           |
+|--------------------|-------------|---------------------------------------|
 | `background_color` | `[r,g,b,a]` | Fill color; alpha=0 uses skin default |
-| `draw_border` | bool | Render skin border |
+| `draw_border`      | bool        | Render skin border                    |
 
 **Label**
 
-| Field | Type | Description |
-|---|---|---|
-| `text` | string | Literal display text |
-| `text_key` | string | Localization key — overrides `text` when present |
-| `align` | `"left"` / `"center"` / `"right"` | Horizontal alignment |
-| `text_color` | `[r,g,b,a]` | Alpha=0 uses skin default |
-| `word_wrap` | bool | Wrap at widget width |
-| `auto_center` | bool | Center text vertically in widget |
+| Field         | Type                              | Description                                      |
+|---------------|-----------------------------------|--------------------------------------------------|
+| `text`        | string                            | Literal display text                             |
+| `text_key`    | string                            | Localization key — overrides `text` when present |
+| `align`       | `"left"` / `"center"` / `"right"` | Horizontal alignment                             |
+| `text_color`  | `[r,g,b,a]`                       | Alpha=0 uses skin default                        |
+| `word_wrap`   | bool                              | Wrap at widget width                             |
+| `auto_center` | bool                              | Center text vertically in widget                 |
 
 **Button**
 
-| Field | Type | Description |
-|---|---|---|
-| `text` | string | Label text |
-| `text_key` | string | Localization key |
+| Field        | Type        | Description               |
+|--------------|-------------|---------------------------|
+| `text`       | string      | Label text                |
+| `text_key`   | string      | Localization key          |
 | `text_color` | `[r,g,b,a]` | Alpha=0 uses skin default |
 
 **ProgressBar**
 
-| Field | Type | Description |
-|---|---|---|
-| `value` | float | Fill fraction 0–1 |
+| Field        | Type        | Description               |
+|--------------|-------------|---------------------------|
+| `value`      | float       | Fill fraction 0–1         |
 | `fill_color` | `[r,g,b,a]` | Alpha=0 uses skin default |
 
 **ScrollPanel**
 
-| Field | Type | Description |
-|---|---|---|
-| `content_height` | float | Total logical height of children |
+| Field             | Type  | Description                      |
+|-------------------|-------|----------------------------------|
+| `content_height`  | float | Total logical height of children |
 | `scrollbar_width` | float | Scrollbar gutter width in pixels |
 
 **NineSlice**
 
-| Field | Type | Description |
-|---|---|---|
-| `tint` | `[r,g,b,a]` | Color tint |
-| `uv_border_left/right/top/bottom` | float | UV-space border fractions (0–1) |
-| `pixel_left/right/top/bottom` | float | Rendered border sizes in screen pixels |
+| Field                             | Type        | Description                            |
+|-----------------------------------|-------------|----------------------------------------|
+| `tint`                            | `[r,g,b,a]` | Color tint                             |
+| `uv_border_left/right/top/bottom` | float       | UV-space border fractions (0–1)        |
+| `pixel_left/right/top/bottom`     | float       | Rendered border sizes in screen pixels |
 
 **Image**
 
-| Field | Type | Description |
-|---|---|---|
-| `tint` | `[r,g,b,a]` | Color tint |
-| `uv` | `[u0,v0,u1,v1]` | UV rect |
+| Field  | Type            | Description |
+|--------|-----------------|-------------|
+| `tint` | `[r,g,b,a]`     | Color tint  |
+| `uv`   | `[u0,v0,u1,v1]` | UV rect     |
 
 ### Meta section
 
@@ -411,12 +411,12 @@ And at the screen level:
 
 **When to use each approach:**
 
-| Scenario | Approach |
-|---|---|
-| Reskin or rearrange an engine screen | Edit its `.arcui` file |
-| Add a new menu with simple button actions | `.arcui` + Lua script |
-| Screens that read/write engine state heavily | C++ `UIScreen` subclass |
-| Dynamic content (chip lists, scroll rows) | C++ `OnEnter` + `RebuildScroll` |
+| Scenario                                     | Approach                        |
+|----------------------------------------------|---------------------------------|
+| Reskin or rearrange an engine screen         | Edit its `.arcui` file          |
+| Add a new menu with simple button actions    | `.arcui` + Lua script           |
+| Screens that read/write engine state heavily | C++ `UIScreen` subclass         |
+| Dynamic content (chip lists, scroll rows)    | C++ `OnEnter` + `RebuildScroll` |
 
 Until Lua scripting lands, game-specific screens are implemented as C++
 `UIScreen` subclasses that call `LoadLayout` for visual layout and wire all
@@ -467,8 +467,18 @@ Color ProgressBg, ProgressFill;
 Color ScrollTrack, ScrollThumb, ScrollThumbHovered;
 Color AccentColor;  // focused/listening states
 Color OverlayColor; // Overlay widget default
+
+// Sound keys — empty string = no sound; resolved via AudioManager at interaction time
+std::string SoundFocusMove;   // keyboard/gamepad focus navigation
+std::string SoundActivate;    // button confirm / click
+std::string SoundBack;        // cancel / close / pop screen
+std::string SoundSliderTick;  // slider value step
+std::string SoundToggle;      // checkbox / switch toggle
+
 i32   ScreenLayerBase; // set per-screen by UIManager; ensures stack order
 ```
+
+Sound keys are plain strings for now; Phase 36 replaces them with asset handle references from `arcbit-pack`. The default engine skin ships with all sound keys empty (no sound).
 
 ---
 
@@ -520,12 +530,21 @@ engine/
     audio_settings.arcui
     graphics_settings.arcui
     input_rebind.arcui
+  assets/fonts/             — engine fonts (deployed to assets/engine/fonts/)
+    Roboto-Regular.ttf
+  assets/skins/             — engine default skin (deployed to assets/engine/skins/)
+    default.skin.json
   assets/locale/            — engine locale strings
     en.json
 ```
 
-Engine assets are copied to `assets/engine/ui/` in the runtime output directory.
-Game assets go in `game/assets/ui/`.
+Engine assets are copied under `assets/engine/` in the runtime output directory:
+- `assets/engine/ui/` — arcui layouts
+- `assets/engine/fonts/` — Roboto-Regular.ttf
+- `assets/engine/skins/` — default.skin.json
+- `assets/engine/locale/` — locale strings
+
+Game assets go in `game/assets/`.
 
 ---
 
@@ -564,6 +583,14 @@ Game assets go in `game/assets/ui/`.
 
 ### Phase 21D — Engine Screens (planned)
 - [ ] `DialogScreen`: portrait + speaker name + scrolling text + choice buttons
-- [ ] `SplashScreen`: ordered logo/image sequence before main menu
-- [ ] `MainMenuScreen` stub: play, settings, quit
+- [ ] `SplashScreen`: ordered logo/image sequence before main menu - progress bar for loading assets (maybe need to load assets in parallel thread)
+- [ ] `MainMenuScreen` similar to `PauseMenuScreen` with optional image, animation, or video background - music too
 - [ ] `InventoryScreen` stub (populated by Phase 25 item system)
+
+### Phase 21E — Skin Sounds (planned)
+- [x] Sound key fields added to `UISkin`: `SoundFocusMove`, `SoundActivate`, `SoundBack`, `SoundSliderTick`, `SoundToggle`
+- [x] Matching `std::optional<std::string>` in `UISkinOverride`; merge in `GetEffectiveSkin`, deserialize in `ApplySkinBlock`
+- [x] `UISkin::LoadFromFile` / `SaveToFile` handle `"sounds"` JSON block
+- [x] `default.skin.json` ships with all sound keys empty (no sound by default)
+- [ ] Wire sound playback into widget interaction handlers: focus move, button activate, slider tick, toggle
+- [ ] Engine SFX pack: optional `engine-sounds.skin.json` overlay with default sound keys for engine screens
