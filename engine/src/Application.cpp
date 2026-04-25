@@ -2,6 +2,7 @@
 #include <arcbit/app/Window.h>
 #include <arcbit/assets/TextureManager.h>
 #include <arcbit/audio/AudioManager.h>
+#include <arcbit/physics/Narrowphase.h>
 #include <arcbit/physics/PhysicsWorld.h>
 #include <arcbit/physics/SpatialHash.h>
 #include <arcbit/scene/Scene.h>
@@ -32,6 +33,7 @@ Application::Application(const ApplicationConfig& config) : _config(config)
     // Stripped from release builds along with all assertions.
     SpatialHash::SelfTest();
     PhysicsWorld::SelfTest();
+    Narrowphase::SelfTest();
 #endif
 
     // Seed Settings with config defaults so that GraphicsSettings has sensible
