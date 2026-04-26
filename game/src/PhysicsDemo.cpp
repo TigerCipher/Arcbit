@@ -1,12 +1,13 @@
 // ---------------------------------------------------------------------------
-// Phase 22A debug-draw verification demo.
+// Phase 22B collision verification demo.
 //
-// Sets up a tiny scene to make the physics debug overlay easy to eyeball:
+// Sets up a tiny scene to exercise the swept resolver end-to-end:
 //   - 17×17 grass field
 //   - 4×4 water square in the middle, marked Solid → tile collider mesh
-//   - Player as a circle collider, WASD to move (no resolver yet, so the
-//     player walks *through* water — point of this demo is to *see* the
-//     colliders, not block them)
+//   - A pair of static box "rocks" so entity-vs-entity blocking + slide is
+//     visible alongside tile blocking
+//   - Player as a circle collider driven by FreeMovement; WASD writes the
+//     intent, the resolver clamps + slides against tiles and props
 //
 // Press F2 to toggle physics debug draw (defaults to ON for instant feedback).
 // ---------------------------------------------------------------------------
@@ -100,10 +101,24 @@ protected:
         GetInput().BindKey(ActionDebugPhysics, Key::F2);
         GetInput().BindKey(ActionToggleGrid, Key::G);
 
-        // Player entity — small blue square sprite + circle collider. The
-        // sprite is just so the eye has something concrete to attach the
-        // collider outline to; the demo doesn't depend on it.
-        auto& world                             = GetScene().GetWorld();
+        // PhysicsWorld is owned by Scene; the first GetPhysics() call lazy-
+        // constructs it using WorldConfig.TileSize as the spatial-hash cell
+        // size and auto-wires the tilemap pointer.
+        PhysicsWorld& physics = GetScene().GetPhysics();
+        physics.SetDebugDraw(true); // ON by default so the demo is self-explanatory
+
+        auto& world = GetScene().GetWorld();
+        CreatePlayer(world, physics);
+        CreateRocks(world, physics);
+
+        LOG_INFO(Game, "PhysicsDemo ready — WASD to move, F2 toggles collider overlay");
+    }
+
+    // Player: blue circle, FreeMovement-driven, ECS-side Collider2D so the
+    // resolver can sweep it. Also registered with the broadphase so it shows
+    // up in QueryAABB hits for other movers.
+    void CreatePlayer(World& world, PhysicsWorld& physics)
+    {
         _player                                 = world.CreateEntity();
         world.GetComponent<Tag>(_player)->Value = "Player";
         auto* t                                 = world.GetTransform(_player);
@@ -116,26 +131,51 @@ protected:
                                                .Layer   = 0,
                                            });
         world.AddComponent<CameraTarget>(_player, CameraTarget{.Lag = 0.05f});
+        world.AddComponent<FreeMovement>(_player, FreeMovement{.Friction = 0.0f});
+        world.AddComponent<PendingMove>(_player, PendingMove{});
 
-        // PhysicsWorld is owned by Scene; the first GetPhysics() call lazy-
-        // constructs it using WorldConfig.TileSize as the spatial-hash cell
-        // size and auto-wires the tilemap pointer.
-        PhysicsWorld& physics = GetScene().GetPhysics();
-        physics.SetDebugDraw(true); // ON by default so the demo is self-explanatory
-
-        // Player collider — circle at half the player's visual size.
-        _playerCollider = Collider2D{
+        const Collider2D playerCollider{
             .Shape  = ColliderShape::Circle,
             .Radius = TileSize * 0.35f,
             .Kind   = BodyKind::Kinematic,
             .Layer  = CollisionLayers::Player,
         };
-        _playerColliderId = physics.RegisterCollider(_player, _playerCollider, t->Position);
-
-        LOG_INFO(Game, "PhysicsDemo ready — WASD to move, F2 toggles collider overlay");
+        world.AddComponent<Collider2D>(_player, playerCollider);
+        // Id discarded — the resolver looks it up by entity each tick.
+        physics.RegisterCollider(_player, playerCollider, t->Position);
     }
 
-    void OnUpdate(const f32 dt) override
+    // Two static box props east of the player so entity-vs-entity blocking +
+    // slide is verifiable separately from the tile collider path.
+    void CreateRocks(World& world, PhysicsWorld& physics)
+    {
+        auto MakeRock = [&](const Vec2 pos, const Vec2 size) {
+            const Entity e                    = world.CreateEntity();
+            world.GetComponent<Tag>(e)->Value = "Rock";
+            auto* t                           = world.GetTransform(e);
+            t->Position                       = pos;
+            t->Scale                          = size;
+            world.AddComponent<SpriteRenderer>(e, SpriteRenderer{
+                                                   .Texture = _whiteTex,
+                                                   .Sampler = _sampler,
+                                                   .Tint    = {0.55f, 0.45f, 0.35f, 1.0f},
+                                                   .Layer   = static_cast<i32>(pos.Y + size.Y * 0.5f),
+                                               });
+            const Collider2D rockCol{
+                .Shape       = ColliderShape::Box,
+                .HalfExtents = {size.X * 0.5f, size.Y * 0.5f},
+                .Kind        = BodyKind::Static,
+                .Layer       = CollisionLayers::Prop,
+            };
+            world.AddComponent<Collider2D>(e, rockCol);
+            (void)physics.RegisterCollider(e, rockCol, pos);
+        };
+
+        MakeRock({TileSize * 8.0f, -TileSize * 1.5f}, {TileSize, TileSize});
+        MakeRock({TileSize * 7.5f, TileSize * 2.5f}, {TileSize * 0.75f, TileSize * 1.5f});
+    }
+
+    void OnUpdate(const f32 /*dt*/) override
     {
         PhysicsWorld& physics = GetScene().GetPhysics();
 
@@ -145,13 +185,13 @@ protected:
         if (GetInput().IsPressed(ActionMoveUp)) dir.Y -= 1.0f;
         if (GetInput().IsPressed(ActionMoveDown)) dir.Y += 1.0f;
 
-        // Simple unbounded movement — collision response lands in 22B.
+        // Drive FreeMovement.Velocity directly — the system integrates it into
+        // PendingMove and the resolver clamps + slides against colliders. No
+        // manual UpdateCollider needed; the resolver refreshes the broadphase
+        // after committing the new position.
         constexpr f32 PlayerSpeed = 240.0f; // world px/sec
-        auto*         t           = GetScene().GetWorld().GetTransform(_player);
-        t->Position               += dir * (PlayerSpeed * dt);
-
-        // Keep the broadphase / AABB cache in sync with the player's position.
-        physics.UpdateCollider(_playerColliderId, _playerCollider, t->Position);
+        auto*         fm          = GetScene().GetWorld().GetComponent<FreeMovement>(_player);
+        fm->Velocity              = dir * PlayerSpeed;
 
         if (GetInput().JustPressed(ActionDebugPhysics)) {
             physics.SetDebugDraw(!physics.GetDebugDraw());
@@ -192,12 +232,10 @@ protected:
     }
 
 private:
-    SamplerHandle            _sampler;
-    TextureHandle            _whiteTex;
-    Entity                   _player = Entity::Invalid();
-    Collider2D               _playerCollider;
-    PhysicsWorld::ColliderId _playerColliderId = PhysicsWorld::InvalidId;
-    bool                     _showGrid         = false;
+    SamplerHandle _sampler;
+    TextureHandle _whiteTex;
+    Entity        _player   = Entity::Invalid();
+    bool          _showGrid = false;
 };
 
 // Entry point — main.cpp calls this when ARCBIT_DEMO_PHYSICS is selected (default).

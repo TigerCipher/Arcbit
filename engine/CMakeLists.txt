@@ -40,6 +40,7 @@ add_library(arcbit-engine STATIC
     src/SpatialHash.cpp
     src/PhysicsWorld.cpp
     src/Narrowphase.cpp
+    src/Sweep.cpp
 )
 
 target_include_directories(arcbit-engine

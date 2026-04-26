@@ -9,9 +9,13 @@
 #include <arcbit/physics/TileColliderRect.h>
 #include <arcbit/render/RenderHandle.h>
 
+#include <unordered_map>
 #include <vector>
 
-namespace Arcbit { struct FramePacket; }
+namespace Arcbit
+{
+struct FramePacket;
+}
 
 namespace Arcbit
 {
@@ -35,13 +39,30 @@ public:
     using ColliderId                      = SpatialHash::ColliderId;
     static constexpr ColliderId InvalidId = ~0u;
 
+    // Per-collider state cached by the broadphase. Owner is the ECS entity that
+    // registered the collider; WorldAABB is the cached bounding AABB used to
+    // remove the collider from the spatial hash on Update/Unregister; the
+    // remaining fields are copies of Collider2D fields needed for resolver
+    // filtering without a component lookup. Active==false means the slot is
+    // vacant (free-list candidate).
+    struct ColliderRecord
+    {
+        Entity   Owner     = Entity::Invalid();
+        AABB     WorldAABB = {};
+        BodyKind Kind      = BodyKind::Kinematic;
+        u32      Layer     = 0;
+        u32      Mask      = 0;
+        bool     IsTrigger = false;
+        bool     Active    = false;
+    };
+
     explicit PhysicsWorld(f32 cellSize);
 
     // Insert a collider associated with `entity`, located at `worldPosition`.
     // The collider data is copied; subsequent edits to the source struct do not
     // affect the broadphase until UpdateCollider is called.
-    [[nodiscard]] ColliderId RegisterCollider(Entity entity, const Collider2D& collider,
-                                              Vec2   worldPosition);
+    ColliderId RegisterCollider(Entity entity, const Collider2D& collider,
+                                Vec2   worldPosition);
 
     // Drop a previously-registered collider. The id becomes invalid; callers
     // should not reuse it. Subsequent calls on a stale id are a no-op (debug
@@ -73,6 +94,19 @@ public:
     [[nodiscard]] const SpatialHash& Hash() const noexcept { return _hash; }
     [[nodiscard]] usize              ColliderCount() const noexcept;
 
+    // O(1) lookup from broadphase ColliderId to its cached record. The
+    // returned reference is invalidated by Register / Unregister / Update.
+    // Asserts in debug builds when `id` is out of range.
+    [[nodiscard]] const ColliderRecord& GetRecord(ColliderId id) const noexcept;
+
+    // Reverse lookup: find the ColliderId an entity registered. Returns
+    // InvalidId when the entity has never registered (or has been
+    // unregistered). Resolver uses this to filter "self" out of broadphase
+    // results, and to call UpdateCollider after committing the new position.
+    // Assumes one collider per entity — re-registration of the same entity
+    // overwrites the previous mapping.
+    [[nodiscard]] ColliderId FindColliderForEntity(Entity entity) const noexcept;
+
     // ---- Debug draw (developer/editor tool, not a player setting) ---------
     // Toggled at runtime by a dev key binding in demo builds and by the editor
     // IPC channel in Phase 40. CollectDebugDraw is a no-op while disabled.
@@ -96,21 +130,19 @@ public:
     static void SelfTest();
 
 private:
-    struct Entry
+    // Pack an entity into a u64 key for the entity→ColliderId map. Generation
+    // is in the upper 32 bits so reused indices with bumped generations get a
+    // distinct key.
+    [[nodiscard]] static constexpr u64 PackEntity(const Entity e) noexcept
     {
-        Entity   Owner     = Entity::Invalid();
-        AABB     WorldAABB = {}; // cached so Remove can reach the right cells
-        BodyKind Kind      = BodyKind::Kinematic;
-        u32      Layer     = 0; // Layer/Mask cached for narrowphase filtering
-        u32      Mask      = 0; // (consumed in a later slice)
-        bool     IsTrigger = false;
-        bool     Active    = false; // false = slot vacant (free-list candidate)
-    };
+        return (static_cast<u64>(e.Generation) << 32) | static_cast<u64>(e.Index);
+    }
 
-    SpatialHash             _hash;
-    std::vector<Entry>      _colliders;
-    std::vector<ColliderId> _freeList;
-    TileMap*                _tilemap   = nullptr;
-    bool                    _debugDraw = false;
+    SpatialHash                         _hash;
+    std::vector<ColliderRecord>         _colliders;
+    std::vector<ColliderId>             _freeList;
+    std::unordered_map<u64, ColliderId> _entityToCollider; // packed entity → id; one collider per entity
+    TileMap*                            _tilemap   = nullptr;
+    bool                                _debugDraw = false;
 };
 } // namespace Arcbit

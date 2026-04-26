@@ -3,6 +3,8 @@
 #include <arcbit/scene/Scene.h>
 #include <arcbit/assets/SpriteSheet.h>
 #include <arcbit/audio/AudioManager.h>
+#include <arcbit/physics/PhysicsWorld.h>
+#include <arcbit/physics/Sweep.h>
 #include <arcbit/render/RenderThread.h>
 #include <arcbit/tilemap/TileMap.h>
 #include <arcbit/core/Log.h>
@@ -74,19 +76,162 @@ namespace
         });
     }
 
-    // Stub resolver for slice 22B.3 — copies the desired delta directly to
-    // Transform with no collision filtering. Replaced in 22B.4 by the real
-    // CollisionResolutionSystem (slab method + slide).
-    void RegisterApplyPendingMoveSystem(World& world)
+    // ---------------------------------------------------------------------
+    // CollisionResolutionSystem helpers — kept inside the anonymous namespace
+    // so the resolver lambda body stays under the 50-line cap.
+    // ---------------------------------------------------------------------
+
+    // Layer/Mask gate between two colliders. Both directions must pair for the
+    // contact to count — matches Collider2D.h's documentation.
+    inline bool LayersPair(const u32 layerA, const u32 maskA,
+                           const u32 layerB, const u32 maskB) noexcept
     {
-        world.RegisterSystem("ApplyPendingMove", [](Scene& scene, f32 /*dt*/) {
-            scene.GetWorld()
-                 .Query<Transform2D, PendingMove>()
-                 .Without<Disabled>()
-                 .ForEach([](Transform2D& t, PendingMove& pm) {
-                     t.Position      = t.Position + pm.DesiredDelta;
-                     pm.DesiredDelta = {};
-                 });
+        return ((layerA & maskB) != 0) && ((layerB & maskA) != 0);
+    }
+
+    // Synthesize the conservative swept AABB enclosing curr → curr+delta.
+    // The broadphase queries against this rect to find any collider the mover
+    // might touch on the way; pairs are then narrowphased with SweepAgainst.
+    inline AABB SweptAABB(const AABB& curr, const Vec2 delta) noexcept
+    {
+        const AABB target = AABB::FromMinMax(
+            { curr.Min.X + delta.X, curr.Min.Y + delta.Y },
+            { curr.Max.X + delta.X, curr.Max.Y + delta.Y });
+        return AABB::FromMinMax(
+            { std::min(curr.Min.X, target.Min.X), std::min(curr.Min.Y, target.Min.Y) },
+            { std::max(curr.Max.X, target.Max.X), std::max(curr.Max.Y, target.Max.Y) });
+    }
+
+    // Sweep one mover against every entity collider returned by the broadphase
+    // and every greedy-meshed tile rect overlapping the swept AABB. Returns
+    // the earliest non-trigger contact (or {ToI=1,Hit=false} if nothing hits).
+    Sweep::Result SweepBroadphaseHits(
+        const Collider2D&                            col,
+        const Vec2                                   origin,
+        const Vec2                                   delta,
+        const PhysicsWorld::ColliderId               selfId,
+        const PhysicsWorld&                          physics,
+        World&                                       ecsWorld,
+        const std::vector<PhysicsWorld::ColliderId>& entityHits,
+        const std::vector<TileColliderRect>&         tileHits)
+    {
+        Sweep::Result best{};
+
+        for (const PhysicsWorld::ColliderId otherId : entityHits) {
+            if (otherId == selfId) continue;
+            const auto& rec = physics.GetRecord(otherId);
+            if (!rec.Active || rec.IsTrigger) continue; // triggers never block (events land in 22F)
+            if (!LayersPair(col.Layer, col.Mask, rec.Layer, rec.Mask)) continue;
+
+            const Collider2D* otherCol = ecsWorld.GetComponent<Collider2D>(rec.Owner);
+            const Transform2D* otherT  = ecsWorld.GetTransform(rec.Owner);
+            if (!otherCol || !otherT) continue; // registered without ECS component → skip
+
+            const Sweep::Result r = Sweep::SweepAgainst(col, origin, delta, *otherCol, otherT->Position);
+            if (r.Hit && r.ToI < best.ToI) best = r;
+        }
+
+        for (const TileColliderRect& rect : tileHits) {
+            if ((rect.Layer & col.Mask) == 0) continue; // tiles always block back; only need self.Mask check
+            Collider2D tileCol{};
+            tileCol.Shape       = ColliderShape::Box;
+            tileCol.HalfExtents = rect.WorldAABB.HalfExtents();
+            tileCol.Kind        = BodyKind::Static;
+            tileCol.Layer       = rect.Layer;
+            const Vec2 tilePos  = rect.WorldAABB.Center();
+
+            const Sweep::Result r = Sweep::SweepAgainst(col, origin, delta, tileCol, tilePos);
+            if (r.Hit && r.ToI < best.ToI) best = r;
+        }
+        return best;
+    }
+
+    // Collision resolution — replaces the 22B.3 ApplyPendingMove stub.
+    //
+    // Two passes:
+    //   1. Entities with (Transform2D, PendingMove, Collider2D): swept resolve
+    //      against the broadphase, slide once along the contact tangent, then
+    //      commit the new position and refresh the broadphase.
+    //   2. Entities with (Transform2D, PendingMove) but NO Collider2D: just
+    //      apply the delta. Preserves the stub behavior so non-physical movers
+    //      (ships, debug props) still update each tick.
+    void RegisterCollisionResolutionSystem(World& world)
+    {
+        world.RegisterSystem("CollisionResolution", [](Scene& scene, f32 /*dt*/) {
+            PhysicsWorld& physics  = scene.GetPhysics();
+            World&        ecsWorld = scene.GetWorld();
+
+            // Reusable scratch — kept outside ForEach so the per-entity work
+            // doesn't churn the heap.
+            std::vector<PhysicsWorld::ColliderId> entityHits;
+            std::vector<TileColliderRect>         tileHits;
+
+            ecsWorld.Query<Transform2D, PendingMove, Collider2D>()
+                    .Without<Disabled>()
+                    .ForEach([&](const Entity e, Transform2D& t, PendingMove& pm, Collider2D& col) {
+                        const Vec2 delta = pm.DesiredDelta;
+                        pm.DesiredDelta  = {};
+                        if (delta.X == 0.0f && delta.Y == 0.0f) return;
+
+                        const PhysicsWorld::ColliderId selfId = physics.FindColliderForEntity(e);
+
+                        // Triggers don't block — apply motion straight through.
+                        if (col.IsTrigger) {
+                            t.Position = t.Position + delta;
+                            if (selfId != PhysicsWorld::InvalidId)
+                                physics.UpdateCollider(selfId, col, t.Position);
+                            return;
+                        }
+
+                        // First sweep — find earliest contact along delta.
+                        const AABB curr  = PhysicsWorld::ComputeWorldAABB(col, t.Position);
+                        const AABB swept = SweptAABB(curr, delta);
+                        physics.QueryAABB(swept, entityHits);
+                        physics.QueryTileColliders(swept, tileHits);
+                        Sweep::Result hit = SweepBroadphaseHits(col, t.Position, delta,
+                                                                selfId, physics, ecsWorld,
+                                                                entityHits, tileHits);
+
+                        Vec2 finalPos = { t.Position.X + delta.X * hit.ToI,
+                                          t.Position.Y + delta.Y * hit.ToI };
+
+                        // Slide: project the unused remainder onto the contact
+                        // tangent, then re-sweep that tangential motion once.
+                        if (hit.Hit) {
+                            const Vec2 remaining = { delta.X * (1.0f - hit.ToI),
+                                                     delta.Y * (1.0f - hit.ToI) };
+                            const Vec2 tangent   = { -hit.Normal.Y, hit.Normal.X };
+                            const f32  proj      = remaining.X * tangent.X + remaining.Y * tangent.Y;
+                            const Vec2 slide     = { tangent.X * proj, tangent.Y * proj };
+
+                            if (slide.X != 0.0f || slide.Y != 0.0f) {
+                                const AABB slideCurr  = PhysicsWorld::ComputeWorldAABB(col, finalPos);
+                                const AABB slideSwept = SweptAABB(slideCurr, slide);
+                                physics.QueryAABB(slideSwept, entityHits);
+                                physics.QueryTileColliders(slideSwept, tileHits);
+                                const Sweep::Result hit2 = SweepBroadphaseHits(
+                                    col, finalPos, slide, selfId, physics, ecsWorld,
+                                    entityHits, tileHits);
+                                finalPos.X += slide.X * hit2.ToI;
+                                finalPos.Y += slide.Y * hit2.ToI;
+                            }
+                        }
+
+                        t.Position = finalPos;
+                        if (selfId != PhysicsWorld::InvalidId)
+                            physics.UpdateCollider(selfId, col, t.Position);
+                    });
+
+            // Pass 2 — entities without a Collider2D still need their delta
+            // applied. Preserves the legacy stub behavior for ships, debug
+            // markers, etc.
+            ecsWorld.Query<Transform2D, PendingMove>()
+                    .Without<Collider2D>()
+                    .Without<Disabled>()
+                    .ForEach([](Transform2D& t, PendingMove& pm) {
+                        t.Position      = t.Position + pm.DesiredDelta;
+                        pm.DesiredDelta = {};
+                    });
         });
     }
 
@@ -563,9 +708,9 @@ void RegisterBuiltinSystems(World& world)
 {
     // Update phase — order matches the blueprint execution table.
     RegisterLifetimeSystem(world);
-    RegisterFreeMovementSystem(world);     // writes PendingMove
-    RegisterSmoothTileMoveSystem(world);   // writes Transform directly (joins PendingMove in 22C)
-    RegisterApplyPendingMoveSystem(world); // consumes PendingMove → Transform (becomes CollisionResolutionSystem in 22B.4)
+    RegisterFreeMovementSystem(world);          // writes PendingMove
+    RegisterSmoothTileMoveSystem(world);        // writes Transform directly (joins PendingMove in 22C)
+    RegisterCollisionResolutionSystem(world);   // sweeps PendingMove → Transform, refreshes broadphase
     RegisterCameraFollowSystem(world);
     RegisterAnimatorStateMachineSystem(world); // evaluates transitions, updates Animator clip
     RegisterAnimatorSystem(world);             // advances frames, fires events, writes UV

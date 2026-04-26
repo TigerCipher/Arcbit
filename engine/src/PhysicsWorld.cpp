@@ -6,6 +6,7 @@
 #include <arcbit/tilemap/TileMap.h>
 
 #include <cmath>
+#include <ranges>
 
 namespace Arcbit
 {
@@ -27,7 +28,7 @@ PhysicsWorld::ColliderId PhysicsWorld::RegisterCollider(const Entity      entity
         _colliders.emplace_back();
     }
 
-    _colliders[id] = Entry{
+    _colliders[id] = ColliderRecord{
         .Owner     = entity,
         .WorldAABB = worldAABB,
         .Kind      = collider.Kind,
@@ -37,6 +38,7 @@ PhysicsWorld::ColliderId PhysicsWorld::RegisterCollider(const Entity      entity
         .Active    = true,
     };
     _hash.Insert(id, worldAABB);
+    _entityToCollider[PackEntity(entity)] = id;
     return id;
 }
 
@@ -47,6 +49,7 @@ void PhysicsWorld::UnregisterCollider(const ColliderId id)
     if (id >= _colliders.size() || !_colliders[id].Active) return;
 
     _hash.Remove(id, _colliders[id].WorldAABB);
+    _entityToCollider.erase(PackEntity(_colliders[id].Owner));
     _colliders[id].Active = false;
     _colliders[id].Owner  = Entity::Invalid();
     _freeList.push_back(id);
@@ -59,8 +62,8 @@ void PhysicsWorld::UpdateCollider(const ColliderId id, const Collider2D& collide
                   "PhysicsWorld::UpdateCollider called with stale or invalid id");
     if (id >= _colliders.size() || !_colliders[id].Active) return;
 
-    Entry&     entry   = _colliders[id];
-    const AABB newAABB = ComputeWorldAABB(collider, worldPosition);
+    ColliderRecord& entry   = _colliders[id];
+    const AABB      newAABB = ComputeWorldAABB(collider, worldPosition);
 
     // Cheap early-out — if the AABB is bit-identical the cell membership is too.
     if (entry.WorldAABB.Min.X == newAABB.Min.X && entry.WorldAABB.Min.Y == newAABB.Min.Y &&
@@ -115,54 +118,67 @@ void PhysicsWorld::QueryTileColliders(const AABB&                    worldAABB,
 
 usize PhysicsWorld::ColliderCount() const noexcept { return _colliders.size() - _freeList.size(); }
 
+const PhysicsWorld::ColliderRecord& PhysicsWorld::GetRecord(const ColliderId id) const noexcept
+{
+    ARCBIT_ASSERT(id < _colliders.size(), "PhysicsWorld::GetRecord: id out of range");
+    return _colliders[id];
+}
+
+PhysicsWorld::ColliderId PhysicsWorld::FindColliderForEntity(const Entity entity) const noexcept
+{
+    const auto it = _entityToCollider.find(PackEntity(entity));
+    return it == _entityToCollider.end() ? InvalidId : it->second;
+}
+
 // ---------------------------------------------------------------------------
 // Debug draw — outlines via four thin world-space sprite quads per rect
 // ---------------------------------------------------------------------------
 
 namespace
 {
-// Layer high enough to sort above tilemap (overlay = 1000000) and entities.
-constexpr i32 PhysicsDebugLayer = 2'000'000;
+    // Layer high enough to sort above tilemap (overlay = 1000000) and entities.
+    constexpr i32 PhysicsDebugLayer = 2'000'000;
 
-// Outline thickness in *world* pixels. Camera zoom scales it visually; if you
-// zoom way in the lines look thicker. Acceptable for a debug tool.
-constexpr f32 PhysicsDebugThickness = 1.5f;
+    // Outline thickness in *world* pixels. Camera zoom scales it visually; if you
+    // zoom way in the lines look thicker. Acceptable for a debug tool.
+    constexpr f32 PhysicsDebugThickness = 1.5f;
 
-void EmitRectOutline(FramePacket& packet, const AABB& aabb, const Color tint,
-                     const TextureHandle whiteTex, const SamplerHandle whiteSampler)
-{
-    const f32  t   = PhysicsDebugThickness;
-    const Vec2 min = aabb.Min;
-    const Vec2 max = aabb.Max;
-    const f32  w   = max.X - min.X;
-    const f32  h   = max.Y - min.Y;
+    void EmitRectOutline(FramePacket&        packet, const AABB&           aabb, const Color tint,
+                         const TextureHandle whiteTex, const SamplerHandle whiteSampler)
+    {
+        const f32  t   = PhysicsDebugThickness;
+        const Vec2 min = aabb.Min;
+        const Vec2 max = aabb.Max;
+        const f32  w   = max.X - min.X;
+        const f32  h   = max.Y - min.Y;
 
-    auto push = [&](const Vec2 center, const Vec2 size) {
-        Sprite s{};
-        s.Texture  = whiteTex;
-        s.Sampler  = whiteSampler;
-        s.Position = center;
-        s.Size     = size;
-        s.Tint     = tint;
-        s.Layer    = PhysicsDebugLayer;
-        packet.Sprites.push_back(s);
-    };
+        auto push = [&](const Vec2 center, const Vec2 size) {
+            Sprite s{};
+            s.Texture  = whiteTex;
+            s.Sampler  = whiteSampler;
+            s.Position = center;
+            s.Size     = size;
+            s.Tint     = tint;
+            s.Layer    = PhysicsDebugLayer;
+            packet.Sprites.push_back(s);
+        };
 
-    // Top edge
-    push({ min.X + w * 0.5f, min.Y + t * 0.5f }, { w, t });
-    // Bottom edge
-    push({ min.X + w * 0.5f, max.Y - t * 0.5f }, { w, t });
-    // Left edge — full height (overlaps top/bottom corners; harmless)
-    push({ min.X + t * 0.5f, min.Y + h * 0.5f }, { t, h });
-    // Right edge
-    push({ max.X - t * 0.5f, min.Y + h * 0.5f }, { t, h });
-}
+        // Top edge
+        push({min.X + w * 0.5f, min.Y + t * 0.5f}, {w, t});
+        // Bottom edge
+        push({min.X + w * 0.5f, max.Y - t * 0.5f}, {w, t});
+        // Left edge — full height (overlaps top/bottom corners; harmless)
+        push({min.X + t * 0.5f, min.Y + h * 0.5f}, {t, h});
+        // Right edge
+        push({max.X - t * 0.5f, min.Y + h * 0.5f}, {t, h});
+    }
 } // anonymous namespace
 
 void PhysicsWorld::CollectDebugDraw(FramePacket&        packet,
                                     const TextureHandle whiteTex,
                                     const SamplerHandle whiteSampler) const
 {
+    // ReSharper disable once CppDFAConstantConditions
     if (!_debugDraw) return;
 
     // Entity colliders — color by kind / trigger flag.
@@ -173,19 +189,20 @@ void PhysicsWorld::CollectDebugDraw(FramePacket&        packet,
     // (especially for grazing contacts at corners).
     for (const auto& entry : _colliders) {
         if (!entry.Active) continue;
-        const Color tint = entry.IsTrigger ? Color::Yellow()
-                            : (entry.Kind == BodyKind::Static) ? Color::Red()
-                                                               : Color::Green();
+        const Color tint = entry.IsTrigger
+                           ? Color::Yellow()
+                           : (entry.Kind == BodyKind::Static)
+                             ? Color::Red()
+                             : Color::Green();
         EmitRectOutline(packet, entry.WorldAABB, tint, whiteTex, whiteSampler);
     }
 
     // Tile colliders — every cached chunk's greedy-meshed rects, in red.
     if (_tilemap) {
-        for (const auto& [key, _] : _tilemap->GetChunks()) {
-            const i32   cx    = static_cast<i32>(static_cast<u32>(key >> 32));
-            const i32   cy    = static_cast<i32>(static_cast<u32>(key));
-            const auto& rects = _tilemap->GetChunkColliders(cx, cy);
-            for (const auto& rect : rects)
+        for (const auto& key : _tilemap->GetChunks() | std::views::keys) {
+            const i32 cx = static_cast<i32>(static_cast<u32>(key >> 32));
+            const i32 cy = static_cast<i32>(static_cast<u32>(key));
+            for (const auto& rects = _tilemap->GetChunkColliders(cx, cy); const auto& rect : rects)
                 EmitRectOutline(packet, rect.WorldAABB, Color::Red(), whiteTex, whiteSampler);
         }
     }
@@ -319,10 +336,10 @@ void PhysicsWorld::SelfTest()
 
         // Pattern A: 3-tile horizontal line at (0,0)-(2,0). Greedy must merge
         // into one 3x1 rect.
-        constexpr u32 OBJECTS = 1;
-        tilemap.SetTile(0, 0, OBJECTS, 1);
-        tilemap.SetTile(1, 0, OBJECTS, 1);
-        tilemap.SetTile(2, 0, OBJECTS, 1);
+        constexpr u32 ObjectsLayer = 1;
+        tilemap.SetTile(0, 0, ObjectsLayer, 1);
+        tilemap.SetTile(1, 0, ObjectsLayer, 1);
+        tilemap.SetTile(2, 0, ObjectsLayer, 1);
 
         pw.QueryTileColliders(AABB::FromMinMax({-1000.0f, -1000.0f}, {1000.0f, 1000.0f}), rects);
         ARCBIT_ASSERT(rects.size() == 1,
@@ -333,10 +350,10 @@ void PhysicsWorld::SelfTest()
 
         // Pattern B: Add a 2x2 block at (5,0)-(6,1). Now the chunk holds
         // a 3x1 rect plus a 2x2 rect — non-adjacent → no merging.
-        tilemap.SetTile(5, 0, OBJECTS, 1);
-        tilemap.SetTile(6, 0, OBJECTS, 1);
-        tilemap.SetTile(5, 1, OBJECTS, 1);
-        tilemap.SetTile(6, 1, OBJECTS, 1);
+        tilemap.SetTile(5, 0, ObjectsLayer, 1);
+        tilemap.SetTile(6, 0, ObjectsLayer, 1);
+        tilemap.SetTile(5, 1, ObjectsLayer, 1);
+        tilemap.SetTile(6, 1, ObjectsLayer, 1);
 
         pw.QueryTileColliders(AABB::FromMinMax({-1000.0f, -1000.0f}, {1000.0f, 1000.0f}), rects);
         ARCBIT_ASSERT(rects.size() == 2,
@@ -352,9 +369,9 @@ void PhysicsWorld::SelfTest()
 
         // Pattern C: SetTile invalidates the chunk cache. Erasing the 3-tile
         // row should leave just the 2x2 block.
-        tilemap.SetTile(0, 0, OBJECTS, 0);
-        tilemap.SetTile(1, 0, OBJECTS, 0);
-        tilemap.SetTile(2, 0, OBJECTS, 0);
+        tilemap.SetTile(0, 0, ObjectsLayer, 0);
+        tilemap.SetTile(1, 0, ObjectsLayer, 0);
+        tilemap.SetTile(2, 0, ObjectsLayer, 0);
         pw.QueryTileColliders(AABB::FromMinMax({-1000.0f, -1000.0f}, {1000.0f, 1000.0f}), rects);
         ARCBIT_ASSERT(rects.size() == 1 &&
                       std::abs(rects[0].WorldAABB.Size().X - 64.0f) < tol &&
@@ -369,13 +386,13 @@ void PhysicsWorld::SelfTest()
         tilemap.RegisterTile(2, wallDef2);
 
         // Clear the 2x2 block first to start with a clean slate at (10, 0).
-        tilemap.SetTile(5, 0, OBJECTS, 0);
-        tilemap.SetTile(6, 0, OBJECTS, 0);
-        tilemap.SetTile(5, 1, OBJECTS, 0);
-        tilemap.SetTile(6, 1, OBJECTS, 0);
+        tilemap.SetTile(5, 0, ObjectsLayer, 0);
+        tilemap.SetTile(6, 0, ObjectsLayer, 0);
+        tilemap.SetTile(5, 1, ObjectsLayer, 0);
+        tilemap.SetTile(6, 1, ObjectsLayer, 0);
 
-        tilemap.SetTile(10, 0, OBJECTS, 1); // Wall
-        tilemap.SetTile(11, 0, OBJECTS, 2); // Prop
+        tilemap.SetTile(10, 0, ObjectsLayer, 1); // Wall
+        tilemap.SetTile(11, 0, ObjectsLayer, 2); // Prop
 
         pw.QueryTileColliders(AABB::FromMinMax({-1000.0f, -1000.0f}, {1000.0f, 1000.0f}), rects);
         ARCBIT_ASSERT(rects.size() == 2,
@@ -385,10 +402,10 @@ void PhysicsWorld::SelfTest()
         // boundary form one rect per chunk. ChunkSize == 16 with tileSize 32
         // means tile X coordinates [0..15] are chunk 0; [16..31] are chunk 1.
         // Clear and lay a 2-tile horizontal strip across the boundary at (15,5)-(16,5).
-        tilemap.SetTile(10, 0, OBJECTS, 0);
-        tilemap.SetTile(11, 0, OBJECTS, 0);
-        tilemap.SetTile(15, 5, OBJECTS, 1);
-        tilemap.SetTile(16, 5, OBJECTS, 1);
+        tilemap.SetTile(10, 0, ObjectsLayer, 0);
+        tilemap.SetTile(11, 0, ObjectsLayer, 0);
+        tilemap.SetTile(15, 5, ObjectsLayer, 1);
+        tilemap.SetTile(16, 5, ObjectsLayer, 1);
         pw.QueryTileColliders(AABB::FromMinMax({-1000.0f, -1000.0f}, {1000.0f, 1000.0f}), rects);
         ARCBIT_ASSERT(rects.size() == 2,
                       "PhysicsWorld::SelfTest: chunk boundary should split greedy mesh");

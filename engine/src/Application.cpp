@@ -5,6 +5,7 @@
 #include <arcbit/physics/Narrowphase.h>
 #include <arcbit/physics/PhysicsWorld.h>
 #include <arcbit/physics/SpatialHash.h>
+#include <arcbit/physics/Sweep.h>
 #include <arcbit/scene/Scene.h>
 #include <arcbit/settings/Settings.h>
 #include <arcbit/ui/SplashScreen.h>
@@ -28,13 +29,14 @@ Application::Application(const ApplicationConfig& config) : _config(config)
     Log::Init();
     LOG_INFO(Engine, "Arcbit starting");
 
-#ifdef ARCBIT_DEBUG
+    #ifdef ARCBIT_DEBUG
     // Cheap startup sanity checks on physics data structures.
     // Stripped from release builds along with all assertions.
     SpatialHash::SelfTest();
     PhysicsWorld::SelfTest();
     Narrowphase::SelfTest();
-#endif
+    Sweep::SelfTest();
+    #endif
 
     // Seed Settings with config defaults so that GraphicsSettings has sensible
     // values even when no settings file exists yet. ReadFile() will then
@@ -157,12 +159,11 @@ void Application::Run()
                 .DebugName = "EngineSplashSampler",
             });
             auto splash = std::make_unique<SplashScreen>();
-            splash->Entries.push_back({ splashTex, splashSampler, 8.0f, 0.5f, 0.5f });
+            splash->Entries.push_back({splashTex, splashSampler, 8.0f, 0.5f, 0.5f});
             splash->OnComplete = [this] { _ui.Pop(); };
             _ui.Push(std::move(splash));
-        } else {
-            LOG_WARN(Engine, "Engine splash image not found — skipping splash screen");
         }
+        else { LOG_WARN(Engine, "Engine splash image not found — skipping splash screen"); }
     }
 
     // Route Window input events to InputManager so JustPressed/JustReleased are
@@ -226,7 +227,7 @@ void Application::Run()
                 if (_scene) _scene->Update(_fixedTimestep);
             }
             _ui.Update(_fixedTimestep,
-                       { static_cast<f32>(_window->GetWidth()), static_cast<f32>(_window->GetHeight()) },
+                       {static_cast<f32>(_window->GetWidth()), static_cast<f32>(_window->GetHeight())},
                        _input);
             accumulator -= static_cast<f64>(_fixedTimestep);
         }
@@ -244,7 +245,7 @@ void Application::Run()
             if (_scene) _scene->CollectRenderData(packet);
         }
         _ui.CollectRenderData(packet,
-            { static_cast<f32>(_window->GetWidth()), static_cast<f32>(_window->GetHeight()) });
+                              {static_cast<f32>(_window->GetWidth()), static_cast<f32>(_window->GetHeight())});
 
         // Capture tilemap stats from the packet before the move — the tilemap
         // system populates these during CollectRenderData on the game thread.
@@ -273,10 +274,10 @@ void Application::Run()
         // recent frame's render statistics from the render thread.
         ++fpsFrameCount;
         if (const f64 fpsElapsed = Duration(Clock::now() - fpsWindowStart).count(); fpsElapsed >= 1.0) {
-            _renderStats            = _renderThread.GetStats();
-            _renderStats.FPS        = static_cast<f32>(static_cast<f64>(fpsFrameCount) / fpsElapsed);
-            fpsFrameCount  = 0;
-            fpsWindowStart = Clock::now();
+            _renderStats     = _renderThread.GetStats();
+            _renderStats.FPS = static_cast<f32>(static_cast<f64>(fpsFrameCount) / fpsElapsed);
+            fpsFrameCount    = 0;
+            fpsWindowStart   = Clock::now();
         }
 
         // --- Asset hot-reload ------------------------------------------------
@@ -339,5 +340,4 @@ void Application::Run()
     LOG_INFO(Engine, "Arcbit shutdown complete");
     Log::Shutdown();
 }
-
 } // namespace Arcbit
