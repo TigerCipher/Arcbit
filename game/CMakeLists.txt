@@ -2,6 +2,7 @@ add_executable(arcbit-game
     src/main.cpp
     src/Common.cpp
     src/PhysicsDemo.cpp
+    src/TileMoveDemo.cpp
     src/WorldDemo.cpp
     src/WidgetTestScreen.cpp
 )

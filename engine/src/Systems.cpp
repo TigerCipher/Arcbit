@@ -237,36 +237,60 @@ namespace
 
     void RegisterSmoothTileMoveSystem(World& world)
     {
+        // Plan-then-commit tile movement (Phase 22C):
+        //   - Idle + queued: snap an origin, compute the candidate target, ask
+        //     the resolver if the path is clear; drop the queued move if not.
+        //   - Mid-lerp: write the interpolated Position and refresh the
+        //     broadphase cache so QueryTileBlocked / FreeMovement see truth.
+        // Movers without a Collider2D bypass the query (and the cache update)
+        // and behave the same as before — preserves stub behavior.
         world.RegisterSystem("SmoothTileMove", [](Scene& scene, const f32 dt) {
-            const f32 ts = scene.GetTileMap().GetTileSize();
-            scene.GetWorld()
-                 .Query<Transform2D, SmoothTileMovement>()
-                 .Without<Disabled>()
-                 .ForEach([ts, dt](Transform2D& t, SmoothTileMovement& stm) {
-                     if (stm.Progress >= 1.0f) {
-                         if (!stm.HasQueued) return;
+            const f32     ts       = scene.GetTileMap().GetTileSize();
+            PhysicsWorld& physics  = scene.GetPhysics();
+            World&        ecsWorld = scene.GetWorld();
 
-                         // Snap to the nearest tile center, then step one tile in QueuedDir.
-                         stm.OriginWorld = {
-                             std::round(t.Position.X / ts) * ts,
-                             std::round(t.Position.Y / ts) * ts,
-                         };
-                         stm.TargetWorld = {
-                             stm.OriginWorld.X + stm.QueuedDir.X * ts,
-                             stm.OriginWorld.Y + stm.QueuedDir.Y * ts,
-                         };
-                         stm.Progress  = 0.0f;
-                         stm.HasQueued = false;
-                         return;
-                     }
+            ecsWorld.Query<Transform2D, SmoothTileMovement>()
+                    .Without<Disabled>()
+                    .ForEach([&](const Entity e, Transform2D& t, SmoothTileMovement& stm) {
+                        const Collider2D* col = ecsWorld.GetComponent<Collider2D>(e);
 
-                     stm.Progress      += stm.Speed * dt;
-                     const f32 alpha    = std::min(stm.Progress, 1.0f);
-                     t.Position         = {
-                         stm.OriginWorld.X + (stm.TargetWorld.X - stm.OriginWorld.X) * alpha,
-                         stm.OriginWorld.Y + (stm.TargetWorld.Y - stm.OriginWorld.Y) * alpha,
-                     };
-                 });
+                        if (stm.Progress >= 1.0f) {
+                            if (!stm.HasQueued) return;
+
+                            const Vec2 origin = {
+                                std::round(t.Position.X / ts) * ts,
+                                std::round(t.Position.Y / ts) * ts,
+                            };
+                            const Vec2 target = {
+                                origin.X + stm.QueuedDir.X * ts,
+                                origin.Y + stm.QueuedDir.Y * ts,
+                            };
+
+                            if (col && physics.QueryTileBlocked(e, *col, origin, target)) {
+                                stm.HasQueued = false; // drop blocked move; stay put
+                                return;
+                            }
+
+                            stm.OriginWorld = origin;
+                            stm.TargetWorld = target;
+                            stm.Progress    = 0.0f;
+                            stm.HasQueued   = false;
+                            return;
+                        }
+
+                        stm.Progress   += stm.Speed * dt;
+                        const f32 alpha = std::min(stm.Progress, 1.0f);
+                        t.Position      = {
+                            stm.OriginWorld.X + (stm.TargetWorld.X - stm.OriginWorld.X) * alpha,
+                            stm.OriginWorld.Y + (stm.TargetWorld.Y - stm.OriginWorld.Y) * alpha,
+                        };
+
+                        if (col) {
+                            const PhysicsWorld::ColliderId id = physics.FindColliderForEntity(e);
+                            if (id != PhysicsWorld::InvalidId)
+                                physics.UpdateCollider(id, *col, t.Position);
+                        }
+                    });
         });
     }
 

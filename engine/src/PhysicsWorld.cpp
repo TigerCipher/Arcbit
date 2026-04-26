@@ -2,11 +2,14 @@
 
 #include <arcbit/core/Assert.h>
 #include <arcbit/core/Log.h>
+#include <arcbit/physics/Sweep.h>
 #include <arcbit/render/RenderThread.h>
 #include <arcbit/tilemap/TileMap.h>
 
+#include <algorithm>
 #include <cmath>
 #include <ranges>
+#include <vector>
 
 namespace Arcbit
 {
@@ -109,6 +112,71 @@ void PhysicsWorld::QueryTileColliders(const AABB&                    worldAABB,
                     out.push_back(rect);
         }
     }
+}
+
+// Synthesize a Box collider from a cached broadphase AABB so the obstacle can
+// be fed to Sweep::SweepAgainst. Conservative when the cached AABB is the
+// bound of a circle or rotated box — same fallback the resolver tolerates.
+namespace
+{
+    Collider2D BoxFromAABB(const AABB& aabb, const u32 layer) noexcept
+    {
+        Collider2D c{};
+        c.Shape       = ColliderShape::Box;
+        c.HalfExtents = aabb.HalfExtents();
+        c.Kind        = BodyKind::Static;
+        c.Layer       = layer;
+        return c;
+    }
+
+    inline bool LayersPair(const u32 layerA, const u32 maskA,
+                           const u32 layerB, const u32 maskB) noexcept
+    {
+        return ((layerA & maskB) != 0) && ((layerB & maskA) != 0);
+    }
+} // anonymous namespace
+
+bool PhysicsWorld::QueryTileBlocked(const Entity      mover, const Collider2D& col,
+                                    const Vec2        originWorld, const Vec2  targetWorld) const noexcept
+{
+    const Vec2 delta = {targetWorld.X - originWorld.X, targetWorld.Y - originWorld.Y};
+    if (delta.X == 0.0f && delta.Y == 0.0f) return false; // zero-length move can't hit anything new
+
+    // Conservative swept AABB enclosing the path. Same union trick the resolver uses.
+    const AABB curr   = ComputeWorldAABB(col, originWorld);
+    const AABB target = ComputeWorldAABB(col, targetWorld);
+    const AABB swept  = AABB::FromMinMax(
+        {std::min(curr.Min.X, target.Min.X), std::min(curr.Min.Y, target.Min.Y)},
+        {std::max(curr.Max.X, target.Max.X), std::max(curr.Max.Y, target.Max.Y)});
+
+    const ColliderId selfId = FindColliderForEntity(mover);
+
+    // Entity broadphase pass.
+    std::vector<ColliderId> entityHits;
+    QueryAABB(swept, entityHits);
+    for (const ColliderId otherId : entityHits) {
+        if (otherId == selfId) continue;
+        const ColliderRecord& rec = _colliders[otherId];
+        if (!rec.Active || rec.IsTrigger) continue;
+        if (!LayersPair(col.Layer, col.Mask, rec.Layer, rec.Mask)) continue;
+
+        const Collider2D obstacle = BoxFromAABB(rec.WorldAABB, rec.Layer);
+        if (Sweep::SweepAgainst(col, originWorld, delta, obstacle, rec.WorldAABB.Center()).Hit)
+            return true;
+    }
+
+    // Tile collider pass — tiles always block back, so we only check self.Mask.
+    std::vector<TileColliderRect> tileHits;
+    QueryTileColliders(swept, tileHits);
+    for (const TileColliderRect& rect : tileHits) {
+        if ((rect.Layer & col.Mask) == 0) continue;
+
+        const Collider2D obstacle = BoxFromAABB(rect.WorldAABB, rect.Layer);
+        if (Sweep::SweepAgainst(col, originWorld, delta, obstacle, rect.WorldAABB.Center()).Hit)
+            return true;
+    }
+
+    return false;
 }
 
 usize PhysicsWorld::ColliderCount() const noexcept { return _colliders.size() - _freeList.size(); }
@@ -406,6 +474,78 @@ void PhysicsWorld::SelfTest()
                       "PhysicsWorld::SelfTest: chunk boundary should split greedy mesh");
 
         LOG_DEBUG(Engine, "PhysicsWorld::SelfTest: greedy tile mesh passed");
+    }
+
+    // ---- QueryTileBlocked ----------------------------------------------------
+    // Plan-then-commit yes/no: clear path, blocked by static box, blocked by
+    // tile rect, ignored trigger, self-filter works.
+    {
+        TileMap tilemap;
+        tilemap.SetTileSize(32.0f);
+        TileDef wallDef{};
+        wallDef.Solid = true;
+        tilemap.RegisterTile(1, wallDef);
+
+        PhysicsWorld pw(32.0f);
+        pw.SetTileMap(&tilemap);
+
+        const Collider2D moverCol{
+            .Shape       = ColliderShape::Box,
+            .HalfExtents = {4.0f, 4.0f},
+            .Kind        = BodyKind::Kinematic,
+            .Layer       = CollisionLayers::Player,
+        };
+        const Entity moverEntity{.Index = 10, .Generation = 0};
+        (void)pw.RegisterCollider(moverEntity, moverCol, {0.0f, 0.0f});
+
+        // Static box obstacle on the +X axis.
+        const Collider2D obstacleCol{
+            .Shape       = ColliderShape::Box,
+            .HalfExtents = {6.0f, 6.0f},
+            .Kind        = BodyKind::Static,
+            .Layer       = CollisionLayers::Prop,
+        };
+        const Entity obstacleEntity{.Index = 11, .Generation = 0};
+        (void)pw.RegisterCollider(obstacleEntity, obstacleCol, {50.0f, 0.0f});
+
+        // Trigger at (0, 50).
+        const Collider2D triggerCol{
+            .Shape       = ColliderShape::Box,
+            .HalfExtents = {6.0f, 6.0f},
+            .Kind        = BodyKind::Static,
+            .Layer       = CollisionLayers::Trigger,
+            .IsTrigger   = true,
+        };
+        const Entity triggerEntity{.Index = 12, .Generation = 0};
+        (void)pw.RegisterCollider(triggerEntity, triggerCol, {0.0f, 50.0f});
+
+        // Solid tile at column 6 (world center {192, 0}).
+        constexpr u32 ObjectsLayer = 1;
+        tilemap.SetTile(6, 0, ObjectsLayer, 1);
+
+        // 1. Clear path — short hop in -Y direction, nothing in the way.
+        ARCBIT_ASSERT(!pw.QueryTileBlocked(moverEntity, moverCol, {0.0f, 0.0f}, {0.0f, -32.0f}),
+                      "QueryTileBlocked: clear path falsely blocked");
+
+        // 2. Path crosses static box obstacle at (50, 0).
+        ARCBIT_ASSERT(pw.QueryTileBlocked(moverEntity, moverCol, {0.0f, 0.0f}, {60.0f, 0.0f}),
+                      "QueryTileBlocked: missed static box on path");
+
+        // 3. Path crosses tile rect at column 6.
+        ARCBIT_ASSERT(pw.QueryTileBlocked(moverEntity, moverCol, {160.0f, 0.0f}, {220.0f, 0.0f}),
+                      "QueryTileBlocked: missed tile collider on path");
+
+        // 4. Path crosses trigger only — must not block.
+        ARCBIT_ASSERT(!pw.QueryTileBlocked(moverEntity, moverCol, {0.0f, 0.0f}, {0.0f, 60.0f}),
+                      "QueryTileBlocked: trigger should not block");
+
+        // 5. Self-filter — moving from current position back through self
+        // shouldn't register as a hit. Use a very short delta around origin so
+        // nothing else is in the swept AABB.
+        ARCBIT_ASSERT(!pw.QueryTileBlocked(moverEntity, moverCol, {0.0f, 0.0f}, {1.0f, 0.0f}),
+                      "QueryTileBlocked: self-filter let mover collide with itself");
+
+        LOG_DEBUG(Engine, "PhysicsWorld::SelfTest: QueryTileBlocked passed");
     }
 
     LOG_DEBUG(Engine, "PhysicsWorld::SelfTest passed");

@@ -86,6 +86,24 @@ public:
     // mean the individual rect overlaps the query.
     void QueryTileColliders(const AABB& worldAABB, std::vector<TileColliderRect>& out) const;
 
+    // Plan-then-commit query for tile movement: would moving `mover` from
+    // `originWorld` to `targetWorld` collide with anything blocking?
+    //
+    // Same dispatcher as the FreeMovement resolver — broadphase entity hits +
+    // overlapping tile rects + `Sweep::SweepAgainst` — but yes/no instead of
+    // producing slide motion, so it returns at the first blocking contact.
+    //
+    // Caller passes the mover's `Collider2D` (PhysicsWorld is intentionally
+    // ECS-free). The mover's broadphase entry is found via
+    // FindColliderForEntity and self-filtered out of the results.
+    //
+    // Other entities are tested using their *cached broadphase AABB* as the
+    // obstacle shape — slightly conservative when the obstacle is a circle
+    // or rotated box (matches the OBB fallback documented for 22B). Layer/Mask
+    // pair check + IsTrigger filter applied before the swept test runs.
+    [[nodiscard]] bool QueryTileBlocked(Entity mover, const Collider2D& col,
+                                        Vec2   originWorld, Vec2 targetWorld) const noexcept;
+
     // Tilemap pointer for the (future) tile-synthesized collider path. Non-owning;
     // the Scene owns the tilemap and outlives the PhysicsWorld.
     void                   SetTileMap(TileMap* tilemap) noexcept { _tilemap = tilemap; }
