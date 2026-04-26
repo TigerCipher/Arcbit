@@ -653,15 +653,15 @@ Until Phase 38 lands, project code registers layers in C++ at startup
 Suggested order of work — each step builds on the previous and ends in a
 runnable / verifiable state:
 
-### Phase 22A — Core types & static collision
-- [ ] `BodyKind`, `Collider2D` headers + ECS registration. (`DirectionArc`
+### Phase 22A — Core types & static collision ✓
+- [x] `BodyKind`, `Collider2D` headers + ECS registration. (`DirectionArc`
       lands in 22D — until then `BlockedFrom` is treated as "always block".)
-- [ ] `SpatialHash` with insert/remove/query.
-- [ ] `PhysicsWorld` skeleton: holds the hash, tilemap pointer, tick stub.
-- [ ] AABB↔AABB and AABB↔Circle narrowphase (the rotation==0 fast path).
-- [ ] Tile-synthesized colliders from `TileDef.Solid`, with greedy-mesh
+- [x] `SpatialHash` with insert/remove/query.
+- [x] `PhysicsWorld` skeleton: holds the hash, tilemap pointer, tick stub.
+- [x] AABB↔AABB and AABB↔Circle narrowphase (the rotation==0 fast path).
+- [x] Tile-synthesized colliders from `TileDef.Solid`, with greedy-mesh
       rectangle merging per chunk; rebuild on tile mutation.
-- [ ] Debug draw (kinematic green / static red), gated by a runtime
+- [x] Debug draw (kinematic green / static red), gated by a runtime
       `PhysicsDebugDraw` flag — toggled from a dev key binding in demos and
       from the editor IPC channel in Phase 40. **Not** a player-facing setting.
 

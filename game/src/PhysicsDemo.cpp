@@ -62,24 +62,6 @@ protected:
     {
         _sampler  = Demo::CreateNearestRepeatSampler(GetDevice());
         _whiteTex = Demo::CreateWhiteTexture(GetDevice());
-        
-        TextureDesc gd{};
-        gd.Width              = 1;
-        gd.Height             = 1;
-        gd.Format             = Format::RGBA8_UNorm;
-        gd.Usage              = TextureUsage::Sampled | TextureUsage::Transfer;
-        gd.DebugName          = "Debug_SolidWhite";
-        _gridTex              = GetDevice().CreateTexture(gd);
-        constexpr u8 white[4] = {255, 255, 255, 255};
-        GetDevice().UploadTexture(_gridTex, white, sizeof(white));
-
-        SamplerDesc sd{};
-        sd.MinFilter = Filter::Nearest;
-        sd.MagFilter = Filter::Nearest;
-        sd.AddressU  = AddressMode::ClampToEdge;
-        sd.AddressV  = AddressMode::ClampToEdge;
-        sd.DebugName = "Debug_GridSampler";
-        _gridSampler = GetDevice().CreateSampler(sd);
 
         GetScene().GetConfig().TileSize = TileSize;
         GetScene().GetCamera().Zoom     = 1.5f;
@@ -175,7 +157,7 @@ protected:
             _physics->SetDebugDraw(!_physics->GetDebugDraw());
             LOG_INFO(Game, "Physics debug draw: {}", _physics->GetDebugDraw() ? "ON" : "OFF");
         }
-        if (GetInput().JustPressed(ActionToggleGrid)) ToggleDebugGrid();
+        if (GetInput().JustPressed(ActionToggleGrid)) _showGrid = !_showGrid;
     }
 
     void OnRender(FramePacket& packet) override
@@ -184,8 +166,18 @@ protected:
         // Emit collider outlines on top of the scene. Sprites already collected
         // by the scene's Y-sort + tilemap render pipeline; we just append.
         _physics->CollectDebugDraw(packet, _whiteTex, _sampler);
-        
-        if (_showGrid) SubmitDebugGrid(packet, {1920, 1080});
+
+        if (_showGrid) {
+            // Compute world-space view AABB from the camera + window viewport.
+            const Camera2D& cam     = GetScene().GetCamera();
+            const Vec2      camPos  = cam.GetEffectivePosition();
+            const Vec2      halfView{ (1920.0f / cam.Zoom) * 0.5f,
+                                     (1080.0f / cam.Zoom) * 0.5f };
+            const AABB      viewAABB = AABB::FromCenterHalfExtents(camPos, halfView);
+            const f32       thickness = std::max(1.0f, 1.0f / cam.Zoom);
+            GetScene().GetTileMap().CollectGridDebugDraw(
+                packet, viewAABB, _whiteTex, _sampler, thickness);
+        }
     }
 
     void OnShutdown() override
@@ -196,11 +188,6 @@ protected:
 
         if (_whiteTex.IsValid()) GetDevice().DestroyTexture(_whiteTex);
         if (_sampler.IsValid())  GetDevice().DestroySampler(_sampler);
-        
-        if (_gridTex.IsValid())
-            GetDevice().DestroyTexture(_gridTex);
-        if (_gridSampler.IsValid())
-            GetDevice().DestroySampler(_gridSampler);
     }
 
 private:
@@ -210,55 +197,7 @@ private:
     std::unique_ptr<PhysicsWorld> _physics;
     Collider2D                    _playerCollider;
     PhysicsWorld::ColliderId      _playerColliderId = PhysicsWorld::InvalidId;
-    
-    TextureHandle _gridTex;
-    SamplerHandle _gridSampler;
-    
-        // -----------------------------------------------------------------------
-    // Debug grid
-    // -----------------------------------------------------------------------
-
-    void SubmitDebugGrid(FramePacket& packet, const Vec2 viewport)
-    {
-        const Camera2D& cam    = GetScene().GetCamera();
-        const Vec2      camPos = cam.GetEffectivePosition();
-        const f32       halfW  = (viewport.X / cam.Zoom) * 0.5f;
-        const f32       halfH  = (viewport.Y / cam.Zoom) * 0.5f;
-
-        const auto fc = static_cast<i32>(std::floor((camPos.X - halfW) / TileSize)) - 1;
-        const auto lc = static_cast<i32>(std::ceil((camPos.X + halfW) / TileSize)) + 1;
-        const auto fr = static_cast<i32>(std::floor((camPos.Y - halfH) / TileSize)) - 1;
-        const auto lr = static_cast<i32>(std::ceil((camPos.Y + halfH) / TileSize)) + 1;
-
-        const f32       totalH = static_cast<f32>(lr - fr) * TileSize;
-        const f32       totalW = static_cast<f32>(lc - fc) * TileSize;
-        const f32       origX  = static_cast<f32>(fc) * TileSize;
-        const f32       origY  = static_cast<f32>(fr) * TileSize;
-        const f32       thick  = std::max(1.0f, 1.0f / cam.Zoom);
-        constexpr Color GCol   = {1.0f, 1.0f, 1.0f, 0.25f};
-        constexpr i32   GLay   = 999999;
-
-        for (i32 col = fc; col <= lc; ++col) {
-            Sprite s{};
-            s.Texture  = _gridTex;
-            s.Sampler  = _gridSampler;
-            s.Position = {col * TileSize + (TileSize * 0.5f), origY + totalH * 0.5f};
-            s.Size     = {thick, totalH};
-            s.Tint     = GCol;
-            s.Layer    = GLay;
-            packet.Sprites.push_back(s);
-        }
-        for (i32 row = fr; row <= lr; ++row) {
-            Sprite s{};
-            s.Texture  = _gridTex;
-            s.Sampler  = _gridSampler;
-            s.Position = {origX + totalW * 0.5f, row * TileSize + (TileSize * 0.5f)};
-            s.Size     = {totalW, thick};
-            s.Tint     = GCol;
-            s.Layer    = GLay;
-            packet.Sprites.push_back(s);
-        }
-    }
+    bool                          _showGrid         = false;
 };
 
 // Entry point — main.cpp calls this when ARCBIT_DEMO_PHYSICS is selected (default).

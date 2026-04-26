@@ -1,6 +1,7 @@
 #include <arcbit/tilemap/TileMap.h>
 #include <arcbit/assets/TextureManager.h>
 #include <arcbit/core/Log.h>
+#include <arcbit/render/RenderThread.h>
 
 #include <nlohmann/json.hpp>
 
@@ -236,6 +237,55 @@ const std::vector<TileColliderRect>& TileMap::GetChunkColliders(const i32 chunkX
     auto& list = _chunkColliders[key];
     BuildChunkColliders(chunkX, chunkY, list);
     return list;
+}
+
+void TileMap::CollectGridDebugDraw(FramePacket&        packet,
+                                   const AABB&         viewAABB,
+                                   const TextureHandle whiteTex,
+                                   const SamplerHandle whiteSampler,
+                                   const f32           lineThickness,
+                                   const Color         color,
+                                   const i32           layer) const
+{
+    if (!viewAABB.IsValid()) return;
+
+    // Tile (tx, ty) is *centered* at (tx*ts, ty*ts), so its left edge is at
+    // (tx - 0.5) * ts and its right edge at (tx + 0.5) * ts. We want vertical
+    // grid lines on every right-edge in the visible range, and horizontal
+    // lines on every bottom-edge. Padding the range by one tile prevents the
+    // outermost line from popping in/out as the camera scrolls.
+    const i32 firstCol = static_cast<i32>(std::floor(viewAABB.Min.X / _tileSize)) - 1;
+    const i32 lastCol  = static_cast<i32>(std::ceil(viewAABB.Max.X / _tileSize)) + 1;
+    const i32 firstRow = static_cast<i32>(std::floor(viewAABB.Min.Y / _tileSize)) - 1;
+    const i32 lastRow  = static_cast<i32>(std::ceil(viewAABB.Max.Y / _tileSize)) + 1;
+
+    const f32 totalW = static_cast<f32>(lastCol - firstCol) * _tileSize;
+    const f32 totalH = static_cast<f32>(lastRow - firstRow) * _tileSize;
+    const f32 origX  = static_cast<f32>(firstCol) * _tileSize;
+    const f32 origY  = static_cast<f32>(firstRow) * _tileSize;
+
+    auto pushLine = [&](const Vec2 center, const Vec2 size) {
+        Sprite s{};
+        s.Texture  = whiteTex;
+        s.Sampler  = whiteSampler;
+        s.Position = center;
+        s.Size     = size;
+        s.Tint     = color;
+        s.Layer    = layer;
+        packet.Sprites.push_back(s);
+    };
+
+    // Vertical lines — one per visible column, on each tile's right edge.
+    for (i32 col = firstCol; col <= lastCol; ++col) {
+        const f32 x = static_cast<f32>(col) * _tileSize + _tileSize * 0.5f;
+        pushLine({ x, origY + totalH * 0.5f }, { lineThickness, totalH });
+    }
+
+    // Horizontal lines.
+    for (i32 row = firstRow; row <= lastRow; ++row) {
+        const f32 y = static_cast<f32>(row) * _tileSize + _tileSize * 0.5f;
+        pushLine({ origX + totalW * 0.5f, y }, { totalW, lineThickness });
+    }
 }
 
 void TileMap::LogStats() const

@@ -248,14 +248,14 @@ directional arc gating, optional rotation, triggers, and per-style movement
 integration. Box2D was reconsidered and rejected — see `docs/physics.md`
 "Library Choice" for rationale.*
 
-### Phase 22A — Core types & static collision
-- [ ] `BodyKind`, `Collider2D` (Box / Circle, `Rotation` for OBB later, `Layer` / `Mask`, `IsTrigger`) headers + ECS registration
-- [ ] `SpatialHash` (uniform grid keyed on tile size) with insert / remove / query
-- [ ] `PhysicsWorld` skeleton — owns the hash and the tilemap pointer; tick stub
-- [ ] AABB↔AABB and AABB↔Circle narrowphase (rotation==0 fast path)
-- [ ] Tile-synthesized colliders from `TileDef.Solid`, with **greedy-mesh** rectangle merging per chunk; rebuild on tile mutation
-- [ ] Engine default collision layers (`Default`, `Player`, `NPC`, `Enemy`, `Wall`, `Prop`, `Pickup`, `Projectile`, `Trigger`); user layers extensible from bit 9 upward
-- [ ] Debug draw — runtime `PhysicsDebugDraw` flag (kinematic green / static red); toggled from a dev key binding in demo, from the editor IPC channel in Phase 40. **Not** a player-facing setting.
+### Phase 22A — Core types & static collision ✓
+- [x] `BodyKind`, `Collider2D` (Box / Circle, `Rotation` for OBB later, `Layer` / `Mask`, `IsTrigger`) headers + ECS registration
+- [x] `SpatialHash` (uniform grid keyed on tile size) with insert / remove / query
+- [x] `PhysicsWorld` skeleton — owns the hash and the tilemap pointer; tick stub
+- [x] AABB↔AABB and AABB↔Circle narrowphase (rotation==0 fast path)
+- [x] Tile-synthesized colliders from `TileDef.Solid`, with **greedy-mesh** rectangle merging per chunk; rebuild on tile mutation
+- [x] Engine default collision layers (`Default`, `Player`, `NPC`, `Enemy`, `Wall`, `Prop`, `Pickup`, `Projectile`, `Trigger`); user layers extensible from bit 9 upward
+- [x] Debug draw — runtime `PhysicsDebugDraw` flag (kinematic green / static red); toggled from a dev key binding in demo, from the editor IPC channel in Phase 40. **Not** a player-facing setting.
 
 ### Phase 22B — `FreeMovement` collision
 - [ ] `PendingMove` component + `FreeMovementIntegrateSystem` writes desired delta into it

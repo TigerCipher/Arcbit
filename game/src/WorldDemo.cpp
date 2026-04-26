@@ -151,7 +151,17 @@ protected:
     {
         packet.AmbientColor  = Color{0.018f, 0.022f, 0.03f, 1.0f};
         packet.ReferenceSize = {ViewportW, ViewportH};
-        if (_showGrid) SubmitDebugGrid(packet, {ViewportW, ViewportH});
+        if (_showGrid) {
+            // Engine-provided tile-grid debug overlay (slice 1, Phase 22B).
+            const Camera2D& cam     = GetScene().GetCamera();
+            const Vec2      camPos  = cam.GetEffectivePosition();
+            const Vec2      halfView{ (ViewportW / cam.Zoom) * 0.5f,
+                                     (ViewportH / cam.Zoom) * 0.5f };
+            const AABB      viewAABB  = AABB::FromCenterHalfExtents(camPos, halfView);
+            const f32       thickness = std::max(1.0f, 1.0f / cam.Zoom);
+            GetScene().GetTileMap().CollectGridDebugDraw(
+                packet, viewAABB, _gridTex, _gridSampler, thickness);
+        }
 
         DrawText(packet, _bitmapFont, "Hello, World!\nThis is a test of a longer string", {100.0f, 100.0f}, 1.0f,
                  Color::Magenta(), 0, TextAlign::Center);
@@ -703,47 +713,8 @@ private:
     // Debug grid
     // -----------------------------------------------------------------------
 
-    void SubmitDebugGrid(FramePacket& packet, const Vec2 viewport)
-    {
-        const Camera2D& cam    = GetScene().GetCamera();
-        const Vec2      camPos = cam.GetEffectivePosition();
-        const f32       halfW  = (viewport.X / cam.Zoom) * 0.5f;
-        const f32       halfH  = (viewport.Y / cam.Zoom) * 0.5f;
-
-        const auto fc = static_cast<i32>(std::floor((camPos.X - halfW) / TileSize)) - 1;
-        const auto lc = static_cast<i32>(std::ceil((camPos.X + halfW) / TileSize)) + 1;
-        const auto fr = static_cast<i32>(std::floor((camPos.Y - halfH) / TileSize)) - 1;
-        const auto lr = static_cast<i32>(std::ceil((camPos.Y + halfH) / TileSize)) + 1;
-
-        const f32       totalH = static_cast<f32>(lr - fr) * TileSize;
-        const f32       totalW = static_cast<f32>(lc - fc) * TileSize;
-        const f32       origX  = static_cast<f32>(fc) * TileSize;
-        const f32       origY  = static_cast<f32>(fr) * TileSize;
-        const f32       thick  = std::max(1.0f, 1.0f / cam.Zoom);
-        constexpr Color GCol   = {1.0f, 1.0f, 1.0f, 0.25f};
-        constexpr i32   GLay   = 999999;
-
-        for (i32 col = fc; col <= lc; ++col) {
-            Sprite s{};
-            s.Texture  = _gridTex;
-            s.Sampler  = _gridSampler;
-            s.Position = {col * TileSize + (TileSize * 0.5f), origY + totalH * 0.5f};
-            s.Size     = {thick, totalH};
-            s.Tint     = GCol;
-            s.Layer    = GLay;
-            packet.Sprites.push_back(s);
-        }
-        for (i32 row = fr; row <= lr; ++row) {
-            Sprite s{};
-            s.Texture  = _gridTex;
-            s.Sampler  = _gridSampler;
-            s.Position = {origX + totalW * 0.5f, row * TileSize + (TileSize * 0.5f)};
-            s.Size     = {totalW, thick};
-            s.Tint     = GCol;
-            s.Layer    = GLay;
-            packet.Sprites.push_back(s);
-        }
-    }
+    // SubmitDebugGrid relocated to TileMap::CollectGridDebugDraw (engine).
+    // Caller now passes a precomputed view AABB + thickness; see OnRender.
 
     // -----------------------------------------------------------------------
     // UI screens

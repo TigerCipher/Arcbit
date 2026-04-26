@@ -12,8 +12,11 @@
 #include <unordered_map>
 #include <vector>
 
+
 namespace Arcbit
 {
+struct FramePacket;
+
 // 16×16 grid of tile IDs per layer. ID 0 = empty cell.
 constexpr u32 ChunkSize  = 16;
 constexpr u32 LayerCount = 3;
@@ -86,6 +89,23 @@ public:
     // Constants exposed so PhysicsWorld can compute the chunk range overlapping
     // a query AABB without duplicating the chunk-coord math.
     [[nodiscard]] static constexpr u32 GetChunkSize() { return ChunkSize; }
+
+    // ---- Debug overlays (developer/editor tool) ---------------------------
+    // Emit a tile-grid overlay covering the given world-space view rect.
+    // Lines fall on tile *edges* (which sit halfway between adjacent tile
+    // centers, since TileToWorld returns a tile's center).
+    //
+    // Caller supplies a 1×1 white texture + sampler — the engine UI white
+    // texture (RenderThread::GetUIWhiteTexture) is the conventional source.
+    // Defaults give a faint white grid on layer 999999 (above tilemap and
+    // entities, below physics debug). Adjust per demo / editor as needed.
+    void CollectGridDebugDraw(FramePacket&        packet,
+                              const AABB&         viewAABB,
+                              TextureHandle       whiteTex,
+                              SamplerHandle       whiteSampler,
+                              f32                 lineThickness = 1.0f,
+                              Color               color         = { 1.0f, 1.0f, 1.0f, 0.25f },
+                              i32                 layer         = 999999) const;
 
     // Log a summary of the current map state: chunk count, tile counts per layer,
     // registered atlases, and registered tile defs. Use after map generation.
