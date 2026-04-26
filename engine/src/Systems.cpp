@@ -53,23 +53,40 @@ namespace
 
     void RegisterFreeMovementSystem(World& world)
     {
+        // Integrate-only: clamp velocity, accumulate desired delta into
+        // PendingMove, decay friction. Transform is *not* touched here — that
+        // lands in CollisionResolutionSystem (22B.4) via the PendingMove path.
         world.RegisterSystem("FreeMovement", [](Scene& scene, f32 dt) {
-        scene.GetWorld()
-                .Query<Transform2D, FreeMovement>()
-                .Without<Disabled>()
-                .ForEach([dt](Transform2D& t, FreeMovement& fm) {
-                    if (fm.MaxSpeed > 0.0f)
-                    {
-                        const f32 sqLen = fm.Velocity.X * fm.Velocity.X + fm.Velocity.Y * fm.Velocity.Y;
-                        if (sqLen > fm.MaxSpeed * fm.MaxSpeed)
-                        {
-                            const f32 inv = fm.MaxSpeed / std::sqrt(sqLen);
-                            fm.Velocity   = fm.Velocity * inv;
-                        }
-                    }
-                    t.Position  = t.Position + fm.Velocity * dt;
-                    fm.Velocity = fm.Velocity * std::exp(-fm.Friction * dt);
-                });
+            scene.GetWorld()
+                 .Query<FreeMovement, PendingMove>()
+                 .Without<Disabled>()
+                 .ForEach([dt](FreeMovement& fm, PendingMove& pm) {
+                     if (fm.MaxSpeed > 0.0f) {
+                         const f32 sqLen = fm.Velocity.X * fm.Velocity.X + fm.Velocity.Y * fm.Velocity.Y;
+                         if (sqLen > fm.MaxSpeed * fm.MaxSpeed) {
+                             const f32 inv = fm.MaxSpeed / std::sqrt(sqLen);
+                             fm.Velocity   = fm.Velocity * inv;
+                         }
+                     }
+                     pm.DesiredDelta = pm.DesiredDelta + fm.Velocity * dt;
+                     fm.Velocity     = fm.Velocity * std::exp(-fm.Friction * dt);
+                 });
+        });
+    }
+
+    // Stub resolver for slice 22B.3 — copies the desired delta directly to
+    // Transform with no collision filtering. Replaced in 22B.4 by the real
+    // CollisionResolutionSystem (slab method + slide).
+    void RegisterApplyPendingMoveSystem(World& world)
+    {
+        world.RegisterSystem("ApplyPendingMove", [](Scene& scene, f32 /*dt*/) {
+            scene.GetWorld()
+                 .Query<Transform2D, PendingMove>()
+                 .Without<Disabled>()
+                 .ForEach([](Transform2D& t, PendingMove& pm) {
+                     t.Position      = t.Position + pm.DesiredDelta;
+                     pm.DesiredDelta = {};
+                 });
         });
     }
 
@@ -546,8 +563,9 @@ void RegisterBuiltinSystems(World& world)
 {
     // Update phase — order matches the blueprint execution table.
     RegisterLifetimeSystem(world);
-    RegisterFreeMovementSystem(world);
-    RegisterSmoothTileMoveSystem(world);
+    RegisterFreeMovementSystem(world);     // writes PendingMove
+    RegisterSmoothTileMoveSystem(world);   // writes Transform directly (joins PendingMove in 22C)
+    RegisterApplyPendingMoveSystem(world); // consumes PendingMove → Transform (becomes CollisionResolutionSystem in 22B.4)
     RegisterCameraFollowSystem(world);
     RegisterAnimatorStateMachineSystem(world); // evaluates transitions, updates Animator clip
     RegisterAnimatorSystem(world);             // advances frames, fires events, writes UV

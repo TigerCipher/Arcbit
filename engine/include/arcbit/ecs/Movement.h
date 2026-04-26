@@ -58,4 +58,23 @@ struct SmoothTileMovement
 // Moves instantly to the adjacent tile. No interpolation.
 struct SnapTileMovement {};
 
+// ---------------------------------------------------------------------------
+// Resolver plumbing
+// ---------------------------------------------------------------------------
+
+// Tentative motion for the current tick. Movement systems (FreeMovement, and
+// in 22C SmoothTileMovement) write a desired world-space delta here;
+// CollisionResolutionSystem consumes it, clamps via swept narrowphase, and
+// commits the final motion to Transform2D, then zeroes the field.
+//
+//   - FreeMovement entities **must** also have PendingMove — otherwise
+//     velocity decays from friction but the entity never actually moves.
+//
+// The Phase 22B.3 stub resolver just copies DesiredDelta to Transform2D
+// unmodified; the real resolver (Phase 22B.4) clamps it against colliders.
+struct PendingMove
+{
+    Vec2 DesiredDelta = {};
+};
+
 } // namespace Arcbit

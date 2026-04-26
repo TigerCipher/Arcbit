@@ -473,6 +473,9 @@ private:
         world.AddComponent<FreeMovement>(e, FreeMovement{
                                              .Velocity = vel, .Friction = 0.0f, .MaxSpeed = ShipMaxSpeed,
                                          });
+        // Required pair — FreeMovement writes desired delta into this; the
+        // resolver consumes it and updates Transform.
+        world.AddComponent<PendingMove>(e, PendingMove{});
         _ships.push_back({e, bMin, bMax});
         return e;
     }
