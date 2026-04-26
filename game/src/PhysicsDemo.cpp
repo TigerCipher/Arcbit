@@ -28,8 +28,6 @@
 #include <arcbit/scene/WorldConfig.h>
 #include <arcbit/tilemap/TileMap.h>
 
-#include <memory>
-
 using namespace Arcbit;
 
 namespace
@@ -39,23 +37,23 @@ constexpr ActionID ActionMoveRight    = MakeAction("Move_Right");
 constexpr ActionID ActionMoveUp       = MakeAction("Move_Up");
 constexpr ActionID ActionMoveDown     = MakeAction("Move_Down");
 constexpr ActionID ActionDebugPhysics = MakeAction("Debug_Physics");
-constexpr ActionID ActionToggleGrid = MakeAction("Debug_ToggleGrid");
+constexpr ActionID ActionToggleGrid   = MakeAction("Debug_ToggleGrid");
 
-constexpr f32 TileSize     = 64.0f;
-constexpr u32 GrassTileId  = 1;   // base of grass.tileatlas.json
-constexpr u32 WaterTileId  = 409; // base of water.tileatlas.json
-constexpr i32 GrassExtent  = 8;   // grass field is [-8..+8] tiles each axis
-constexpr i32 WaterMin     = -2;  // water is [-2..+1] each axis (4×4)
-constexpr i32 WaterMax     = 1;
+constexpr f32 TileSize    = 64.0f;
+constexpr u32 GrassTileId = 1;   // base of grass.tileatlas.json
+constexpr u32 WaterTileId = 409; // base of water.tileatlas.json
+constexpr i32 GrassExtent = 8;   // grass field is [-8..+8] tiles each axis
+constexpr i32 WaterMin    = -2;  // water is [-2..+1] each axis (4×4)
+constexpr i32 WaterMax    = 1;
 } // namespace
 
 class PhysicsDemo : public Application
 {
 public:
-    PhysicsDemo()
-        : Application({ .Title = "Arcbit — Physics Demo (F2 toggles colliders)",
-                        .Width = 1920, .Height = 1080 })
-    {}
+    PhysicsDemo() : Application({
+        .Title = "Arcbit — Physics Demo (F2 toggles colliders)",
+        .Width = 1920, .Height = 1080
+    }) {}
 
 protected:
     void OnStart() override
@@ -88,42 +86,42 @@ protected:
                 tm.SetTile(tx, ty, 0, WaterTileId);
 
         // Input — WASD plus the F2 debug toggle. No pause, no UI.
-        GetInput().RegisterAction(ActionMoveLeft,     "Move_Left",     "Move Left",  "Movement");
-        GetInput().RegisterAction(ActionMoveRight,    "Move_Right",    "Move Right", "Movement");
-        GetInput().RegisterAction(ActionMoveUp,       "Move_Up",       "Move Up",    "Movement");
-        GetInput().RegisterAction(ActionMoveDown,     "Move_Down",     "Move Down",  "Movement");
+        GetInput().RegisterAction(ActionMoveLeft, "Move_Left", "Move Left", "Movement");
+        GetInput().RegisterAction(ActionMoveRight, "Move_Right", "Move Right", "Movement");
+        GetInput().RegisterAction(ActionMoveUp, "Move_Up", "Move Up", "Movement");
+        GetInput().RegisterAction(ActionMoveDown, "Move_Down", "Move Down", "Movement");
         GetInput().RegisterAction(ActionDebugPhysics, "Debug_Physics", "Toggle Physics Debug", "Debug");
-        GetInput().RegisterAction(ActionToggleGrid,   "Debug_ToggleGrid", "Toggle Grid", "Debug");
+        GetInput().RegisterAction(ActionToggleGrid, "Debug_ToggleGrid", "Toggle Grid", "Debug");
 
-        GetInput().BindKey(ActionMoveLeft,     Key::A);
-        GetInput().BindKey(ActionMoveRight,    Key::D);
-        GetInput().BindKey(ActionMoveUp,       Key::W);
-        GetInput().BindKey(ActionMoveDown,     Key::S);
+        GetInput().BindKey(ActionMoveLeft, Key::A);
+        GetInput().BindKey(ActionMoveRight, Key::D);
+        GetInput().BindKey(ActionMoveUp, Key::W);
+        GetInput().BindKey(ActionMoveDown, Key::S);
         GetInput().BindKey(ActionDebugPhysics, Key::F2);
-        GetInput().BindKey(ActionToggleGrid,   Key::G);
+        GetInput().BindKey(ActionToggleGrid, Key::G);
 
         // Player entity — small blue square sprite + circle collider. The
         // sprite is just so the eye has something concrete to attach the
         // collider outline to; the demo doesn't depend on it.
-        auto& world                                = GetScene().GetWorld();
-        _player                                    = world.CreateEntity();
-        world.GetComponent<Tag>(_player)->Value    = "Player";
-        auto* t                                    = world.GetTransform(_player);
-        t->Position                                = { TileSize * 5.0f, 0.0f };
-        t->Scale                                   = { TileSize * 0.7f, TileSize * 0.7f };
+        auto& world                             = GetScene().GetWorld();
+        _player                                 = world.CreateEntity();
+        world.GetComponent<Tag>(_player)->Value = "Player";
+        auto* t                                 = world.GetTransform(_player);
+        t->Position                             = {TileSize * 5.0f, 0.0f};
+        t->Scale                                = {TileSize * 0.7f, TileSize * 0.7f};
         world.AddComponent<SpriteRenderer>(_player, SpriteRenderer{
-                                              .Texture = _whiteTex,
-                                              .Sampler = _sampler,
-                                              .Tint    = { 0.3f, 0.5f, 1.0f, 1.0f },
-                                              .Layer   = 0,
-                                          });
-        world.AddComponent<CameraTarget>(_player, CameraTarget{ .Lag = 0.05f });
+                                               .Texture = _whiteTex,
+                                               .Sampler = _sampler,
+                                               .Tint    = {0.3f, 0.5f, 1.0f, 1.0f},
+                                               .Layer   = 0,
+                                           });
+        world.AddComponent<CameraTarget>(_player, CameraTarget{.Lag = 0.05f});
 
-        // PhysicsWorld — owns the broadphase + tile collider mesher.
-        // Cell size matches tile size so chunked tile colliders bucket cleanly.
-        _physics = std::make_unique<PhysicsWorld>(TileSize);
-        _physics->SetTileMap(&tm);
-        _physics->SetDebugDraw(true); // ON by default so the demo is self-explanatory
+        // PhysicsWorld is owned by Scene; the first GetPhysics() call lazy-
+        // constructs it using WorldConfig.TileSize as the spatial-hash cell
+        // size and auto-wires the tilemap pointer.
+        PhysicsWorld& physics = GetScene().GetPhysics();
+        physics.SetDebugDraw(true); // ON by default so the demo is self-explanatory
 
         // Player collider — circle at half the player's visual size.
         _playerCollider = Collider2D{
@@ -132,49 +130,53 @@ protected:
             .Kind   = BodyKind::Kinematic,
             .Layer  = CollisionLayers::Player,
         };
-        _playerColliderId = _physics->RegisterCollider(_player, _playerCollider, t->Position);
+        _playerColliderId = physics.RegisterCollider(_player, _playerCollider, t->Position);
 
         LOG_INFO(Game, "PhysicsDemo ready — WASD to move, F2 toggles collider overlay");
     }
 
     void OnUpdate(const f32 dt) override
     {
+        PhysicsWorld& physics = GetScene().GetPhysics();
+
         Vec2 dir{};
-        if (GetInput().IsPressed(ActionMoveLeft))  dir.X -= 1.0f;
+        if (GetInput().IsPressed(ActionMoveLeft)) dir.X -= 1.0f;
         if (GetInput().IsPressed(ActionMoveRight)) dir.X += 1.0f;
-        if (GetInput().IsPressed(ActionMoveUp))    dir.Y -= 1.0f;
-        if (GetInput().IsPressed(ActionMoveDown))  dir.Y += 1.0f;
+        if (GetInput().IsPressed(ActionMoveUp)) dir.Y -= 1.0f;
+        if (GetInput().IsPressed(ActionMoveDown)) dir.Y += 1.0f;
 
         // Simple unbounded movement — collision response lands in 22B.
         constexpr f32 PlayerSpeed = 240.0f; // world px/sec
         auto*         t           = GetScene().GetWorld().GetTransform(_player);
-        t->Position += dir * (PlayerSpeed * dt);
+        t->Position               += dir * (PlayerSpeed * dt);
 
         // Keep the broadphase / AABB cache in sync with the player's position.
-        _physics->UpdateCollider(_playerColliderId, _playerCollider, t->Position);
+        physics.UpdateCollider(_playerColliderId, _playerCollider, t->Position);
 
         if (GetInput().JustPressed(ActionDebugPhysics)) {
-            _physics->SetDebugDraw(!_physics->GetDebugDraw());
-            LOG_INFO(Game, "Physics debug draw: {}", _physics->GetDebugDraw() ? "ON" : "OFF");
+            physics.SetDebugDraw(!physics.GetDebugDraw());
+            LOG_INFO(Game, "Physics debug draw: {}", physics.GetDebugDraw() ? "ON" : "OFF");
         }
         if (GetInput().JustPressed(ActionToggleGrid)) _showGrid = !_showGrid;
     }
 
     void OnRender(FramePacket& packet) override
     {
-        packet.AmbientColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+        packet.AmbientColor = {1.0f, 1.0f, 1.0f, 1.0f};
         // Emit collider outlines on top of the scene. Sprites already collected
         // by the scene's Y-sort + tilemap render pipeline; we just append.
-        _physics->CollectDebugDraw(packet, _whiteTex, _sampler);
+        GetScene().GetPhysics().CollectDebugDraw(packet, _whiteTex, _sampler);
 
         if (_showGrid) {
             // Compute world-space view AABB from the camera + window viewport.
-            const Camera2D& cam     = GetScene().GetCamera();
-            const Vec2      camPos  = cam.GetEffectivePosition();
-            const Vec2      halfView{ (1920.0f / cam.Zoom) * 0.5f,
-                                     (1080.0f / cam.Zoom) * 0.5f };
-            const AABB      viewAABB = AABB::FromCenterHalfExtents(camPos, halfView);
-            const f32       thickness = std::max(1.0f, 1.0f / cam.Zoom);
+            const Camera2D& cam    = GetScene().GetCamera();
+            const Vec2      camPos = cam.GetEffectivePosition();
+            const Vec2      halfView{
+                (1920.0f / cam.Zoom) * 0.5f,
+                (1080.0f / cam.Zoom) * 0.5f
+            };
+            const AABB viewAABB  = AABB::FromCenterHalfExtents(camPos, halfView);
+            const f32  thickness = std::max(1.0f, 1.0f / cam.Zoom);
             GetScene().GetTileMap().CollectGridDebugDraw(
                 packet, viewAABB, _whiteTex, _sampler, thickness);
         }
@@ -182,22 +184,20 @@ protected:
 
     void OnShutdown() override
     {
-        if (_physics && _playerColliderId != PhysicsWorld::InvalidId)
-            _physics->UnregisterCollider(_playerColliderId);
-        _physics.reset();
-
+        // No need to UnregisterCollider — the Scene-owned PhysicsWorld is
+        // destroyed in the Scene destructor, which tears down the spatial
+        // hash + entry vectors wholesale.
         if (_whiteTex.IsValid()) GetDevice().DestroyTexture(_whiteTex);
-        if (_sampler.IsValid())  GetDevice().DestroySampler(_sampler);
+        if (_sampler.IsValid()) GetDevice().DestroySampler(_sampler);
     }
 
 private:
-    SamplerHandle                 _sampler;
-    TextureHandle                 _whiteTex;
-    Entity                        _player           = Entity::Invalid();
-    std::unique_ptr<PhysicsWorld> _physics;
-    Collider2D                    _playerCollider;
-    PhysicsWorld::ColliderId      _playerColliderId = PhysicsWorld::InvalidId;
-    bool                          _showGrid         = false;
+    SamplerHandle            _sampler;
+    TextureHandle            _whiteTex;
+    Entity                   _player = Entity::Invalid();
+    Collider2D               _playerCollider;
+    PhysicsWorld::ColliderId _playerColliderId = PhysicsWorld::InvalidId;
+    bool                     _showGrid         = false;
 };
 
 // Entry point — main.cpp calls this when ARCBIT_DEMO_PHYSICS is selected (default).
