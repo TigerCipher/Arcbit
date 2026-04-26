@@ -2,6 +2,7 @@
 
 #include <arcbit/core/Assert.h>
 #include <arcbit/core/Log.h>
+#include <arcbit/render/RenderThread.h>
 #include <arcbit/tilemap/TileMap.h>
 
 #include <cmath>
@@ -113,6 +114,82 @@ void PhysicsWorld::QueryTileColliders(const AABB&                    worldAABB,
 }
 
 usize PhysicsWorld::ColliderCount() const noexcept { return _colliders.size() - _freeList.size(); }
+
+// ---------------------------------------------------------------------------
+// Debug draw — outlines via four thin world-space sprite quads per rect
+// ---------------------------------------------------------------------------
+
+namespace
+{
+// Layer high enough to sort above tilemap (overlay = 1000000) and entities.
+constexpr i32 PhysicsDebugLayer = 2'000'000;
+
+// Outline thickness in *world* pixels. Camera zoom scales it visually; if you
+// zoom way in the lines look thicker. Acceptable for a debug tool.
+constexpr f32 PhysicsDebugThickness = 1.5f;
+
+void EmitRectOutline(FramePacket& packet, const AABB& aabb, const Color tint,
+                     const TextureHandle whiteTex, const SamplerHandle whiteSampler)
+{
+    const f32  t   = PhysicsDebugThickness;
+    const Vec2 min = aabb.Min;
+    const Vec2 max = aabb.Max;
+    const f32  w   = max.X - min.X;
+    const f32  h   = max.Y - min.Y;
+
+    auto push = [&](const Vec2 center, const Vec2 size) {
+        Sprite s{};
+        s.Texture  = whiteTex;
+        s.Sampler  = whiteSampler;
+        s.Position = center;
+        s.Size     = size;
+        s.Tint     = tint;
+        s.Layer    = PhysicsDebugLayer;
+        packet.Sprites.push_back(s);
+    };
+
+    // Top edge
+    push({ min.X + w * 0.5f, min.Y + t * 0.5f }, { w, t });
+    // Bottom edge
+    push({ min.X + w * 0.5f, max.Y - t * 0.5f }, { w, t });
+    // Left edge — full height (overlaps top/bottom corners; harmless)
+    push({ min.X + t * 0.5f, min.Y + h * 0.5f }, { t, h });
+    // Right edge
+    push({ max.X - t * 0.5f, min.Y + h * 0.5f }, { t, h });
+}
+} // anonymous namespace
+
+void PhysicsWorld::CollectDebugDraw(FramePacket&        packet,
+                                    const TextureHandle whiteTex,
+                                    const SamplerHandle whiteSampler) const
+{
+    if (!_debugDraw) return;
+
+    // Entity colliders — color by kind / trigger flag.
+    // TODO(Phase 34): switch circle colliders from a bounding AABB outline to a
+    // proper N-segment circle drawn via DrawLine — bounding AABBs are
+    // misleading when debugging circle-vs-something interactions because the
+    // visible outline doesn't match the actual shape used for narrowphase
+    // (especially for grazing contacts at corners).
+    for (const auto& entry : _colliders) {
+        if (!entry.Active) continue;
+        const Color tint = entry.IsTrigger ? Color::Yellow()
+                            : (entry.Kind == BodyKind::Static) ? Color::Red()
+                                                               : Color::Green();
+        EmitRectOutline(packet, entry.WorldAABB, tint, whiteTex, whiteSampler);
+    }
+
+    // Tile colliders — every cached chunk's greedy-meshed rects, in red.
+    if (_tilemap) {
+        for (const auto& [key, _] : _tilemap->GetChunks()) {
+            const i32   cx    = static_cast<i32>(static_cast<u32>(key >> 32));
+            const i32   cy    = static_cast<i32>(static_cast<u32>(key));
+            const auto& rects = _tilemap->GetChunkColliders(cx, cy);
+            for (const auto& rect : rects)
+                EmitRectOutline(packet, rect.WorldAABB, Color::Red(), whiteTex, whiteSampler);
+        }
+    }
+}
 
 AABB PhysicsWorld::ComputeWorldAABB(const Collider2D& collider, const Vec2 worldPosition)
 {

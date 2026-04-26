@@ -7,8 +7,11 @@
 #include <arcbit/physics/Collider2D.h>
 #include <arcbit/physics/SpatialHash.h>
 #include <arcbit/physics/TileColliderRect.h>
+#include <arcbit/render/RenderHandle.h>
 
 #include <vector>
+
+namespace Arcbit { struct FramePacket; }
 
 namespace Arcbit
 {
@@ -70,6 +73,21 @@ public:
     [[nodiscard]] const SpatialHash& Hash() const noexcept { return _hash; }
     [[nodiscard]] usize              ColliderCount() const noexcept;
 
+    // ---- Debug draw (developer/editor tool, not a player setting) ---------
+    // Toggled at runtime by a dev key binding in demo builds and by the editor
+    // IPC channel in Phase 40. CollectDebugDraw is a no-op while disabled.
+    void               SetDebugDraw(bool enabled) noexcept { _debugDraw = enabled; }
+    [[nodiscard]] bool GetDebugDraw() const noexcept { return _debugDraw; }
+
+    // Emit outline rectangles for every registered collider (color-coded by
+    // BodyKind / IsTrigger) and for every cached tile collider rect. Caller
+    // supplies a 1×1 white texture + sampler used for the outline strokes —
+    // the engine's UI white texture (RenderThread::GetUIWhiteTexture) is the
+    // intended source. No-op if debug draw is disabled.
+    void CollectDebugDraw(FramePacket&  packet,
+                          TextureHandle whiteTex,
+                          SamplerHandle whiteSampler) const;
+
     // Compute a world-space bounding AABB for a collider at the given position.
     // Handles axis-aligned box (fast path), rotated box (OBB bounds), and circle.
     [[nodiscard]] static AABB ComputeWorldAABB(const Collider2D& collider, Vec2 worldPosition);
@@ -92,6 +110,7 @@ private:
     SpatialHash             _hash;
     std::vector<Entry>      _colliders;
     std::vector<ColliderId> _freeList;
-    TileMap*                _tilemap = nullptr;
+    TileMap*                _tilemap   = nullptr;
+    bool                    _debugDraw = false;
 };
 } // namespace Arcbit

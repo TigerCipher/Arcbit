@@ -339,4 +339,5 @@ void Application::Run()
     LOG_INFO(Engine, "Arcbit shutdown complete");
     Log::Shutdown();
 }
+
 } // namespace Arcbit

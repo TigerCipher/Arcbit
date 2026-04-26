@@ -545,6 +545,13 @@ proper `DrawLine` API, debug draw migrates onto it. Until then, debug draw
 emits short axis-aligned sprite-batch rectangles (matches what the FPS overlay
 already does).
 
+**Pending on Phase 34**: circle colliders currently render as their bounding
+AABB. Once `DrawLine` exists, replace that with a proper N-segment polyline
+circle (16 segments is a reasonable default). Bounding AABBs are actively
+misleading when debugging circle-vs-something issues — grazing contacts near
+the AABB corners look like collisions even when the underlying geometry test
+correctly reports "no overlap". Tracked in the `CollectDebugDraw` source.
+
 ---
 
 ## Components & File Layout

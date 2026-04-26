@@ -206,10 +206,16 @@ void TileMap::BuildChunkColliders(const i32                      chunkX, const i
                 for (u32 dx = 0; dx < w; ++dx)
                     visited[(y + dy) * ChunkSize + (x + dx)] = true;
 
-            const f32 worldX0 = static_cast<f32>(baseTileX + static_cast<i32>(x)) * _tileSize;
-            const f32 worldY0 = static_cast<f32>(baseTileY + static_cast<i32>(y)) * _tileSize;
-            const f32 worldX1 = worldX0 + static_cast<f32>(w) * _tileSize;
-            const f32 worldY1 = worldY0 + static_cast<f32>(h) * _tileSize;
+            // TileToWorld(tx, ty) returns the *center* of the tile (the
+            // tilemap renderer uses it as Sprite::Position which is centered).
+            // So tile (tx, ty) occupies [tx*ts - ts/2, tx*ts + ts/2] in world
+            // space. The collider rect must use the same convention, otherwise
+            // it ends up offset by half a tile southeast of what the player sees.
+            const f32 halfTile = _tileSize * 0.5f;
+            const f32 worldX0  = static_cast<f32>(baseTileX + static_cast<i32>(x)) * _tileSize - halfTile;
+            const f32 worldY0  = static_cast<f32>(baseTileY + static_cast<i32>(y)) * _tileSize - halfTile;
+            const f32 worldX1  = worldX0 + static_cast<f32>(w) * _tileSize;
+            const f32 worldY1  = worldY0 + static_cast<f32>(h) * _tileSize;
 
             out.push_back(TileColliderRect{
                 .BlockedFrom = def->BlockedFrom,
