@@ -85,11 +85,6 @@ void PhysicsWorld::UpdateCollider(const ColliderId id, const Collider2D& collide
     _hash.Insert(id, newAABB);
 }
 
-void PhysicsWorld::Tick(const f32 /*dt*/)
-{
-    // Stub. Resolution pass lands in 22B (FreeMovement) and 22C (TileMovement).
-}
-
 void PhysicsWorld::QueryTileColliders(const AABB&                    worldAABB,
                                       std::vector<TileColliderRect>& out) const
 {

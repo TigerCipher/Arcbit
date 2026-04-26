@@ -28,11 +28,14 @@ class TileMap; // forward decl — narrowphase against tile colliders lands late
 //
 // Per-frame movement systems should:
 //   1. Register colliders at entity creation (or on first frame).
-//   2. Call UpdateCollider whenever the entity's world position changes.
+//   2. Call UpdateCollider whenever the entity's world position changes —
+//      though the built-in CollisionResolutionSystem already does this for any
+//      entity with (Transform2D, PendingMove, Collider2D).
 //   3. Unregister at entity destruction.
 //
-// Tick(dt) is the entry point for the (future) collision resolution pass — a
-// stub for now so the call site can be wired ahead of the resolver landing.
+// The collision resolution pass itself lives in `CollisionResolutionSystem`
+// (Systems.cpp), not on PhysicsWorld — the world is a pure broadphase/cache
+// service that the ECS system queries each tick.
 class PhysicsWorld
 {
 public:
@@ -73,9 +76,6 @@ public:
     // and world position, swap it into the broadphase, and update the cache.
     // Cheaper than Unregister + Register because the slot stays put.
     void UpdateCollider(ColliderId id, const Collider2D& collider, Vec2 worldPosition);
-
-    // Per-tick stub. Will own the resolution pass once the narrowphase exists.
-    void Tick(f32 dt);
 
     // Pure broadphase query. Caller must run a narrowphase test on each result.
     void QueryAABB(const AABB& worldAABB, std::vector<ColliderId>& out) const { _hash.Query(worldAABB, out); }
