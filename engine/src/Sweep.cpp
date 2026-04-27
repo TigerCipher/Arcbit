@@ -85,6 +85,26 @@ Result Substep(const Collider2D& mover, const Vec2 origin, const Vec2 delta,
 {
     if (substeps == 0) return {};
 
+    // If the mover already overlaps the obstacle at t=0, the obstacle-center
+    // → mover-position vector (the normal we'd compute below) is essentially
+    // noise — the mover could be anywhere inside the obstacle. Match the
+    // slab method's convention instead: report a normal pointing back along
+    // the motion direction (the axis-equivalent of "the face the mover is
+    // moving toward"). Without this, a circle mover inside a directional
+    // box collider (e.g. walked through a Vertical-arc tree from the side)
+    // would get spurious off-axis normals that fall inside the arc and trap
+    // it; with this fix, the arc check sees the actual motion direction.
+    if (Narrowphase::Overlap(mover, origin, other, otherPos)) {
+        Result r{};
+        r.Hit       = true;
+        r.ToI       = 0.0f;
+        const f32 dl = std::sqrt(delta.X * delta.X + delta.Y * delta.Y);
+        r.Normal    = dl > SweepEpsilon
+                          ? Vec2{-delta.X / dl, -delta.Y / dl}
+                          : Vec2{1.0f, 0.0f};
+        return r;
+    }
+
     // Walk the delta in N equal steps. The first step where the boolean
     // narrowphase fires gives ToI = (k-1)/N — the position just before contact.
     for (u32 k = 1; k <= substeps; ++k) {

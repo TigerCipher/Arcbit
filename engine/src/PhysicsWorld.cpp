@@ -32,13 +32,15 @@ PhysicsWorld::ColliderId PhysicsWorld::RegisterCollider(const Entity      entity
     }
 
     _colliders[id] = ColliderRecord{
-        .Owner     = entity,
-        .WorldAABB = worldAABB,
-        .Kind      = collider.Kind,
-        .Layer     = collider.Layer,
-        .Mask      = collider.Mask,
-        .IsTrigger = collider.IsTrigger,
-        .Active    = true,
+        .Owner       = entity,
+        .WorldAABB   = worldAABB,
+        .Kind        = collider.Kind,
+        .Layer       = collider.Layer,
+        .Mask        = collider.Mask,
+        .Rotation    = collider.Rotation,
+        .IsTrigger   = collider.IsTrigger,
+        .Active      = true,
+        .BlockedFrom = collider.BlockedFrom,
     };
     _hash.Insert(id, worldAABB);
     _entityToCollider[PackEntity(entity)] = id;
@@ -71,20 +73,25 @@ void PhysicsWorld::UpdateCollider(const ColliderId id, const Collider2D& collide
     // Cheap early-out — if the AABB is bit-identical the cell membership is too.
     if (entry.WorldAABB.Min.X == newAABB.Min.X && entry.WorldAABB.Min.Y == newAABB.Min.Y &&
         entry.WorldAABB.Max.X == newAABB.Max.X && entry.WorldAABB.Max.Y == newAABB.Max.Y) {
-        // Still refresh the layer/mask/kind cache in case the caller mutated them.
-        entry.Kind      = collider.Kind;
-        entry.Layer     = collider.Layer;
-        entry.Mask      = collider.Mask;
-        entry.IsTrigger = collider.IsTrigger;
+        // Still refresh the layer/mask/kind/arc cache in case the caller
+        // mutated them without changing the bounds.
+        entry.Kind        = collider.Kind;
+        entry.Layer       = collider.Layer;
+        entry.Mask        = collider.Mask;
+        entry.Rotation    = collider.Rotation;
+        entry.IsTrigger   = collider.IsTrigger;
+        entry.BlockedFrom = collider.BlockedFrom;
         return;
     }
 
     _hash.Remove(id, entry.WorldAABB);
-    entry.WorldAABB = newAABB;
-    entry.Kind      = collider.Kind;
-    entry.Layer     = collider.Layer;
-    entry.Mask      = collider.Mask;
-    entry.IsTrigger = collider.IsTrigger;
+    entry.WorldAABB   = newAABB;
+    entry.Kind        = collider.Kind;
+    entry.Layer       = collider.Layer;
+    entry.Mask        = collider.Mask;
+    entry.Rotation    = collider.Rotation;
+    entry.IsTrigger   = collider.IsTrigger;
+    entry.BlockedFrom = collider.BlockedFrom;
     _hash.Insert(id, newAABB);
 }
 
@@ -160,9 +167,12 @@ bool PhysicsWorld::QueryTileBlocked(const Entity      mover, const Collider2D& c
         if (!rec.Active || rec.IsTrigger) continue;
         if (!LayersPair(col.Layer, col.Mask, rec.Layer, rec.Mask)) continue;
 
-        const Collider2D obstacle = BoxFromAABB(rec.WorldAABB, rec.Layer);
-        if (Sweep::SweepAgainst(col, originWorld, delta, obstacle, rec.WorldAABB.Center()).Hit)
-            return true;
+        const Collider2D    obstacle    = BoxFromAABB(rec.WorldAABB, rec.Layer);
+        const Vec2          obstaclePos = rec.WorldAABB.Center();
+        const Sweep::Result r           = Sweep::SweepAgainst(col, originWorld, delta, obstacle, obstaclePos);
+        if (!r.Hit) continue;
+        if (!IsContactBlocked(rec.BlockedFrom, r.Normal, rec.Rotation)) continue;
+        return true;
     }
 
     // Tile collider pass — tiles always block back, so we only check self.Mask.
@@ -171,9 +181,14 @@ bool PhysicsWorld::QueryTileBlocked(const Entity      mover, const Collider2D& c
     for (const TileColliderRect& rect : tileHits) {
         if ((rect.Layer & col.Mask) == 0) continue;
 
-        const Collider2D obstacle = BoxFromAABB(rect.WorldAABB, rect.Layer);
-        if (Sweep::SweepAgainst(col, originWorld, delta, obstacle, rect.WorldAABB.Center()).Hit)
-            return true;
+        const Collider2D    obstacle    = BoxFromAABB(rect.WorldAABB, rect.Layer);
+        const Vec2          obstaclePos = rect.WorldAABB.Center();
+        const Sweep::Result r           = Sweep::SweepAgainst(col, originWorld, delta, obstacle, obstaclePos);
+        if (!r.Hit) continue;
+        // Tile rects don't carry rotation (greedy mesh is axis-aligned), so
+        // pass 0 — local frame == world frame.
+        if (!IsContactBlocked(rect.BlockedFrom, r.Normal, 0.0f)) continue;
+        return true;
     }
 
     return false;
@@ -496,7 +511,7 @@ void PhysicsWorld::SelfTest()
             .Layer       = CollisionLayers::Player,
         };
         const Entity moverEntity{.Index = 10, .Generation = 0};
-        (void)pw.RegisterCollider(moverEntity, moverCol, {0.0f, 0.0f});
+        pw.RegisterCollider(moverEntity, moverCol, {0.0f, 0.0f});
 
         // Static box obstacle on the +X axis.
         const Collider2D obstacleCol{
@@ -506,7 +521,7 @@ void PhysicsWorld::SelfTest()
             .Layer       = CollisionLayers::Prop,
         };
         const Entity obstacleEntity{.Index = 11, .Generation = 0};
-        (void)pw.RegisterCollider(obstacleEntity, obstacleCol, {50.0f, 0.0f});
+        pw.RegisterCollider(obstacleEntity, obstacleCol, {50.0f, 0.0f});
 
         // Trigger at (0, 50).
         const Collider2D triggerCol{
@@ -517,7 +532,7 @@ void PhysicsWorld::SelfTest()
             .IsTrigger   = true,
         };
         const Entity triggerEntity{.Index = 12, .Generation = 0};
-        (void)pw.RegisterCollider(triggerEntity, triggerCol, {0.0f, 50.0f});
+        pw.RegisterCollider(triggerEntity, triggerCol, {0.0f, 50.0f});
 
         // Solid tile at column 6 (world center {192, 0}).
         constexpr u32 ObjectsLayer = 1;
@@ -544,6 +559,46 @@ void PhysicsWorld::SelfTest()
         // nothing else is in the swept AABB.
         ARCBIT_ASSERT(!pw.QueryTileBlocked(moverEntity, moverCol, {0.0f, 0.0f}, {1.0f, 0.0f}),
                       "QueryTileBlocked: self-filter let mover collide with itself");
+
+        // 6. Vertical-arc entity collider — blocks N/S approach, lets E/W pass.
+        // Build a fresh tree entity with BlockedFrom = Vertical(); the existing
+        // obstacle uses default empty arcs and would interfere with the E/W
+        // pass-through test, so put the tree well away from it.
+        const Collider2D tree{
+            .Shape       = ColliderShape::Box,
+            .HalfExtents = {6.0f, 6.0f},
+            .Kind        = BodyKind::Static,
+            .Layer       = CollisionLayers::Prop,
+            .BlockedFrom = DirectionArc::Vertical(),
+        };
+        const Entity treeEntity{.Index = 13, .Generation = 0};
+        pw.RegisterCollider(treeEntity, tree, {-200.0f, 0.0f});
+        // Approach from the west (mover east of tree, moving west into it) —
+        // contact normal points east (+X), which is in the *Horizontal* direction.
+        // Vertical arcs cover N/S only, so this contact passes through.
+        ARCBIT_ASSERT(!pw.QueryTileBlocked(moverEntity, moverCol, {-180.0f, 0.0f}, {-200.0f, 0.0f}),
+                      "QueryTileBlocked: vertical-arc tree must let E/W approach pass");
+        // Approach from the south (mover north of tree, moving south into it) —
+        // contact normal points north, which falls inside the Vertical arc.
+        ARCBIT_ASSERT(pw.QueryTileBlocked(moverEntity, moverCol, {-200.0f, -20.0f}, {-200.0f, 0.0f}),
+                      "QueryTileBlocked: vertical-arc tree must block N/S approach");
+
+        // 7. Vertical-arc tile rect — same idea, but on a tile collider.
+        TileDef ledgeDef{};
+        ledgeDef.Solid       = true;
+        ledgeDef.BlockedFrom = DirectionArc::NorthOnly();
+        tilemap.RegisterTile(2, ledgeDef);
+        // Place the ledge tile at column -6 (world center {-192, 0}), well
+        // separated from the tree at -200 to keep tests independent.
+        tilemap.SetTile(-6, 5, ObjectsLayer, 2);
+        // Approach from the south (moving north into the ledge): contact normal
+        // points south, outside NorthOnly arc → passes.
+        ARCBIT_ASSERT(!pw.QueryTileBlocked(moverEntity, moverCol, {-192.0f, 180.0f}, {-192.0f, 160.0f}),
+                      "QueryTileBlocked: NorthOnly ledge must let S→N approach pass");
+        // Approach from the north (moving south onto the ledge): contact normal
+        // points north → inside NorthOnly arc → blocks.
+        ARCBIT_ASSERT(pw.QueryTileBlocked(moverEntity, moverCol, {-192.0f, 130.0f}, {-192.0f, 150.0f}),
+                      "QueryTileBlocked: NorthOnly ledge must block N→S approach");
 
         LOG_DEBUG(Engine, "PhysicsWorld::SelfTest: QueryTileBlocked passed");
     }

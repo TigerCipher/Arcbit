@@ -128,7 +128,16 @@ namespace
             if (!otherCol || !otherT) continue; // registered without ECS component → skip
 
             const Sweep::Result r = Sweep::SweepAgainst(col, origin, delta, *otherCol, otherT->Position);
-            if (r.Hit && r.ToI < best.ToI) best = r;
+            if (!r.Hit) continue;
+            // Arc gate — directional contacts can pass through if the
+            // approach falls outside the obstacle's BlockedFrom arcs.
+            // Sweep::SweepAgainst already handles the started-overlapping
+            // case by returning an axis-aligned normal opposite to motion,
+            // so the arc check correctly sees the motion direction even
+            // when the mover is inside the obstacle (e.g. walked through a
+            // pass-through arc).
+            if (!IsContactBlocked(rec.BlockedFrom, r.Normal, rec.Rotation)) continue;
+            if (r.ToI < best.ToI) best = r;
         }
 
         for (const TileColliderRect& rect : tileHits) {
@@ -141,7 +150,10 @@ namespace
             const Vec2 tilePos  = rect.WorldAABB.Center();
 
             const Sweep::Result r = Sweep::SweepAgainst(col, origin, delta, tileCol, tilePos);
-            if (r.Hit && r.ToI < best.ToI) best = r;
+            if (!r.Hit) continue;
+            // Tile rects are axis-aligned (greedy mesh); pass rotation 0.
+            if (!IsContactBlocked(rect.BlockedFrom, r.Normal, 0.0f)) continue;
+            if (r.ToI < best.ToI) best = r;
         }
         return best;
     }

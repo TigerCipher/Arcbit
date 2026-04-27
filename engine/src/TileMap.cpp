@@ -451,6 +451,20 @@ bool TileMap::LoadAtlasJson(const u32           baseId, const std::string_view  
             def.UVScroll.X = t["uv_scroll"].value("x", 0.0f);
             def.UVScroll.Y = t["uv_scroll"].value("y", 0.0f);
         }
+        // Collision metadata (consumed when Solid == true). `layer` is an
+        // integer bitmask matching CollisionLayers — named-layer support
+        // arrives with project.arcbit (Phase 38).
+        if (t.contains("layer")) def.Layer = t["layer"].get<u32>();
+        // `blocked_from`: array of {center, half_width} arc objects. Empty
+        // / missing → block-all (the default empty list).
+        if (t.contains("blocked_from")) {
+            for (const auto& a : t["blocked_from"]) {
+                DirectionArc arc{};
+                arc.CenterDegrees    = a.value("center", 0.0f);
+                arc.HalfWidthDegrees = a.value("half_width", 180.0f);
+                def.BlockedFrom.push_back(arc);
+            }
+        }
         RegisterTile(baseId + localId, std::move(def));
     }
 

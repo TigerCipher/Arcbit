@@ -5,6 +5,7 @@
 #include <arcbit/ecs/World.h>
 #include <arcbit/physics/AABB.h>
 #include <arcbit/physics/Collider2D.h>
+#include <arcbit/physics/DirectionArc.h>
 #include <arcbit/physics/SpatialHash.h>
 #include <arcbit/physics/TileColliderRect.h>
 #include <arcbit/render/RenderHandle.h>
@@ -48,15 +49,22 @@ public:
     // remaining fields are copies of Collider2D fields needed for resolver
     // filtering without a component lookup. Active==false means the slot is
     // vacant (free-list candidate).
+    //
+    // Cache invariant: any mutation to a Collider2D's cached fields requires
+    // a UpdateCollider call to refresh this record. Position / Rotation /
+    // HalfExtents / Radius changes already require it (they affect WorldAABB);
+    // Layer / Mask / IsTrigger / BlockedFrom changes are equally subject.
     struct ColliderRecord
     {
-        Entity   Owner     = Entity::Invalid();
-        AABB     WorldAABB = {};
-        BodyKind Kind      = BodyKind::Kinematic;
-        u32      Layer     = 0;
-        u32      Mask      = 0;
-        bool     IsTrigger = false;
-        bool     Active    = false;
+        Entity                    Owner       = Entity::Invalid();
+        AABB                      WorldAABB   = {};
+        BodyKind                  Kind        = BodyKind::Kinematic;
+        u32                       Layer       = 0;
+        u32                       Mask        = 0;
+        f32                       Rotation    = 0.0f;
+        bool                      IsTrigger   = false;
+        bool                      Active      = false;
+        std::vector<DirectionArc> BlockedFrom = {};
     };
 
     explicit PhysicsWorld(f32 cellSize);

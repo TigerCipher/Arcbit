@@ -666,17 +666,17 @@ runnable / verifiable state:
       from the editor IPC channel in Phase 40. **Not** a player-facing setting.
 
 ### Phase 22B — `FreeMovement` collision
-- [ ] `PendingMove` component + `FreeMovementIntegrateSystem` writes into it.
-- [ ] `CollisionResolutionSystem`: swept resolution, slide along contact normal,
+- [x] `PendingMove` component + `FreeMovementIntegrateSystem` writes into it.
+- [x] `CollisionResolutionSystem`: swept resolution, slide along contact normal,
       one re-sweep.
-- [ ] Layer / Mask filtering.
-- [ ] Free-movement demo: player can't walk through trees, slides along walls.
+- [x] Layer / Mask filtering.
+- [x] Free-movement demo: player can't walk through trees, slides along walls.
 
 ### Phase 22C — Tile movement collision
-- [ ] `PhysicsWorld::QueryTileBlocked(entity, targetTile)` for plan-then-commit.
-- [ ] `TileMovementPlanSystem` integrates `SmoothTileMovement` and (deferred)
+- [x] `PhysicsWorld::QueryTileBlocked(entity, targetTile)` for plan-then-commit.
+- [x] `TileMovementPlanSystem` integrates `SmoothTileMovement` and (deferred)
       `SnapTileMovement` with the query.
-- [ ] Tile-style demo: player can't enter solid tiles.
+- [x] Tile-style demo: player can't enter solid tiles.
 
 ### Phase 22D — Directional collision (arcs)
 - [ ] `DirectionArc` type + preset library (`AllDirections`, `Vertical`,

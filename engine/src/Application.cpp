@@ -2,6 +2,7 @@
 #include <arcbit/app/Window.h>
 #include <arcbit/assets/TextureManager.h>
 #include <arcbit/audio/AudioManager.h>
+#include <arcbit/physics/DirectionArc.h>
 #include <arcbit/physics/Narrowphase.h>
 #include <arcbit/physics/PhysicsWorld.h>
 #include <arcbit/physics/SpatialHash.h>
@@ -36,6 +37,7 @@ Application::Application(const ApplicationConfig& config) : _config(config)
     PhysicsWorld::SelfTest();
     Narrowphase::SelfTest();
     Sweep::SelfTest();
+    DirectionArcSelfTest();
     #endif
 
     // Seed Settings with config defaults so that GraphicsSettings has sensible

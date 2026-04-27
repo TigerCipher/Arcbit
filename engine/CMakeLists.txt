@@ -41,6 +41,7 @@ add_library(arcbit-engine STATIC
     src/PhysicsWorld.cpp
     src/Narrowphase.cpp
     src/Sweep.cpp
+    src/DirectionArc.cpp
 )
 
 target_include_directories(arcbit-engine
