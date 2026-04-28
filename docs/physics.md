@@ -679,13 +679,13 @@ runnable / verifiable state:
 - [x] Tile-style demo: player can't enter solid tiles.
 
 ### Phase 22D — Directional collision (arcs)
-- [ ] `DirectionArc` type + preset library (`AllDirections`, `Vertical`,
+- [x] `DirectionArc` type + preset library (`AllDirections`, `Vertical`,
       `Horizontal`, `NorthOnly`, etc.).
-- [ ] Narrowphase emits a contact direction; arc check filters blocking
+- [x] Narrowphase emits a contact direction; arc check filters blocking
       contacts. Arcs are evaluated in the collider's local frame so they
       rotate with the body.
-- [ ] `TileDef.BlockedFrom` field + tilemap loader / arc spec support.
-- [ ] Tree demo: walk under from sides, blocked top/bottom; verify smooth
+- [x] `TileDef.BlockedFrom` field + tilemap loader / arc spec support.
+- [x] Tree demo: walk under from sides, blocked top/bottom; verify smooth
       behaviour at off-axis approach angles for free movement.
 
 ### Phase 22E — Rotated colliders (OBB)

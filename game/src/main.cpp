@@ -12,12 +12,14 @@
 void RunWorldDemo();
 void RunPhysicsDemo();
 void RunTileMoveDemo();
+void RunTileMoveArcDemo();
 void RunArcDemo();
 
 
 // #define ARCBIT_DEMO_WORLD
 // #define ARCBIT_DEMO_TILEMOVE
-#define ARCBIT_DEMO_ARC
+// #define ARCBIT_DEMO_ARC
+#define ARCBIT_DEMO_TILEARC
 
 int main(int /*argc*/, char* /*argv*/[])
 {
@@ -27,6 +29,8 @@ int main(int /*argc*/, char* /*argv*/[])
     RunTileMoveDemo();
 #elif defined(ARCBIT_DEMO_ARC)
     RunArcDemo();
+#elif defined(ARCBIT_DEMO_TILEARC)
+    RunTileMoveArcDemo();
 #else
     RunPhysicsDemo();
 #endif

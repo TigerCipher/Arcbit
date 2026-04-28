@@ -2,6 +2,7 @@
 
 #include <arcbit/core/Assert.h>
 #include <arcbit/core/Log.h>
+#include <arcbit/physics/Narrowphase.h>
 #include <arcbit/physics/Sweep.h>
 #include <arcbit/render/RenderThread.h>
 #include <arcbit/tilemap/TileMap.h>
@@ -167,9 +168,19 @@ bool PhysicsWorld::QueryTileBlocked(const Entity      mover, const Collider2D& c
         if (!rec.Active || rec.IsTrigger) continue;
         if (!LayersPair(col.Layer, col.Mask, rec.Layer, rec.Mask)) continue;
 
-        const Collider2D    obstacle    = BoxFromAABB(rec.WorldAABB, rec.Layer);
-        const Vec2          obstaclePos = rec.WorldAABB.Center();
-        const Sweep::Result r           = Sweep::SweepAgainst(col, originWorld, delta, obstacle, obstaclePos);
+        const Collider2D obstacle    = BoxFromAABB(rec.WorldAABB, rec.Layer);
+        const Vec2       obstaclePos = rec.WorldAABB.Center();
+        // Skip blockers the mover already overlaps at origin. Tile movement
+        // asks "does the destination cell block my approach?" — the source
+        // cell isn't part of that question. Without this skip, the slab
+        // method's started-overlapping convention (normal opposite delta,
+        // ToI=0) makes a stationary contact with the source tile look like
+        // a fresh approach, tripping the source's arc and trapping the
+        // mover inside any arc'd tile they legitimately stepped onto.
+        // Free-movement's resolver keeps overlap as a real contact for
+        // push-back; this skip is scoped to the tile-step path only.
+        if (Narrowphase::Overlap(col, originWorld, obstacle, obstaclePos)) continue;
+        const Sweep::Result r = Sweep::SweepAgainst(col, originWorld, delta, obstacle, obstaclePos);
         if (!r.Hit) continue;
         if (!IsContactBlocked(rec.BlockedFrom, r.Normal, rec.Rotation)) continue;
         return true;
@@ -181,9 +192,11 @@ bool PhysicsWorld::QueryTileBlocked(const Entity      mover, const Collider2D& c
     for (const TileColliderRect& rect : tileHits) {
         if ((rect.Layer & col.Mask) == 0) continue;
 
-        const Collider2D    obstacle    = BoxFromAABB(rect.WorldAABB, rect.Layer);
-        const Vec2          obstaclePos = rect.WorldAABB.Center();
-        const Sweep::Result r           = Sweep::SweepAgainst(col, originWorld, delta, obstacle, obstaclePos);
+        const Collider2D obstacle    = BoxFromAABB(rect.WorldAABB, rect.Layer);
+        const Vec2       obstaclePos = rect.WorldAABB.Center();
+        // Same source-tile skip as the entity pass above — see comment there.
+        if (Narrowphase::Overlap(col, originWorld, obstacle, obstaclePos)) continue;
+        const Sweep::Result r = Sweep::SweepAgainst(col, originWorld, delta, obstacle, obstaclePos);
         if (!r.Hit) continue;
         // Tile rects don't carry rotation (greedy mesh is axis-aligned), so
         // pass 0 — local frame == world frame.

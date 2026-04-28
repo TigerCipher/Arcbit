@@ -49,9 +49,14 @@ bool IsContactBlocked(const std::vector<DirectionArc>& arcs,
     // Convert to degrees in [-180, 180]. atan2 returns radians in [-π, π].
     const f32 angleDeg = std::atan2(localY, localX) * RadToDeg;
 
+    // Strict `<`: a contact exactly on the half-plane boundary (e.g. pure
+    // east/west on a NorthOnly halfwidth-90° arc) is NOT inside the arc.
+    // That matches "only the north face blocks" — a perpendicular contact is
+    // east or west, not north — and is what tile-aligned movement needs so
+    // sliding past a directional tile from the side isn't falsely blocked.
     for (const auto& arc : arcs) {
         const f32 delta = WrapDelta(angleDeg - arc.CenterDegrees);
-        if (std::abs(delta) <= arc.HalfWidthDegrees) return true;
+        if (std::abs(delta) < arc.HalfWidthDegrees) return true;
     }
     return false;
 }
@@ -97,16 +102,19 @@ void DirectionArcSelfTest()
         ARCBIT_ASSERT(!IsContactBlocked(h, south, 0.0f), "Horizontal: should pass south");
     }
 
-    // One-sided gates — NorthOnly should block north, pass south. The default
-    // half-width of 90° puts east/west exactly on the arc boundary (`<=` →
-    // blocked), so use a narrower preset to test the "clearly outside" case.
+    // One-sided gates — NorthOnly blocks north, passes south. The default
+    // half-width of 90° puts east/west exactly on the arc boundary; with the
+    // strict `<` comparison the boundary is *outside* the arc, so a pure E/W
+    // contact passes (matches "only the north face blocks").
     {
         const auto wide   = DirectionArc::NorthOnly();      // halfWidth 90
         const auto narrow = DirectionArc::NorthOnly(45.0f); // ±45° around north
         ARCBIT_ASSERT(IsContactBlocked(wide, north, 0.0f), "NorthOnly: should block north");
         ARCBIT_ASSERT(!IsContactBlocked(wide, south, 0.0f), "NorthOnly: should pass south (180° away)");
-        ARCBIT_ASSERT(IsContactBlocked(wide, east, 0.0f),
-                      "NorthOnly(90): east is exactly on the boundary → blocked by <= convention");
+        ARCBIT_ASSERT(!IsContactBlocked(wide, east, 0.0f),
+                      "NorthOnly(90): east is on the boundary → passes with strict `<`");
+        ARCBIT_ASSERT(!IsContactBlocked(wide, west, 0.0f),
+                      "NorthOnly(90): west is on the boundary → passes with strict `<`");
         ARCBIT_ASSERT(!IsContactBlocked(narrow, east, 0.0f),
                       "NorthOnly(45): east is well outside the narrow arc → passes");
         ARCBIT_ASSERT(!IsContactBlocked(narrow, west, 0.0f),
